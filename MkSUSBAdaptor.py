@@ -9,7 +9,7 @@ import thread
 class Adaptor ():
 	UsbPath = ""
 	Interfaces = ""
-	SerialAdapter = ""
+	SerialAdapter = None
 
 	def __init__(self):
 		self.UsbPath 						  = "/dev/"
@@ -32,12 +32,26 @@ class Adaptor ():
 		print self.Interfaces
 
 	def ConnectDevice(self, id, withtimeout):
-		if (withtimeout > 0):
-			self.SerialAdapter = serial.Serial(port=self.UsbPath+self.Interfaces[id-1], baudrate=9600, parity=serial.PARITY_ODD, stopbits=serial.STOPBITS_TWO, bytesize=serial.SEVENBITS, timeout=withtimeout)
-		else:
-			self.SerialAdapter = serial.Serial(port=self.UsbPath+self.Interfaces[id-1], baudrate=9600, parity=serial.PARITY_ODD, stopbits=serial.STOPBITS_TWO, bytesize=serial.SEVENBITS)
-
-		if self.SerialAdapter != "":
+		self.SerialAdapter 			= serial.Serial()
+		self.SerialAdapter.port		= self.UsbPath + self.Interfaces[id-1]
+		self.SerialAdapter.baudrate	= 9600
+		# That will disable the assertion of DTR which is resetting the board.
+		self.SerialAdapter.setDTR(False)
+		
+		try:
+			if (withtimeout > 0):
+				self.SerialAdapter.timeout = withtimeout
+				self.SerialAdapter.open()
+			else:
+				self.SerialAdapter.open()
+			# Only for Arduino issue - The first time it is run there will be a reset, 
+			# since setting that flag entails opening the port, which causes a reset. 
+			# So we need to add a delay long enough to get past the bootloader make delay 3 sec.
+			time.sleep(3)
+		except Exception, e:
+			print "ERROR: Serial adpater. " + str(e)
+			
+		if self.SerialAdapter != None:
 			print "Connected to " + self.UsbPath + self.Interfaces[id-1]
 			self.DeviceConnectedName 			= self.UsbPath + self.Interfaces[id-1]
 			self.RecievePacketsWorkerRunning 	= True
@@ -51,9 +65,10 @@ class Adaptor ():
 	def DisconnectDevice (self):
 		self.DeviceConnected 			 = False
 		self.RecievePacketsWorkerRunning = False
-		while self.ExitRecievePacketsWorker == False:
+		while self.ExitRecievePacketsWorker == False and self.DeviceConnected == True:
 			time.sleep(0.1)
-		self.SerialAdapter.close()
+		if self.SerialAdapter != None:
+			self.SerialAdapter.close()
 		print "Serial connection to " + self.DeviceConnectedName + " was closed ..."
 
 	def Send (self, data):
@@ -65,8 +80,11 @@ class Adaptor ():
 
 	def RecievePacketsWorker (self):
 		while self.RecievePacketsWorkerRunning == True:
-			self.RXData = self.SerialAdapter.readline()
+			try:
+				self.RXData = self.SerialAdapter.readline()
+			except Exception, e:
+				print "ERROR: Serial adpater. " + str(e)
+				self.RXData = ""
 			self.DataArrived = True
 			print ":".join("{:02x}".format(ord(c)) for c in self.RXData)
 		self.ExitRecievePacketsWorker = True
-

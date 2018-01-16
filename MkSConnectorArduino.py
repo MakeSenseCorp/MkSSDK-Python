@@ -24,7 +24,7 @@ class Connector ():
 					if (magic_one == 0xde and magic_two == 0xad):
 						deviceType = rxPacket[5:]
 						deviceFound = True
-						self.Adaptor.DisconnectDevice()
+						return True
 						break
 					else:
 						self.Adaptor.DisconnectDevice()
@@ -32,14 +32,7 @@ class Connector ():
 				else:
 					self.Adaptor.DisconnectDevice()
 					print "Not a MakeSense complient device... "
-
 			idx = idx + 1
-
-		if deviceFound == True:
-			isConnected = self.Adaptor.ConnectDevice(idx, 0)
-			if isConnected == True:
-				return True
-
 		return False
 	
 	def Disconnect(self):
@@ -59,6 +52,9 @@ class Connector ():
 	def GetSensor (self, id):
 		txPacket = self.Protocol.GetArduinoNanoUSBSensorValueCommand(id)
 		rxPacket = self.Adaptor.Send(txPacket)
-		MagicOne, MagicTwo, Opcode, Length, DeviceId, Value = struct.unpack("BBHBBH", rxPacket[0:8])
+		if (len(rxPacket) > 7):
+			MagicOne, MagicTwo, Opcode, Length, DeviceId, Value = struct.unpack("BBHBBH", rxPacket[0:8])
+		else:
+			DeviceId = Value = 0
 		return DeviceId, Value
 	

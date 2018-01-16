@@ -240,7 +240,6 @@ class Node():
 		while self.IsRunnig:
 			time.sleep(0.5)
 		
-		print "Waiting for every thread ..."
 		self.ExitEvent.wait()
 	
 	def Stop (self):
