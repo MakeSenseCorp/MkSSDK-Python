@@ -73,6 +73,7 @@ class Adaptor ():
 
 	def Send (self, data):
 		self.DataArrived = False
+		print "[OUT] " + ":".join("{:02x}".format(ord(c)) for c in data)
 		self.SerialAdapter.write(str(data) + '\n')
 		while self.DataArrived == False and self.DeviceConnected == True:
 			time.sleep(0.1)
@@ -82,9 +83,12 @@ class Adaptor ():
 		while self.RecievePacketsWorkerRunning == True:
 			try:
 				self.RXData = self.SerialAdapter.readline()
+				if self.RXData == "" and self.DataArrived == False:
+					self.RXData = self.SerialAdapter.readline()
 			except Exception, e:
 				print "ERROR: Serial adpater. " + str(e)
 				self.RXData = ""
-			self.DataArrived = True
-			print ":".join("{:02x}".format(ord(c)) for c in self.RXData)
+			if self.DataArrived == False:
+				self.DataArrived = True
+				print "[IN]  " + ":".join("{:02x}".format(ord(c)) for c in self.RXData)
 		self.ExitRecievePacketsWorker = True

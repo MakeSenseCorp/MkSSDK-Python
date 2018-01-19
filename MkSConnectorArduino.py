@@ -54,7 +54,9 @@ class Connector ():
 		rxPacket = self.Adaptor.Send(txPacket)
 		if (len(rxPacket) > 7):
 			MagicOne, MagicTwo, Opcode, Length, DeviceId, Value = struct.unpack("BBHBBH", rxPacket[0:8])
+			Error = False
 		else:
 			DeviceId = Value = 0
-		return DeviceId, Value
+			Error = True
+		return Error, DeviceId, Value
 	

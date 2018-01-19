@@ -55,6 +55,7 @@ class Node():
 		self.OnNodeSystemLoaded 	= None
 		# Locks and Events
 		self.NetworkAccessTickLock 	= threading.Lock()
+		self.DeviceLock			 	= threading.Lock()
 		self.ExitEvent 				= threading.Event()
 	
 	def LoadSystemConfig(self):
@@ -192,11 +193,22 @@ class Node():
 	
 	def GetSensorHWValue (self, id):
 		"""Get HW device sensor value"""
-		return self.Device.GetSensor(id)
+		self.DeviceLock.acquire()
+		error, device_id, value = self.Device.GetSensor(id)
+		if error == True:
+			error, device_id, value = self.Device.GetSensor(id)
+			if error == True:
+				self.DeviceLock.release()
+				return True, 0, 0
+		self.DeviceLock.release()
+		return False, device_id, value
 
 	def SetSensorHWValue (self, id, value):
 		"""Set HW device with sensor value"""
-		return self.Device.SetSensor(id, value)
+		self.DeviceLock.acquire()
+		data = self.Device.SetSensor(id, value)
+		self.DeviceLock.release()
+		return data
 
 	def NodeWorker (self, callback):
 		# Read sytem configuration
@@ -252,4 +264,3 @@ class Node():
 	def Exit (self):
 		print "Exit with ERROR"
 		self.Stop()
-
