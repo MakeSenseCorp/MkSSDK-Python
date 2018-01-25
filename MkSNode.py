@@ -170,6 +170,39 @@ class Node():
 
 	def SaveBasicSensorValueToFile (self, uuid, value):
 		self.AppendToFile(uuid + ".json", "{\"ts\":" + str(time.time()) + ",\"v\":" + str(value) + "},")
+	
+	def LoadBasicSensorValuesFromFileByRowNumber (self, uuid, rows_number):
+		buf_size = 8192
+		data_set = "["
+		data_set_index = 0
+		with open(uuid + ".json") as fh:
+			segment = None
+			offset = 0
+			fh.seek(0, os.SEEK_END)
+			file_size = remaining_size = fh.tell()
+			while remaining_size > 0:
+				offset = min(file_size, offset + buf_size)
+				fh.seek(file_size - offset)
+				buffer = fh.read(min(remaining_size, buf_size))
+				remaining_size -= buf_size
+				lines = buffer.split('\n')
+				if segment is not None:
+					if buffer[-1] is not '\n':
+						lines[-1] += segment
+					else:
+						print "1" + segment
+				segment = lines[0]
+				for index in range(len(lines) - 1, 0, -1):
+					if len(lines[index]):
+						data_set_index += 1
+						data_set += lines[index]
+						if data_set_index == rows_number:
+							data_set = data_set[:-1] + "]"
+							return data_set
+			if segment is not None:
+				data_set += segment
+		data_set = data_set[:-1] + "]"
+		return data_set
 
 	def GetDeviceConfig (self):
 		jsonConfigStr = self.File.LoadStateFromFile("config.json")
