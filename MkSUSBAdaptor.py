@@ -35,10 +35,11 @@ class Adaptor ():
 		self.SerialAdapter 			= serial.Serial()
 		self.SerialAdapter.port		= self.UsbPath + self.Interfaces[id-1]
 		self.SerialAdapter.baudrate	= 9600
-		# That will disable the assertion of DTR which is resetting the board.
-		self.SerialAdapter.setDTR(False)
 		
 		try:
+			# That will disable the assertion of DTR which is resetting the board.
+			# self.SerialAdapter.setDTR(False)
+
 			if (withtimeout > 0):
 				self.SerialAdapter.timeout = withtimeout
 				self.SerialAdapter.open()
@@ -50,6 +51,7 @@ class Adaptor ():
 			time.sleep(3)
 		except Exception, e:
 			print "ERROR: Serial adpater. " + str(e)
+			return False
 			
 		if self.SerialAdapter != None:
 			print "Connected to " + self.UsbPath + self.Interfaces[id-1]

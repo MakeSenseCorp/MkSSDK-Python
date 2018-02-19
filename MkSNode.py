@@ -16,7 +16,7 @@ class Node():
 	"""Node respomsable for coordinate between web services
 	and adaptor (in most cases serial)"""
 	   
-	def __init__(self):
+	def __init__(self, node_type):
 		# Objects node depend on
 		self.File 				= MkSFile.File()
 		self.Device 			= None
@@ -26,6 +26,7 @@ class Node():
 		self.WsUrl				= ""
 		self.UserName 			= ""
 		self.Password 			= ""
+		self.NodeType 			= node_type
 		# Device information
 		self.Type 				= 0
 		self.UUID 				= ""
@@ -71,16 +72,18 @@ class Node():
 			self.Password 			= dataSystem["password"]
 			# Device information
 			self.Type 				= dataSystem["device"]["type"]
-			self.UUID 				= dataSystem["device"]["uuid"]
 			self.OSType 			= dataSystem["device"]["ostype"]
 			self.OSVersion 			= dataSystem["device"]["osversion"]
 			self.BrandName 			= dataSystem["device"]["brandname"]
+			# Device UUID MUST be read from HW device.
 			if "True" == dataSystem["device"]["isHW"]:
 				self.IsHardwareBased = True
 				if "" != dataSystem["sensors"]:
 					for sensor in dataSystem["sensors"]:
 						self.Sensors.append(MkSSensor.Sensor(self.UUID, sensor["type"], sensor["id"]))
 						self.SensorsLoaded = True
+			else:
+				self.UUID = dataSystem["device"]["uuid"]
 		except:
 			print "Error: [LoadSystemConfig] Wrong system.json format"
 			self.Exit()
@@ -103,10 +106,15 @@ class Node():
 			if None == self.Device:
 				print "Error: [Run] Device did not specified"
 				self.Exit()
+				return;
 			
-			if False == self.Device.Connect():
+			if False == self.Device.Connect(self.NodeType):
 				print "Error: [Run] Could not connect device"
 				self.Exit()
+				return;
+			
+			print self.Device.GetUUID()
+
 		self.State = "ACCESS"
 	
 	def StateGetAccess (self):
