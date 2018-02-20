@@ -24,7 +24,7 @@ class Connector ():
 					if (magic_one == 0xde and magic_two == 0xad):
 						deviceType = rxPacket[5:-1]
 						if deviceType == device_type:
-							print deviceType
+							print "Device Type: " + deviceType
 							deviceFound = True
 							return True
 					else:
@@ -61,3 +61,7 @@ class Connector ():
 			Error = True
 		return Error, DeviceId, Value
 	
+	def SetWindow (self, window_id, msg, value_type, sign, block_type):
+		txPacket = self.Protocol.SetWindowMessageCommand(window_id, msg, value_type, sign, block_type)
+		rxPacket = self.Adaptor.Send(txPacket)
+		return rxPacket[5:-1] # "-1" is for removing "\n" at the end (no unpack used)

@@ -106,14 +106,22 @@ class Node():
 			if None == self.Device:
 				print "Error: [Run] Device did not specified"
 				self.Exit()
-				return;
+				return
 			
 			if False == self.Device.Connect(self.NodeType):
 				print "Error: [Run] Could not connect device"
 				self.Exit()
-				return;
+				return
 			
-			print self.Device.GetUUID()
+			deviceUUID = self.Device.GetUUID()
+			if len(deviceUUID) > 30:
+				self.UUID = deviceUUID
+				print "Device UUID: " + self.UUID
+				self.Network.SetDeviceUUID(self.UUID)
+			else:
+				print "Error: [Run] Could not connect device"
+				self.Exit()
+				return
 
 		self.State = "ACCESS"
 	
