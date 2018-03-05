@@ -118,6 +118,10 @@ class Node():
 				self.UUID = deviceUUID
 				print "Device UUID: " + self.UUID
 				self.Network.SetDeviceUUID(self.UUID)
+				# Need to update sensors UUID because LoadSystemConfig happend before device connection.
+				if True == self.IsHardwareBased:
+					for sensor in self.Sensors:
+						sensor.SetUUID(deviceUUID, sensor.ID)
 			else:
 				print "Error: [Run] Could not connect device"
 				self.Exit()

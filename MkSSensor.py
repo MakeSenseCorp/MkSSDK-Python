@@ -14,3 +14,6 @@ class Sensor:
 	
 	def SetInterval(self, interval):
 		self.UpdateInterval = interval
+
+	def SetUUID(self, device_uuid, local_id):
+		self.UUID = device_uuid[:-1] + str(local_id)
