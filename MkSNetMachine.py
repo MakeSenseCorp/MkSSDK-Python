@@ -90,7 +90,7 @@ class Network ():
 	def WSWorker (self):
 		self.WSConnection.run_forever()
 
-	def Connect (self, username, password):
+	def Connect (self, username, password, payload):
 		self.UserName = username
 		self.Password = password
 
@@ -104,7 +104,7 @@ class Network ():
 			self.WSConnection.on_error 		= self.WSConnection_OnError_Handler
 			self.WSConnection.on_close 		= self.WSConnection_OnClose_Handler
 			self.WSConnection.on_open 		= self.WSConnection_OnOpen_Handler
-			self.WSConnection.header		= {'uuid':self.DeviceUUID}
+			self.WSConnection.header		= {'uuid':self.DeviceUUID, 'payload':payload}
 			thread.start_new_thread(self.WSWorker, ())
 			return True
 
