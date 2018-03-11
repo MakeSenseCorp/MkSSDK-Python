@@ -137,7 +137,7 @@ class Node():
 			self.AccessTick = 1
 		finally:
 			self.NetworkAccessTickLock.release()		
-		if self.Network.Connect(self.UserName, self.Password, GetSensorList()) == True:
+		if self.Network.Connect(self.UserName, self.Password, self.GetSensorList()) == True:
 			print "Register Device ..."
 			data, error = self.Network.RegisterDevice(self.DeviceInfo)
 			if error == False:
