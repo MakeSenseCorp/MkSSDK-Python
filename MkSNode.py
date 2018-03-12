@@ -136,8 +136,13 @@ class Node():
 		try:
 			self.AccessTick = 1
 		finally:
-			self.NetworkAccessTickLock.release()		
-		if self.Network.Connect(self.UserName, self.Password, self.GetSensorList()) == True:
+			self.NetworkAccessTickLock.release()
+		SensorList = self.GetSensorList()
+		payloadStr = "[";
+		for sensor in SensorList:
+			payloadStr = payloadStr + sensor.ConvertToStr() + ','
+		payloadStr = payloadStr[:-1] + "]"
+		if self.Network.Connect(self.UserName, self.Password, payloadStr) == True:
 			print "Register Device ..."
 			data, error = self.Network.RegisterDevice(self.DeviceInfo)
 			if error == False:

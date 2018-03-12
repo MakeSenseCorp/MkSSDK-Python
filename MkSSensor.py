@@ -17,3 +17,6 @@ class Sensor:
 
 	def SetUUID(self, device_uuid, local_id):
 		self.UUID = device_uuid[:-1] + str(local_id)
+
+	def ConvertToStr(self):
+		return "{\"id\":" + self.ID + ",\"uuid\":\"" + str(self.UUID) + "\",\"type\":" + str(self.Type) + "}"
