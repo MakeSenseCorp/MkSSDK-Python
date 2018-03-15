@@ -74,6 +74,15 @@ class Network ():
 		
 		return "", False
 
+	def RegisterDeviceToPublisher (self, publisher, subscriber):
+		jdata = json.dumps([{"key":"" + str(self.UserDevKey) + "", "payload":{"publisher_uuid":"" + str(publisher) + "","listener_uuid":"" + str(subscriber) + ""}}])
+		data = self.PostRequset(self.ServerUri + "register/device/node/listener", jdata)
+
+		if ('info' in data):
+			return data, True;
+		
+		return "", False
+
 	def WSConnection_OnMessage_Handler (self, ws, message):
 		data = json.loads(message)
 		self.OnDataArrivedCallback(data)
