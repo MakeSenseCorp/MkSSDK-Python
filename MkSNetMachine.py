@@ -105,7 +105,7 @@ class Network ():
 			self.WSConnection.on_error 		= self.WSConnection_OnError_Handler
 			self.WSConnection.on_close 		= self.WSConnection_OnClose_Handler
 			self.WSConnection.on_open 		= self.WSConnection_OnOpen_Handler
-			self.WSConnection.header		= {'uuid':self.DeviceUUID, 'payload':str(payload)}
+			self.WSConnection.header		= {'uuid':self.DeviceUUID, 'payload':str(payload), 'key':self.UserDevKey}
 			print self.WSConnection.header
 			thread.start_new_thread(self.WSWorker, ())
 			return True
