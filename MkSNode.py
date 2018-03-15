@@ -141,7 +141,10 @@ class Node():
 		payloadStr = "[";
 		for sensor in SensorList:
 			payloadStr = payloadStr + sensor.ConvertToStr() + ','
-		payloadStr = payloadStr[:-1] + "]"
+		if len(SensorList) > 0:
+			payloadStr = payloadStr[:-1] + "]"
+		else:
+			payloadStr = payloadStr + "]"
 		if self.Network.Connect(self.UserName, self.Password, payloadStr) == True:
 			print "Register Device ..."
 			data, error = self.Network.RegisterDevice(self.DeviceInfo)
