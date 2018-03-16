@@ -136,6 +136,9 @@ class Network ():
 	def SendWebSocket(self, payload):
 		self.WSConnection.send(payload)
 
+	def SendKeepAlive(self):
+		self.WSConnection.send("{\"packet_type\":\"keepalive\"}")
+
 	def BuildJSONFromBasicSensorListToHost (self, sensors):
 		payload = "{\"response\":\"sensors_publish\",\"data\":{\"key\":\"" + str(self.UserDevKey) + "\",\"device\":{\"uuid\":\"" + str(self.DeviceUUID) + "\",\"type\":" + str(self.Type) + ",\"cmd\":\"get_device_sensors\"},\"sensors\":["
 		for item in sensors:

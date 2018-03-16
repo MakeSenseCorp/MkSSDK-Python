@@ -160,8 +160,9 @@ class Node():
 
 	def WebSocketDataArrivedCallback (self, json):
 		self.State = "WORK"
+		#print json
 		request = self.Network.GetRequestFromJson(json)
-		if request == "direct":
+		if (request == "direct" or request == "publish"):
 			payload = self.Network.GetPayloadFromJson(json)
 			command = self.Network.GetCommandFromJson(json)
 			self.OnWSDataArrived(command, payload);
