@@ -160,12 +160,13 @@ class Node():
 
 	def WebSocketDataArrivedCallback (self, json):
 		self.State = "WORK"
-		#print json
-		request = self.Network.GetRequestFromJson(json)
-		if (request == "direct" or request == "publish"):
-			payload = self.Network.GetPayloadFromJson(json)
-			command = self.Network.GetCommandFromJson(json)
-			self.OnWSDataArrived(command, payload);
+		
+		messageType = self.Network.GetMessageTypeFromJson(json)
+		if messageType == "CUSTOM":
+			return;
+		elif (messageType == "DIRECT" or messageType == "PRIVATE"):
+			data = self.Network.GetDataFromJson(json)
+			self.OnWSDataArrived(data);
 		else:
 			print "Error: Not support " + request + " request type."
 
@@ -242,10 +243,9 @@ class Node():
 			print "Error: [GetDeviceConfig] Wrong config.json format"
 			return ""
 
-	def Response (self, command, payload):
-		response = self.Network.BuildDirectResponse(command, payload)
-		print "[RESPONSE] " + response
-		ret = self.Network.Response(response)
+	def SendMessage (self, command, payload):
+		message = self.Network.BuildMessage(command, payload)
+		ret = self.Network.SendMessage(message)
 		if False == ret:
 			self.State = "ACCESS"
 		return ret

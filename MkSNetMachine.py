@@ -139,45 +139,60 @@ class Network ():
 	def SendKeepAlive(self):
 		self.WSConnection.send("{\"packet_type\":\"keepalive\"}")
 
-	def BuildJSONFromBasicSensorListToHost (self, sensors):
-		payload = "{\"response\":\"sensors_publish\",\"data\":{\"key\":\"" + str(self.UserDevKey) + "\",\"device\":{\"uuid\":\"" + str(self.DeviceUUID) + "\",\"type\":" + str(self.Type) + ",\"cmd\":\"get_device_sensors\"},\"sensors\":["
-		for item in sensors:
-			payload += "{\"uuid\":\"" + str(item.UUID) + "\",\"type\":" + str(item.Type) + ",\"value\":" + str(item.Value) + "},"
-		payload = payload[:-1]
-		payload += "]}}"
-		return payload
+	def BuildMessage (self, command, payload):
+		messageType = "\"message_type\":\"BROADCAST\""
+		destination = "\"destination\":\"BROADCAST\""
+		source = "\"source\":\"" + str(self.DeviceUUID) + "\""
+		
+		device = "\"uuid\":\"" + str(self.DeviceUUID) + "\","
+		device = device + "\"type\":" + str(self.Type) + ","
+		device = device + "\"command\":\"" + str(command) + "\","
+		device = device + "\"timestamp\":" + str(int(time.time()))
 
-	def BuildDirectResponse (self, command, payload):
-		response = "{\"response\":\"direct\",\"data\":{\"key\":\"" + str(self.UserDevKey) + "\",\"device\":{\"uuid\":\"" + str(self.DeviceUUID) + "\",\"type\":" + str(self.Type) + ",\"cmd\":\"" + command + "\"},\"payload\":{" + payload + "}}}"
-		return response
+		data = "\"device\":{"
+		data = data + device + "},"
+		data = data + "\"payload\":{"
+		data = data + payload + "}"
+
+		user = "\"key\":\"" + str(self.UserDevKey) + "\""
+		additional = ""
+
+		message = "{"
+		message = message + messageType + ","
+		message = message + destination + ","
+		message = message + source + ","
+		message = message + "\"data\":{"
+		message = message + data
+		message = message + "},"
+		message = message + "\"user\":{"
+		message = message + user
+		message = message + "},"
+		message = message + "\"additional\":{"
+		message = message + additional
+		message = message + "}"
+		message = message + "}"
+		
+		return message
 	
-	def BuildJSONFromBasicSensorList (self, sensors):
-		payload = "{\"key\":\"" + str(self.UserDevKey) + "\",\"device\":{\"uuid\":\"" + str(self.DeviceUUID) + "\",\"type\":" + str(self.Type) + "},\"sensors\":["
-		for item in sensors:
-			payload += "{\"uuid\":\"" + str(item.UUID) + "\",\"type\":" + str(item.Type) + ",\"value\":" + str(item.Value) + "},"
-		payload = payload[:-1]
-		payload += "]}"
-		return payload
-
 	def GetUUIDFromJson(self, json):
 		return json['uuid']
 
 	def GetValueFromJson(self, json):
 		return json['value']
 	
-	def GetRequestFromJson(self, json):
-		return json['request']
-
-	def GetCommandFromJson(self, json):
-		return json['data']['device']['cmd']
-
-	def GetPayloadFromJson(self, json):
-		return json['data']['payload']
+	def GetMessageTypeFromJson(self, json):
+		return json['message_type']
 
 	def GetDataFromJson(self, json):
 		return json['data']
+
+	def GetCommandFromJson(self, json):
+		return json['data']['device']['command']
+
+	def GetPayloadFromJson(self, json):
+		return json['data']['payload']
 	
-	def Response(self, payload):
+	def SendMessage(self, payload):
 		try:
 			self.SendWebSocket(payload)
 		except:
@@ -185,12 +200,3 @@ class Network ():
 		
 		return True
 
-	def UpdateSensorsWS(self, sensors):
-		if (len(sensors) > 0):
-			payload = self.BuildJSONFromBasicSensorListToHost(sensors)
-			try:
-				self.SendWebSocket(payload)
-			except:
-				return False
-		
-		return True

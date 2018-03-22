@@ -23,6 +23,7 @@ class Connector ():
 					magic_one, magic_two, op_code, content_length = struct.unpack("BBHB", rxPacket[0:5])
 					if (magic_one == 0xde and magic_two == 0xad):
 						deviceType = rxPacket[5:-1]
+						print deviceType + " <?> " + device_type
 						if deviceType == device_type:
 							print "Device Type: " + deviceType
 							deviceFound = True
@@ -34,6 +35,7 @@ class Connector ():
 					self.Adaptor.DisconnectDevice()
 					print "Not a MakeSense complient device... "
 			idx = idx + 1
+			self.Adaptor.DisconnectDevice()
 		return False
 	
 	def Disconnect(self):
