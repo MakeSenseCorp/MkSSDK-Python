@@ -160,11 +160,10 @@ class Node():
 
 	def WebSocketDataArrivedCallback (self, json):
 		self.State = "WORK"
-		
 		messageType = self.Network.GetMessageTypeFromJson(json)
 		if messageType == "CUSTOM":
 			return;
-		elif (messageType == "DIRECT" or messageType == "PRIVATE"):
+		elif (messageType == "DIRECT" or messageType == "PRIVATE" or messageType == "BROADCAST"):
 			data = self.Network.GetDataFromJson(json)
 			self.OnWSDataArrived(data);
 		else:
