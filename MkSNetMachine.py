@@ -139,9 +139,9 @@ class Network ():
 	def SendKeepAlive(self):
 		self.WSConnection.send("{\"packet_type\":\"keepalive\"}")
 
-	def BuildMessage (self, command, payload):
-		messageType = "\"message_type\":\"BROADCAST\""
-		destination = "\"destination\":\"BROADCAST\""
+	def BuildMessage (self, messageType, destination, command, payload):
+		messageType = "\"message_type\":\"" + messageType + "\""
+		destination = "\"destination\":\"" + destination + "\""
 		source = "\"source\":\"" + str(self.DeviceUUID) + "\""
 		
 		device = "\"uuid\":\"" + str(self.DeviceUUID) + "\","
@@ -182,6 +182,9 @@ class Network ():
 	
 	def GetMessageTypeFromJson(self, json):
 		return json['message_type']
+
+	def GetSourceFromJson(self, json):
+		return json['source']
 
 	def GetDataFromJson(self, json):
 		return json['data']

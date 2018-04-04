@@ -160,14 +160,24 @@ class Node():
 
 	def WebSocketDataArrivedCallback (self, json):
 		self.State = "WORK"
+		print json
 		messageType = self.Network.GetMessageTypeFromJson(json)
+		source = self.Network.GetSourceFromJson(json)
 		if messageType == "CUSTOM":
 			return;
-		elif (messageType == "DIRECT" or messageType == "PRIVATE" or messageType == "BROADCAST"):
+		elif (messageType == "DIRECT" or messageType == "PRIVATE" or messageType == "BROADCAST" or messageType == "WEBFACE"):
 			data = self.Network.GetDataFromJson(json)
-			self.OnWSDataArrived(data);
+			self.OnWSDataArrived(messageType, source, data)
 		else:
 			print "Error: Not support " + request + " request type."
+
+	def SendMessage (self, message_type, destination, command, payload):
+		message = self.Network.BuildMessage(message_type, destination, command, payload)
+		print message
+		ret = self.Network.SendMessage(message)
+		if False == ret:
+			self.State = "ACCESS"
+		return ret
 
 	def WebSocketConnectionClosedCallback (self):
 		self.OnWSConnectionClosed()
@@ -241,13 +251,6 @@ class Node():
 		except:
 			print "Error: [GetDeviceConfig] Wrong config.json format"
 			return ""
-
-	def SendMessage (self, command, payload):
-		message = self.Network.BuildMessage(command, payload)
-		ret = self.Network.SendMessage(message)
-		if False == ret:
-			self.State = "ACCESS"
-		return ret
 
 	def GetSensorList (self):
 		return self.Sensors

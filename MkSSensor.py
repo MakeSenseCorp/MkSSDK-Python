@@ -19,4 +19,4 @@ class Sensor:
 		self.UUID = device_uuid[:-1] + str(local_id)
 
 	def ConvertToStr(self):
-		return "{\"id\":" + self.ID + ",\"uuid\":\"" + str(self.UUID) + "\",\"type\":" + str(self.Type) + "}"
+		return "{\"id\":" + self.ID + ",\"uuid\":\"" + str(self.UUID) + "\",\"type\":" + str(self.Type) + ",\"name\":\"" + self.Name + "\"}"
