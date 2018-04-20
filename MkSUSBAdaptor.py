@@ -11,12 +11,14 @@ class Adaptor ():
 	Interfaces = ""
 	SerialAdapter = None
 
-	def __init__(self):
+	def __init__(self, asyncCallback):
 		self.UsbPath 						  = "/dev/"
-		self.DataArrived 					  = False;
+		self.DataArrived 					  = False
+		self.SendRequest 					  = False
 		self.RXData 						  = ""
 		self.OnSerialConnectedCallback 		  = None
 		self.OnSerialDataArrivedCallback 	  = None
+		self.OnSerialAsyncDataCallback 	  	  = asyncCallback
 		self.OnSerialErrorCallback 			  = None
 		self.OnSerialConnectionClosedCallback = None
 		self.RecievePacketsWorkerRunning 	  = True
@@ -75,10 +77,12 @@ class Adaptor ():
 
 	def Send (self, data):
 		self.DataArrived = False
+		self.SendRequest = True
 		print "[OUT] " + ":".join("{:02x}".format(ord(c)) for c in data)
 		self.SerialAdapter.write(str(data) + '\n')
 		while self.DataArrived == False and self.DeviceConnected == True:
 			time.sleep(0.1)
+		self.SendRequest = False
 		return self.RXData
 
 	def RecievePacketsWorker (self):
@@ -90,7 +94,12 @@ class Adaptor ():
 			except Exception, e:
 				print "ERROR: Serial adpater. " + str(e)
 				self.RXData = ""
-			if self.DataArrived == False:
-				self.DataArrived = True
-				print "[IN]  " + ":".join("{:02x}".format(ord(c)) for c in self.RXData)
+			if True == self.SendRequest:
+				if self.DataArrived == False:
+					self.DataArrived = True
+					print "[IN]  " + ":".join("{:02x}".format(ord(c)) for c in self.RXData)
+			else:
+				print "[IN ASYNC]  " + ":".join("{:02x}".format(ord(c)) for c in self.RXData)
+				if len(self.RXData) > 2:
+					self.OnSerialAsyncDataCallback(self.RXData)
 		self.ExitRecievePacketsWorker = True
