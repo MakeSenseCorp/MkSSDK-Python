@@ -78,6 +78,12 @@ class Adaptor ():
 	def Send (self, data):
 		self.DataArrived = False
 		self.SendRequest = True
+
+		# Send PAUSE request to HW
+		self.SerialAdapter.write(str(struct.pack("BBH", 0xDE, 0xAD, 0x5)) + '\n')
+		time.sleep(0.2)
+
+		# Now the device pause all async (if supporting) tasks
 		print "[OUT] " + ":".join("{:02x}".format(ord(c)) for c in data)
 		self.SerialAdapter.write(str(data) + '\n')
 		while self.DataArrived == False and self.DeviceConnected == True:

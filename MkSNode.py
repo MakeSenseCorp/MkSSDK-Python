@@ -160,9 +160,11 @@ class Node():
 
 	def WebSocketDataArrivedCallback (self, json):
 		self.State = "WORK"
-		print "[NETWORK IN] - " + str(json)
+		#print "[NETWORK IN] - " + str(json)
 		messageType = self.Network.GetMessageTypeFromJson(json)
 		source = self.Network.GetSourceFromJson(json)
+		command = self.Network.GetCommandFromJson(json)
+		print "[NETWORK IN] - " + command
 		if messageType == "CUSTOM":
 			return;
 		elif (messageType == "DIRECT" or messageType == "PRIVATE" or messageType == "BROADCAST" or messageType == "WEBFACE"):
@@ -173,7 +175,8 @@ class Node():
 
 	def SendMessage (self, message_type, destination, command, payload):
 		message = self.Network.BuildMessage(message_type, destination, command, payload)
-		print "[NETWORK OUT] - " + str(message)
+		#print "[NETWORK OUT] - " + str(message)
+		print "[NETWORK OUT] - " + command
 		ret = self.Network.SendMessage(message)
 		if False == ret:
 			self.State = "ACCESS"
