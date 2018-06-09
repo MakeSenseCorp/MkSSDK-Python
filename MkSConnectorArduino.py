@@ -39,6 +39,7 @@ class Connector ():
 		return False
 	
 	def Disconnect(self):
+		print "[DEBUG::Connector] Disconnect"
 		self.Adaptor.DisconnectDevice()
 		print "Connector ... [DISCONNECTED]"
 	
@@ -51,6 +52,9 @@ class Connector ():
 		txPacket = self.Protocol.SetArduinoNanoUSBSensorValueCommand(id, value)
 		rxPacket = self.Adaptor.Send(txPacket)
 		return rxPacket
+
+	def SetDeviceDisconnectCallback(self, callback):
+		self.Adaptor.OnSerialConnectionClosedCallback = callback
 
 	def GetSensor (self, id):
 		txPacket = self.Protocol.GetArduinoNanoUSBSensorValueCommand(id)

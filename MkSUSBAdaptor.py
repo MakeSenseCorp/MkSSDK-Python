@@ -16,15 +16,17 @@ class Adaptor ():
 		self.DataArrived 					  = False
 		self.SendRequest 					  = False
 		self.RXData 						  = ""
+		self.RecievePacketsWorkerRunning 	  = True
+		self.DeviceConnected				  = False
+		self.DeviceConnectedName 			  = ""
+		self.DeviceComNumber 				  = 0
+		self.ExitRecievePacketsWorker 		  = False
+		# Callbacks
 		self.OnSerialConnectedCallback 		  = None
 		self.OnSerialDataArrivedCallback 	  = None
 		self.OnSerialAsyncDataCallback 	  	  = asyncCallback
 		self.OnSerialErrorCallback 			  = None
 		self.OnSerialConnectionClosedCallback = None
-		self.RecievePacketsWorkerRunning 	  = True
-		self.DeviceConnected				  = False
-		self.DeviceConnectedName 			  = ""
-		self.ExitRecievePacketsWorker 		  = False
 
 		self.Initiate()
 
@@ -36,6 +38,7 @@ class Adaptor ():
 	def ConnectDevice(self, id, withtimeout):
 		self.SerialAdapter 			= serial.Serial()
 		self.SerialAdapter.port		= self.UsbPath + self.Interfaces[id-1]
+		self.DeviceComNumber 		= id
 		self.SerialAdapter.baudrate	= 9600
 		
 		try:
@@ -69,6 +72,7 @@ class Adaptor ():
 	def DisconnectDevice (self):
 		self.DeviceConnected 			 = False
 		self.RecievePacketsWorkerRunning = False
+		print "[DEBUG::Adaptor] DisconnectDevice"
 		while self.ExitRecievePacketsWorker == False and self.DeviceConnected == True:
 			time.sleep(0.1)
 		if self.SerialAdapter != None:
@@ -100,6 +104,9 @@ class Adaptor ():
 			except Exception, e:
 				print "ERROR: Serial adpater. " + str(e)
 				self.RXData = ""
+				# Need to reconnect, send event to Node.
+				if self.OnSerialConnectionClosedCallback != None:
+					self.OnSerialConnectionClosedCallback(self.DeviceComNumber)
 			if True == self.SendRequest:
 				if self.DataArrived == False:
 					self.DataArrived = True

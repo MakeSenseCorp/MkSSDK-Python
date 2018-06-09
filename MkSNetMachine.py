@@ -27,7 +27,11 @@ class Network ():
 
 	def GetRequest (self, url):
 		try:
-			data = urllib2.urlopen(url).read()
+			req = urllib2.urlopen(url, timeout=1)
+			if req != None:
+				data = req.read()
+			else:
+				return "failed"
 		except:
 			return "failed"
 
@@ -42,7 +46,9 @@ class Network ():
 		return data
 
 	def Authenticate (self, username, password):
+		print "[DEBUG::Network] Authenticate"
 		data = self.GetRequest(self.ServerUri + "fastlogin/" + self.UserName + "/" + self.Password)
+		print "[DEBUG::Network] GetRequest"
 
 		if ('failed' in data):
 			return False
@@ -100,10 +106,14 @@ class Network ():
 	def WSWorker (self):
 		self.WSConnection.run_forever()
 
+	def Disconnect(self):
+		self.WSConnection.close()
+
 	def Connect (self, username, password, payload):
 		self.UserName = username
 		self.Password = password
 
+		print "[DEBUG::Network] Connect"
 		# TODO 	- Add retry counter.
 		#		- Handle socket error [No handlers could be found for logger "websocket"]
 		ret = self.Authenticate(username, password)

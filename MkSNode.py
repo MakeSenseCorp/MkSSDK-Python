@@ -59,6 +59,13 @@ class Node():
 		self.DeviceLock			 	= threading.Lock()
 		self.ExitEvent 				= threading.Event()
 	
+	def DeviceDisconnectedCallback(self, data):
+		print "[DEBUG::Node] DeviceDisconnectedCallback"
+		self.Device.Disconnect()
+		self.Network.Disconnect()
+		self.Stop()
+		self.Run(self.WorkingCallback)
+
 	def LoadSystemConfig(self):
 		# Information about the node located here.
 		jsonSystemStr = self.File.LoadStateFromFile("system.json")
@@ -113,6 +120,7 @@ class Node():
 				self.Exit()
 				return
 			
+			self.Device.SetDeviceDisconnectCallback(self.DeviceDisconnectedCallback)
 			deviceUUID = self.Device.GetUUID()
 			if len(deviceUUID) > 30:
 				self.UUID = deviceUUID
@@ -130,7 +138,7 @@ class Node():
 		self.State = "ACCESS"
 	
 	def StateGetAccess (self):
-		print "StateGetAccess"
+		print "[DEBUG::Node] StateGetAccess"
 		# Let the state machine know that this state was entered.
 		self.NetworkAccessTickLock.acquire()
 		try:
@@ -294,6 +302,7 @@ class Node():
 		self.OnNodeSystemLoaded()
 		
 		while self.IsRunnig:
+			print "[DEBUG::Node] NodeWorker"
 			time.sleep(0.5)
 			# If state is accessing network and it ia only the first time.
 			if self.State == "ACCESS" and self.AccessTick > 0:
@@ -309,6 +318,7 @@ class Node():
 			self.Method = self.States[self.State]
 			self.Method()
 		
+		print "[DEBUG::Node] Exit NodeWork"
 		self.Device.Disconnect()
 		self.ExitEvent.set()
 
@@ -322,7 +332,7 @@ class Node():
 		self.ExitEvent.wait()
 	
 	def Stop (self):
-		print "Stop"
+		print "[DEBUG::Node] Stop"
 		self.IsRunnig = False
 	
 	def Pause (self):
