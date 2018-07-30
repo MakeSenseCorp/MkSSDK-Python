@@ -48,7 +48,6 @@ class Network ():
 	def Authenticate (self, username, password):
 		print "[DEBUG::Network] Authenticate"
 		data = self.GetRequest(self.ServerUri + "fastlogin/" + self.UserName + "/" + self.Password)
-		print "[DEBUG::Network] GetRequest"
 
 		if ('failed' in data):
 			return False
@@ -113,7 +112,6 @@ class Network ():
 		self.UserName = username
 		self.Password = password
 
-		print "[DEBUG::Network] Connect"
 		# TODO 	- Add retry counter.
 		#		- Handle socket error [No handlers could be found for logger "websocket"]
 		ret = self.Authenticate(username, password)

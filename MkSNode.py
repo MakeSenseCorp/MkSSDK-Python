@@ -10,7 +10,6 @@ import signal
 from mksdk import MkSFile
 from mksdk import MkSNetMachine
 from mksdk import MkSDevice
-from mksdk import MkSSensor
 
 class Node():
 	"""Node respomsable for coordinate between web services
@@ -34,13 +33,15 @@ class Node():
 		self.OSType 			= ""
 		self.OSVersion 			= ""
 		self.BrandName 			= ""
+		self.Name 				= ""
+		self.Description		= ""
 		self.DeviceInfo 		= None
 		# Misc
-		self.Sensors 			= []
-		self.SensorsLoaded 		= False
 		self.State 				= 'IDLE'
 		self.IsRunnig 			= True
 		self.AccessTick 		= 0
+		self.RegisteredNodes  	= []
+		self.SystemLoaded		= False
 		# Inner state
 		self.States = {
 			'IDLE': 			self.StateIdle,
@@ -58,6 +59,15 @@ class Node():
 		self.NetworkAccessTickLock 	= threading.Lock()
 		self.DeviceLock			 	= threading.Lock()
 		self.ExitEvent 				= threading.Event()
+		# Debug
+		self.DebugMode				= False
+		# Handlers
+		self.Handlers				= {
+			'get_node_info': 			self.GetNodeInfoHandler,
+			'get_node_status': 			self.GetNodeStatusHandler,
+			'register_subscriber':		self.RegisterSubscriberHandler,
+			'unregister_subscriber':	self.UnregisterSubscriberHandler 
+		}
 	
 	def DeviceDisconnectedCallback(self, data):
 		print "[DEBUG::Node] DeviceDisconnectedCallback"
@@ -78,19 +88,18 @@ class Node():
 			self.UserName 			= dataSystem["username"]
 			self.Password 			= dataSystem["password"]
 			# Device information
-			self.Type 				= dataSystem["device"]["type"]
-			self.OSType 			= dataSystem["device"]["ostype"]
-			self.OSVersion 			= dataSystem["device"]["osversion"]
-			self.BrandName 			= dataSystem["device"]["brandname"]
+			self.Type 				= dataSystem["node"]["type"]
+			self.OSType 			= dataSystem["node"]["ostype"]
+			self.OSVersion 			= dataSystem["node"]["osversion"]
+			self.BrandName 			= dataSystem["node"]["brandname"]
+			self.Name 				= dataSystem["node"]["name"]
+			self.Description 		= dataSystem["node"]["description"]
+			self.UserDefined		= dataSystem["user"]
 			# Device UUID MUST be read from HW device.
-			if "True" == dataSystem["device"]["isHW"]:
+			if "True" == dataSystem["node"]["isHW"]:
 				self.IsHardwareBased = True
-				if "" != dataSystem["sensors"]:
-					for sensor in dataSystem["sensors"]:
-						self.Sensors.append(MkSSensor.Sensor(self.UUID, sensor["type"], sensor["id"]))
-						self.SensorsLoaded = True
 			else:
-				self.UUID = dataSystem["device"]["uuid"]
+				self.UUID = dataSystem["node"]["uuid"]
 		except:
 			print "Error: [LoadSystemConfig] Wrong system.json format"
 			self.Exit()
@@ -126,10 +135,6 @@ class Node():
 				self.UUID = deviceUUID
 				print "Device UUID: " + self.UUID
 				self.Network.SetDeviceUUID(self.UUID)
-				# Need to update sensors UUID because LoadSystemConfig happend before device connection.
-				if True == self.IsHardwareBased:
-					for sensor in self.Sensors:
-						sensor.SetUUID(deviceUUID, sensor.ID)
 			else:
 				print "Error: [Run] Could not connect device"
 				self.Exit()
@@ -145,14 +150,7 @@ class Node():
 			self.AccessTick = 1
 		finally:
 			self.NetworkAccessTickLock.release()
-		SensorList = self.GetSensorList()
-		payloadStr = "[";
-		for sensor in SensorList:
-			payloadStr = payloadStr + sensor.ConvertToStr() + ','
-		if len(SensorList) > 0:
-			payloadStr = payloadStr[:-1] + "]"
-		else:
-			payloadStr = payloadStr + "]"
+		payloadStr = "[]"
 		if self.Network.Connect(self.UserName, self.Password, payloadStr) == True:
 			print "Register Device ..."
 			data, error = self.Network.RegisterDevice(self.DeviceInfo)
@@ -166,25 +164,49 @@ class Node():
 		self.State = "WORK"
 		self.OnWSConnected()
 
+	def GetNodeInfoHandler(self, message_type, source, data):
+		if True == self.SystemLoaded:
+			print self.UserDefined
+			res_payload = "\"state\":\"response\",\"status\":\"ok\",\"ts\":" + str(time.time()) + ",\"name\":\"" + self.Name + "\",\"description\":\"" + self.Description + "\", \"user\":" + json.dumps(self.UserDefined)
+			print res_payload
+			self.SendMessage(message_type, source, "get_node_info", res_payload)
+
+	def GetNodeStatusHandler(self, message_type, source, data):
+		if True == self.SystemLoaded:
+			res_payload = "\"state\":\"response\",\"status\":\"ok\",\"ts\":" + str(time.time()) + ",\"registered\":\"" + str(self.IsNodeRegistered(source)) + "\""
+			self.SendMessage(message_type, source, "get_node_status", res_payload)
+	
+	def RegisterSubscriberHandler(self, message_type, source, data):
+		print "RegisterSubscriberHandler"
+	
+	def UnregisterSubscriberHandler(self, message_type, source, data):
+		print "UnregisterSubscriberHandler"
+	
 	def WebSocketDataArrivedCallback (self, json):
 		self.State = "WORK"
 		#print "[NETWORK IN] - " + str(json)
 		messageType = self.Network.GetMessageTypeFromJson(json)
 		source = self.Network.GetSourceFromJson(json)
 		command = self.Network.GetCommandFromJson(json)
-		print "[NETWORK IN] - " + command
+		print "[DEBUG::Node Network(In)] " + command
 		if messageType == "CUSTOM":
 			return;
-		elif (messageType == "DIRECT" or messageType == "PRIVATE" or messageType == "BROADCAST" or messageType == "WEBFACE"):
+		elif messageType == "DIRECT" or messageType == "PRIVATE" or messageType == "BROADCAST" or messageType == "WEBFACE":
 			data = self.Network.GetDataFromJson(json)
-			self.OnWSDataArrived(messageType, source, data)
+			# If commands located in the list below, do not forward this message and handle it in this context.
+			if command in ["get_node_info", "get_node_status"]:
+				self.Handlers[command](messageType, source, data)
+			else:
+				self.OnWSDataArrived(messageType, source, data)
 		else:
 			print "Error: Not support " + request + " request type."
 
+	def IsNodeRegistered(self, subscriber_uuid):
+		return subscriber_uuid in self.RegisteredNodes
+	
 	def SendMessage (self, message_type, destination, command, payload):
 		message = self.Network.BuildMessage(message_type, destination, command, payload)
-		#print "[NETWORK OUT] - " + str(message)
-		print "[NETWORK OUT] - " + command
+		print "[DEBUG::Node Network(Out)] " + command
 		ret = self.Network.SendMessage(message)
 		if False == ret:
 			self.State = "ACCESS"
@@ -262,9 +284,6 @@ class Node():
 		except:
 			print "Error: [GetDeviceConfig] Wrong config.json format"
 			return ""
-
-	def GetSensorList (self):
-		return self.Sensors
 	
 	def GetSensorHWValue (self, id):
 		"""Get HW device sensor value"""
@@ -299,10 +318,10 @@ class Node():
 		self.Network.OnConnectionClosedCallback = self.WebSocketConnectionClosedCallback
 		self.Network.OnErrorCallback 			= self.WebSocketErrorCallback
 
+		self.SystemLoaded = True # Update node that system done loading.
 		self.OnNodeSystemLoaded()
 		
 		while self.IsRunnig:
-			print "[DEBUG::Node] NodeWorker"
 			time.sleep(0.5)
 			# If state is accessing network and it ia only the first time.
 			if self.State == "ACCESS" and self.AccessTick > 0:
