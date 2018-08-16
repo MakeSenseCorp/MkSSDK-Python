@@ -71,7 +71,8 @@ class Node():
 	
 	def DeviceDisconnectedCallback(self, data):
 		print "[DEBUG::Node] DeviceDisconnectedCallback"
-		self.Device.Disconnect()
+		if True == self.IsHardwareBased:
+			self.Device.Disconnect()
 		self.Network.Disconnect()
 		self.Stop()
 		self.Run(self.WorkingCallback)
@@ -338,7 +339,8 @@ class Node():
 			self.Method()
 		
 		print "[DEBUG::Node] Exit NodeWork"
-		self.Device.Disconnect()
+		if True == self.IsHardwareBased:
+			self.Device.Disconnect()
 		self.ExitEvent.set()
 
 	def Run (self, callback):
