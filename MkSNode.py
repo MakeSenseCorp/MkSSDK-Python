@@ -11,6 +11,7 @@ import socket
 from mksdk import MkSFile
 from mksdk import MkSNetMachine
 from mksdk import MkSDevice
+from mksdk import MkSUtils
 
 class Node():
 	"""Node respomsable for coordinate between web services
@@ -43,6 +44,7 @@ class Node():
 		self.AccessTick 		= 0
 		self.RegisteredNodes  	= []
 		self.SystemLoaded		= False
+		self.IsNodeMainEnabled	= False
 		# Inner state
 		self.States = {
 			'IDLE': 			self.StateIdle,
@@ -71,7 +73,7 @@ class Node():
 		}
 		# Node sockets
 		self.Connections 			= {}
-		self.LocalSocketServer		= (localhost, 16999)
+		self.LocalSocketServer		= ('localhost', 16999)
 		self.LocalSocketServerRun	= False
 		self.ThreadList				= []
 
@@ -101,11 +103,13 @@ class Node():
        	# SOCK_RDM        	Provides a reliable datagram layer that does not
         #               	guarantee ordering.
 
-		sock = socket.socket(socket.AF__INET, socket.SOCK_STREAM)
+		sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+		# sock.setblocking(0)
 		sock.bind(self.LocalSocketServer)
 		sock.listen(1)
 
 		self.LocalSocketServerRun = True
+		print "[DEBUG::Node] Starting socket local server"
 		while True == self.LocalSocketServerRun:
 			conn, clienAddr = sock.accept()
 			# Before recieving check whether we have not reach thread limit
@@ -114,6 +118,8 @@ class Node():
 			currThread = Thread(target=self.SocketClientHandler, args=(data,))
 			currThread.start()
 			self.ThreadList.append(currThread)
+		# Clean all resorses
+		print "[DEBUG::Node] Exit socket local server"
 	
 	def ScanForNodes(self):
 		print "ScanForNodes"
@@ -389,6 +395,8 @@ class Node():
 		self.SystemLoaded = True # Update node that system done loading.
 		self.OnNodeSystemLoaded()
 		
+		# We need to know if this worker is running for waiting mechanizm
+		self.IsNodeMainEnabled = True
 		while self.IsRunnig:
 			time.sleep(0.5)
 			# If state is accessing network and it ia only the first time.
@@ -412,13 +420,15 @@ class Node():
 
 	def Run (self, callback):
 		self.ExitEvent.clear()
-		thread.start_new_thread(self.NodeWorker, (callback, ))
-		thread.start_new_thread(self.NodeLocalNetworkConectionListener, ())
+		# thread.start_new_thread(self.NodeWorker, (callback, ))
+		print MkSUtils.get_lan_ip()
+		# thread.start_new_thread(self.NodeLocalNetworkConectionListener, ())
 		# Waiting here till SIGNAL from OS will come.
 		while self.IsRunnig:
 			time.sleep(0.5)
 		
-		self.ExitEvent.wait()
+		if True == self.IsNodeMainEnabled:
+			self.ExitEvent.wait()
 	
 	def Stop (self):
 		print "[DEBUG::Node] Stop"
