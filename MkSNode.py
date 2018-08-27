@@ -46,6 +46,7 @@ class Node():
 		self.SystemLoaded					= False
 		self.IsNodeMainEnabled  			= False
 		self.IsNodeLocalServerEnabled 		= False
+		self.IsMasterNode					= False
 		# Inner state
 		self.States = {
 			'IDLE': 						self.StateIdle,
@@ -75,7 +76,8 @@ class Node():
 		}
 		# Node sockets
 		self.Connections 					= {}
-		self.LocalSocketServer				= ('localhost', 16999)
+		self.MasterNodeServer				= ('localhost', 16999)
+		self.LocalSocketServer				= ('localhost', 10000)
 		self.LocalSocketServerRun			= False
 		self.ThreadList						= []
 
@@ -106,12 +108,16 @@ class Node():
         #               	guarantee ordering.
 		server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 		server.setblocking(0)
-		server.bind(self.LocalSocketServer)
+
+		if True == self.IsMasterNode:
+			server.bind(self.MasterNodeServer)
+		else:
+			server.bind(self.LocalSocketServer)
 		server.listen(5)
 
-		inputs 	= [server]
-		outputs = []
-		message_queues = {}
+		inputs 			= [server]
+		outputs 		= []
+		message_queues 	= {}
 
 		self.IsNodeLocalServerEnabled 	= True
 		self.LocalSocketServerRun 		= True
@@ -120,6 +126,7 @@ class Node():
 
 			for s in readable:
 				if s is server:
+					print "Accept"
 					connection, client_address = s.accept()
 					connection.setblocking(0)
 					inputs.append(connection)
@@ -466,11 +473,16 @@ class Node():
 	def SetConnectivityStatus(self, is_enabled):
 		self.IsNodeMainEnabled = is_enabled
 
+	def SetMasterNodeStatus(self, is_enabled):
+		self.IsMasterNode = is_enabled
+
 	def Run (self, callback):
 		self.ExitEvent.clear()
 		self.ExitLocalServerEvent.clear()
 		
-		print MkSUtils.get_lan_ip()
+		if False == self.IsMasterNode:
+			self.ConnectNodeSocket("10.85.115.74", True)
+		#	masterList = MkSUtils.FindLocalMasterNodes()
 
 		if True == self.IsNodeMainEnabled:
 			thread.start_new_thread(self.NodeWorker, (callback, ))
