@@ -76,6 +76,7 @@ class Node():
 			'unregister_subscriber':		self.UnregisterSubscriberHandler 
 		}
 		# Node sockets
+		self.MyLocalIP						= ""
 		self.Connections 					= {}
 		self.MasterNodeServer				= ('', 16999)
 		self.LocalSocketServer				= ('', 10000)
@@ -107,6 +108,21 @@ class Node():
 	def SocketClientHandler(self, uuid):
 		print uuid
 
+	def HandlerRouter (self, data, sock):
+		try:
+			jsonData = json.loads(data)
+			command = jsonData['command']
+
+			if "get_port" == command:
+				sock.send("{\"command\":\"get_port\",\"port\":10001}")
+			elif "get_local_nodes" == command:
+				print "get_local_nodes"
+			elif "get_master_info" == command:
+				print "get_master_info"
+			else:
+				print "[Node Server] Does NOT support this command", command
+		except:
+			print "[Node Server] HandlerRouter ERROR"
 	def NodeLocalNetworkConectionListener(self):
 		# AF_UNIX, AF_LOCAL   Local communication
        	# AF_INET             IPv4 Internet protocols
@@ -151,7 +167,7 @@ class Node():
 					print "[Node Server] Accept new connection", clientAddr
 					conn.setblocking(0)
 					self.RecievingSockets.append(conn)
-					self.SendingSockets.append(conn)
+					# self.SendingSockets.append(conn)
 					self.Connections[conn] = [clientAddr, Queue.Queue(), conn]
 				else:
 					print "[Node Server] Client communicate", self.Connections[sock][0]
@@ -163,14 +179,15 @@ class Node():
 						if data:
 							print data
 							# Client sending data.
-							self.Connections[sock][1].put(data)
-							if sock not in self.SendingSockets:
-								self.SendingSockets.append(sock)
+							# self.Connections[sock][1].put(data)
+							# if sock not in self.SendingSockets:
+							#	self.SendingSockets.append(sock)
 
 							if "MKS" in data[:3]:
-								print "Makesense request"
+								print "[Node Server] MakeSense REQUEST"
+								self.HandlerRouter((data.split('\n'))[1], sock)
 							else:
-								print "Drop"
+								print "[Node Server] Data Invalid"
 						else:
 							print "[Node Server] Closing connection"
 							# Client might be disconnected.
@@ -178,15 +195,17 @@ class Node():
 								self.SendingSockets.remove(sock)
 							self.RecievingSockets.remove(sock)
 							sock.close()
-							del self.Connections[sock][1]
+							del self.Connections[sock]
 
-			for sock in writable:
-				try:
-					next_msg = self.Connections[sock][1].get_nowait()
-				except Queue.Empty:
-					self.SendingSockets.remove(sock)
-				else:
-					sock.send(next_msg)
+			#for sock in writable:
+			#	try:
+			#		if sock in self.Connections:
+			#			next_msg = self.Connections[sock][1].get_nowait()
+			#			sock.send(next_msg)
+			#	except:
+			#		print "[Node Server] Send ERROR"
+			#		if sock in self.SendingSockets:
+			#			self.SendingSockets.remove(sock)
 
 			for sock in exceptional:
 				self.RecievingSockets.remove(sock)
@@ -221,19 +240,16 @@ class Node():
 		ip_addr = ""
 		return ip_addr
 
-	def ConnectNodeSocket(self, ip_addr, no_thread):
+	def ConnectNodeSocket(self, ip_addr_port):
 		sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-		serverAddr = ((ip_addr, 16999))
 		sock.settimeout(5)
 		try:
-			print "Connecting to", ip_addr
-			sock.connect(serverAddr)
-			self.MasterNodesList.append(sock)
-			print "Connected ..."
+			print "Connecting to", ip_addr_port
+			sock.connect(ip_addr_port)
+			return sock, True
 		except:
-			print "Could not connect server", ip_addr
-		# Open thread to communicate only if no_thread is False.
-		# If continues connection, store socket in DB.
+			print "Could not connect server", ip_addr_port
+			return None, False
 
 	def CreateConnectionToNode(self, uuid):
 		print "CreateConnectionToNode"
@@ -528,14 +544,28 @@ class Node():
 	def Run (self, callback):
 		self.ExitEvent.clear()
 		self.ExitLocalServerEvent.clear()
+
+		self.MyLocalIP = MkSUtils.GetLocalIP()
 		
 		if False == self.IsMasterNode:
 			# Find all master nodes on the network.
-			# Find local master and get port port number.
-			self.ConnectNodeSocket("10.0.0.7", True)
+			masterIPPortList = MkSUtils.FindLocalMasterNodes()
+			for masterIpPort in masterIPPortList:
+				sock, status = self.ConnectNodeSocket(masterIpPort)
+				if True == status:
+					self.MasterNodesList.append([sock, masterIpPort[0]])
+				else:
+					print "[Node Server] Could not connect"
+			# Foreach master node need to send request of list nodes related to  master,
+			# also if master is local than node need to ask for port.
 			for master in self.MasterNodesList:
-				master.send("MKS: Data\nHello\n")
-		#	masterList = MkSUtils.FindLocalMasterNodes()
+				# Find local master and get port port number.
+				if self.MyLocalIP in master[1]:
+					print "This is my master"
+					# This is node's master, thus send port request.
+					master[0].send("MKS: Data\n{\"command\":\"get_port\"}\n")
+				else:
+					master[0].send("MKS: Data\n{\"command\":\"get_local_nodes\"}\n")
 
 		if True == self.IsNodeMainEnabled:
 			thread.start_new_thread(self.NodeWorker, (callback, ))
