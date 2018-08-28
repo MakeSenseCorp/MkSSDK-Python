@@ -7,6 +7,7 @@ import time
 import json
 import signal
 import socket, select
+import Queue
 
 from mksdk import MkSFile
 from mksdk import MkSNetMachine
@@ -76,10 +77,32 @@ class Node():
 		}
 		# Node sockets
 		self.Connections 					= {}
-		self.MasterNodeServer				= ('localhost', 16999)
-		self.LocalSocketServer				= ('localhost', 10000)
+		self.MasterNodeServer				= ('', 16999)
+		self.LocalSocketServer				= ('', 10000)
 		self.LocalSocketServerRun			= False
-		self.ThreadList						= []
+		self.RecievingSockets				= []
+		self.SendingSockets					= []
+		self.MasterNodesList				= []
+		# Master Section
+		self.MasterVersion					= "1.0.1"
+		self.PackagesList					= ["Gateway","LinuxTerminal","USBManager"] # Default Master capabilities.
+		self.PortsForClients				= [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32]
+		# Master Node Request Handlers
+		self.Handlers						= {
+			'get_port': 					self.GetPort_MasterHandler,
+			'get_local_nodes': 				self.GetLocalNodes_MasterHandler,
+			'get_master_info':				self.GetMasterInfo_MasterHandler
+		}
+
+	def GetPort_MasterHandler(self, sock):
+		port =self.PortsForClients.pop()
+		print "GetPort_MasterHandler"
+
+	def GetLocalNodes_MasterHandler(self):
+		print "GetLocalNodes_MasterHandler"
+
+	def GetMasterInfo_MasterHandler(self):
+		print "GetMasterInfo_MasterHandler"
 
 	def SocketClientHandler(self, uuid):
 		print uuid
@@ -115,56 +138,75 @@ class Node():
 			server.bind(self.LocalSocketServer)
 		server.listen(5)
 
-		inputs 			= [server]
-		outputs 		= []
-		message_queues 	= {}
+		self.RecievingSockets.append(server)
 
 		self.IsNodeLocalServerEnabled 	= True
 		self.LocalSocketServerRun 		= True
 		while True == self.LocalSocketServerRun:
-			readable, writable, exceptional = select.select(inputs, outputs, inputs, 0.5)
+			readable, writable, exceptional = select.select(self.RecievingSockets, self.SendingSockets, self.RecievingSockets, 0.5)
 
-			for s in readable:
-				if s is server:
-					print "Accept"
-					connection, client_address = s.accept()
-					connection.setblocking(0)
-					inputs.append(connection)
-					message_queues[connection] = Queue.Queue()
+			for sock in readable:
+				if sock is server:
+					conn, clientAddr = sock.accept()
+					print "[Node Server] Accept new connection", clientAddr
+					conn.setblocking(0)
+					self.RecievingSockets.append(conn)
+					self.SendingSockets.append(conn)
+					self.Connections[conn] = [clientAddr, Queue.Queue(), conn]
 				else:
-					data = s.recv(1024)
-					if data:
-						message_queues[s].put(data)
-						if s not in outputs:
-							outputs.append(s)
+					print "[Node Server] Client communicate", self.Connections[sock][0]
+					try:
+						data = sock.recv(1024)
+					except:
+						print "[Node Server] Recieve ERROR"
 					else:
-						if s in outputs:
-							outputs.remove(s)
-						inputs.remove(s)
-						s.close()
-						del message_queues[s]
+						if data:
+							print data
+							# Client sending data.
+							self.Connections[sock][1].put(data)
+							if sock not in self.SendingSockets:
+								self.SendingSockets.append(sock)
 
-			for s in writable:
+							if "MKS" in data[:3]:
+								print "Makesense request"
+							else:
+								print "Drop"
+						else:
+							print "[Node Server] Closing connection"
+							# Client might be disconnected.
+							if sock in self.SendingSockets:
+								self.SendingSockets.remove(sock)
+							self.RecievingSockets.remove(sock)
+							sock.close()
+							del self.Connections[sock][1]
+
+			for sock in writable:
 				try:
-					next_msg = message_queues[s].get_nowait()
+					next_msg = self.Connections[sock][1].get_nowait()
 				except Queue.Empty:
-					outputs.remove(s)
+					self.SendingSockets.remove(sock)
 				else:
-					s.send(next_msg)
+					sock.send(next_msg)
 
-			for s in exceptional:
-				inputs.remove(s)
-				if s in outputs:
-					outputs.remove(s)
-				s.close()
-				del message_queues[s]
+			for sock in exceptional:
+				self.RecievingSockets.remove(sock)
+				if sock in self.SendingSockets:
+					self.SendingSockets.remove(sock)
+				sock.close()
+				del self.Connections[sock]
 
-			# Clean all resorses
-			# data = conn.recv(128)
-			# self.Connections[data] = conn
-			# currThread = Thread(target=self.SocketClientHandler, args=(data,))
-			# currThread.start()
-			# self.ThreadList.append(currThread)
+		# data = conn.recv(128)
+		# self.Connections[data] = conn
+		# currThread = Thread(target=self.SocketClientHandler, args=(data,))
+		# currThread.start()
+		# self.ThreadList.append(currThread)
+
+		# Clean all resorses before exit.
+		self.Connections.clear()
+		for sock in self.RecievingSockets:
+			sock.close()
+		for sock in self.SendingSockets:
+			sock.close()
 
 		print "[DEBUG::Node] Exit local socket server"
 		self.ExitLocalServerEvent.set()
@@ -181,8 +223,15 @@ class Node():
 
 	def ConnectNodeSocket(self, ip_addr, no_thread):
 		sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-		serverAddr = (ip_addr, 16999)
-		sock.connect(serverAddr)
+		serverAddr = ((ip_addr, 16999))
+		sock.settimeout(5)
+		try:
+			print "Connecting to", ip_addr
+			sock.connect(serverAddr)
+			self.MasterNodesList.append(sock)
+			print "Connected ..."
+		except:
+			print "Could not connect server", ip_addr
 		# Open thread to communicate only if no_thread is False.
 		# If continues connection, store socket in DB.
 
@@ -481,7 +530,11 @@ class Node():
 		self.ExitLocalServerEvent.clear()
 		
 		if False == self.IsMasterNode:
-			self.ConnectNodeSocket("10.85.115.74", True)
+			# Find all master nodes on the network.
+			# Find local master and get port port number.
+			self.ConnectNodeSocket("10.0.0.7", True)
+			for master in self.MasterNodesList:
+				master.send("MKS: Data\nHello\n")
 		#	masterList = MkSUtils.FindLocalMasterNodes()
 
 		if True == self.IsNodeMainEnabled:
