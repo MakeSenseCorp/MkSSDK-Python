@@ -48,6 +48,7 @@ class Node():
 		self.IsNodeMainEnabled  			= False
 		self.IsNodeLocalServerEnabled 		= False
 		self.IsMasterNode					= False
+		self.IsListenerEnabled 				= False
 		# Inner state
 		self.States = {
 			'IDLE': 						self.StateIdle,
@@ -84,6 +85,7 @@ class Node():
 		self.RecievingSockets				= []
 		self.SendingSockets					= []
 		self.MasterNodesList				= []
+		self.ServerSocket					= None
 		# Master Section
 		self.MasterVersion					= "1.0.1"
 		self.PackagesList					= ["Gateway","LinuxTerminal","USBManager"] # Default Master capabilities.
@@ -108,17 +110,28 @@ class Node():
 	def SocketClientHandler(self, uuid):
 		print uuid
 
+	# Handler triggered by request and response
 	def HandlerRouter (self, data, sock):
 		try:
-			jsonData = json.loads(data)
-			command = jsonData['command']
+			jsonData 	= json.loads(data)
+			command 	= jsonData['command']
+			direction 	= jsonData['direction']
 
 			if "get_port" == command:
-				sock.send("{\"command\":\"get_port\",\"port\":10001}")
+				if "request" == direction:
+					sock.send("MKS: Data\n{\"command\":\"get_port\",\"direction\":\"response\",\"port\":10001}\n")
+				elif "response" == direction:
+					print "Execute RESPONSE handler for \"get_port\""
 			elif "get_local_nodes" == command:
-				print "get_local_nodes"
+				if "request" == direction:
+					sock.send("MKS: Data\n{\"command\":\"get_local_nodes\",\"direction\":\"response\",\"nodes\":[]}\n")
+				elif "response" == direction:
+					print "Execute RESPONSE handler for \"get_local_nodes\""
 			elif "get_master_info" == command:
-				print "get_master_info"
+				if "request" == direction:
+					print "get_master_info"
+				elif "response" == direction:
+					print "Execute RESPONSE handler for \"get_master_info\""
 			else:
 				print "[Node Server] Does NOT support this command", command
 		except:
@@ -145,16 +158,20 @@ class Node():
        	#
        	# SOCK_RDM        	Provides a reliable datagram layer that does not
         #               	guarantee ordering.
-		server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-		server.setblocking(0)
+		if True == self.IsListenerEnabled:
+			self.ServerSocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+			self.ServerSocket.setblocking(0)
 
-		if True == self.IsMasterNode:
-			server.bind(self.MasterNodeServer)
-		else:
-			server.bind(self.LocalSocketServer)
-		server.listen(5)
+			try:
+				if True == self.IsMasterNode:
+					self.ServerSocket.bind(self.MasterNodeServer)
+				else:
+					self.ServerSocket.bind(self.LocalSocketServer)
+			except:
+				return;
 
-		self.RecievingSockets.append(server)
+			self.ServerSocket.listen(5)
+			self.RecievingSockets.append(self.ServerSocket)
 
 		self.IsNodeLocalServerEnabled 	= True
 		self.LocalSocketServerRun 		= True
@@ -162,7 +179,7 @@ class Node():
 			readable, writable, exceptional = select.select(self.RecievingSockets, self.SendingSockets, self.RecievingSockets, 0.5)
 
 			for sock in readable:
-				if sock is server:
+				if sock is self.ServerSocket and True == self.IsListenerEnabled:
 					conn, clientAddr = sock.accept()
 					print "[Node Server] Accept new connection", clientAddr
 					conn.setblocking(0)
@@ -177,15 +194,16 @@ class Node():
 						print "[Node Server] Recieve ERROR"
 					else:
 						if data:
-							print data
+							# print data
 							# Client sending data.
 							# self.Connections[sock][1].put(data)
 							# if sock not in self.SendingSockets:
 							#	self.SendingSockets.append(sock)
 
 							if "MKS" in data[:3]:
-								print "[Node Server] MakeSense REQUEST"
-								self.HandlerRouter((data.split('\n'))[1], sock)
+								multiData = data.split("MKS: ")
+								for data in multiData[1:]:
+									self.HandlerRouter((data.split('\n'))[1], sock)
 							else:
 								print "[Node Server] Data Invalid"
 						else:
@@ -246,6 +264,8 @@ class Node():
 		try:
 			print "Connecting to", ip_addr_port
 			sock.connect(ip_addr_port)
+			self.RecievingSockets.append(sock)
+			self.Connections[sock] = [ip_addr_port[0], Queue.Queue(), sock]
 			return sock, True
 		except:
 			print "Could not connect server", ip_addr_port
@@ -539,7 +559,8 @@ class Node():
 		self.IsNodeMainEnabled = is_enabled
 
 	def SetMasterNodeStatus(self, is_enabled):
-		self.IsMasterNode = is_enabled
+		self.IsMasterNode 		= is_enabled
+		self.IsListenerEnabled 	= is_enabled
 
 	def Run (self, callback):
 		self.ExitEvent.clear()
@@ -563,9 +584,10 @@ class Node():
 				if self.MyLocalIP in master[1]:
 					print "This is my master"
 					# This is node's master, thus send port request.
-					master[0].send("MKS: Data\n{\"command\":\"get_port\"}\n")
+					master[0].send("MKS: Data\n{\"command\":\"get_port\",\"direction\":\"request\"}\n")
+					master[0].send("MKS: Data\n{\"command\":\"get_local_nodes\",\"direction\":\"request\"}\n")
 				else:
-					master[0].send("MKS: Data\n{\"command\":\"get_local_nodes\"}\n")
+					master[0].send("MKS: Data\n{\"command\":\"get_local_nodes\",\"direction\":\"request\"}\n")
 
 		if True == self.IsNodeMainEnabled:
 			thread.start_new_thread(self.NodeWorker, (callback, ))
