@@ -6,6 +6,7 @@ import threading
 import time
 import json
 import signal
+import socket
 
 from mksdk import MkSFile
 from mksdk import MkSNetMachine
@@ -68,7 +69,73 @@ class Node():
 			'register_subscriber':		self.RegisterSubscriberHandler,
 			'unregister_subscriber':	self.UnregisterSubscriberHandler 
 		}
+		# Node sockets
+		self.Connections 			= {}
+		self.LocalSocketServer		= (localhost, 16999)
+		self.LocalSocketServerRun	= False
+		self.ThreadList				= []
+
+	def SocketClientHandler(self, uuid):
+		print uuid
+
+	def NodeLocalNetworkConectionListener(self):
+		# AF_UNIX, AF_LOCAL   Local communication
+       	# AF_INET             IPv4 Internet protocols
+       	# AF_INET6            IPv6 Internet protocols
+       	# AF_PACKET           Low level packet interface
+       	#
+       	# SOCK_STREAM     	Provides sequenced, reliable, two-way, connection-
+        #               	based byte streams.  An out-of-band data transmission
+        #               	mechanism may be supported.
+        #
+        # SOCK_DGRAM      	Supports datagrams (connectionless, unreliable
+        #               	messages of a fixed maximum length).
+        #
+       	# SOCK_SEQPACKET  	Provides a sequenced, reliable, two-way connection-
+        #               	based data transmission path for datagrams of fixed
+        #               	maximum length; a consumer is required to read an
+        #               	entire packet with each input system call.
+        #
+       	# SOCK_RAW        	Provides raw network protocol access.
+       	#
+       	# SOCK_RDM        	Provides a reliable datagram layer that does not
+        #               	guarantee ordering.
+
+		sock = socket.socket(socket.AF__INET, socket.SOCK_STREAM)
+		sock.bind(self.LocalSocketServer)
+		sock.listen(1)
+
+		self.LocalSocketServerRun = True
+		while True == self.LocalSocketServerRun:
+			conn, clienAddr = sock.accept()
+			# Before recieving check whether we have not reach thread limit
+			data = conn.recv(128)
+			self.Connections[data] = conn
+			currThread = Thread(target=self.SocketClientHandler, args=(data,))
+			currThread.start()
+			self.ThreadList.append(currThread)
 	
+	def ScanForNodes(self):
+		print "ScanForNodes"
+		# Get local IP
+		# Scan from 1 to 240
+		# Add nodes to the list
+
+	def GetUUIDFromIP(self, uuid):
+		ip_addr = ""
+		return ip_addr
+
+	def ConnectNodeSocket(self, ip_addr, no_thread):
+		sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+		serverAddr = (ip_addr, 16999)
+		sock.connect(serverAddr)
+		# Open thread to communicate only if no_thread is False
+
+	def CreateConnectionToNode(self, uuid):
+		print "CreateConnectionToNode"
+		ip_addr = self.GetUUIDFromIP(uuid)
+		self.ConnectNodeSocket(ip_addr, False)
+
 	def DeviceDisconnectedCallback(self, data):
 		print "[DEBUG::Node] DeviceDisconnectedCallback"
 		if True == self.IsHardwareBased:
@@ -346,6 +413,7 @@ class Node():
 	def Run (self, callback):
 		self.ExitEvent.clear()
 		thread.start_new_thread(self.NodeWorker, (callback, ))
+		thread.start_new_thread(self.NodeLocalNetworkConectionListener, ())
 		# Waiting here till SIGNAL from OS will come.
 		while self.IsRunnig:
 			time.sleep(0.5)
@@ -354,7 +422,8 @@ class Node():
 	
 	def Stop (self):
 		print "[DEBUG::Node] Stop"
-		self.IsRunnig = False
+		self.IsRunnig 				= False
+		self.LocalSocketServerRun 	= False
 	
 	def Pause (self):
 		print "Pause"
