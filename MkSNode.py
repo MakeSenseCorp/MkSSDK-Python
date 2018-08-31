@@ -6,7 +6,7 @@ import threading
 import time
 import json
 import signal
-import socket
+import socket, select
 
 from mksdk import MkSFile
 from mksdk import MkSNetMachine
@@ -19,63 +19,65 @@ class Node():
 	   
 	def __init__(self, node_type):
 		# Objects node depend on
-		self.File 				= MkSFile.File()
-		self.Device 			= None
-		self.Network			= None
+		self.File 							= MkSFile.File()
+		self.Device 						= None
+		self.Network						= None
 		# Node connection to WS information
-		self.ApiUrl 			= ""
-		self.WsUrl				= ""
-		self.UserName 			= ""
-		self.Password 			= ""
-		self.NodeType 			= node_type
+		self.ApiUrl 						= ""
+		self.WsUrl							= ""
+		self.UserName 						= ""
+		self.Password 						= ""
+		self.NodeType 						= node_type
 		# Device information
-		self.Type 				= 0
-		self.UUID 				= ""
-		self.IsHardwareBased 	= False
-		self.OSType 			= ""
-		self.OSVersion 			= ""
-		self.BrandName 			= ""
-		self.Name 				= ""
-		self.Description		= ""
-		self.DeviceInfo 		= None
+		self.Type 							= 0
+		self.UUID 							= ""
+		self.IsHardwareBased 				= False
+		self.OSType 						= ""
+		self.OSVersion 						= ""
+		self.BrandName 						= ""
+		self.Name 							= ""
+		self.Description					= ""
+		self.DeviceInfo 					= None
 		# Misc
-		self.State 				= 'IDLE'
-		self.IsRunnig 			= True
-		self.AccessTick 		= 0
-		self.RegisteredNodes  	= []
-		self.SystemLoaded		= False
-		self.IsNodeMainEnabled	= False
+		self.State 							= 'IDLE'
+		self.IsRunnig 						= True
+		self.AccessTick 					= 0
+		self.RegisteredNodes  				= []
+		self.SystemLoaded					= False
+		self.IsNodeMainEnabled  			= False
+		self.IsNodeLocalServerEnabled 		= False
 		# Inner state
 		self.States = {
-			'IDLE': 			self.StateIdle,
-			'CONNECT_DEVICE':	self.StateConnectDevice,
-			'ACCESS': 			self.StateGetAccess,
-			'WORK': 			self.StateWork
+			'IDLE': 						self.StateIdle,
+			'CONNECT_DEVICE':				self.StateConnectDevice,
+			'ACCESS': 						self.StateGetAccess,
+			'WORK': 						self.StateWork
 		}
 		# Callbacks
-		self.WorkingCallback 		= None
-		self.OnWSDataArrived 		= None
-		self.OnWSConnected 			= None
-		self.OnWSConnectionClosed 	= None
-		self.OnNodeSystemLoaded 	= None
+		self.WorkingCallback 				= None
+		self.OnWSDataArrived 				= None
+		self.OnWSConnected 					= None
+		self.OnWSConnectionClosed 			= None
+		self.OnNodeSystemLoaded 			= None
 		# Locks and Events
-		self.NetworkAccessTickLock 	= threading.Lock()
-		self.DeviceLock			 	= threading.Lock()
-		self.ExitEvent 				= threading.Event()
+		self.NetworkAccessTickLock 			= threading.Lock()
+		self.DeviceLock			 			= threading.Lock()
+		self.ExitEvent 						= threading.Event()
+		self.ExitLocalServerEvent			= threading.Event()
 		# Debug
-		self.DebugMode				= False
+		self.DebugMode						= False
 		# Handlers
-		self.Handlers				= {
-			'get_node_info': 			self.GetNodeInfoHandler,
-			'get_node_status': 			self.GetNodeStatusHandler,
-			'register_subscriber':		self.RegisterSubscriberHandler,
-			'unregister_subscriber':	self.UnregisterSubscriberHandler 
+		self.Handlers						= {
+			'get_node_info': 				self.GetNodeInfoHandler,
+			'get_node_status': 				self.GetNodeStatusHandler,
+			'register_subscriber':			self.RegisterSubscriberHandler,
+			'unregister_subscriber':		self.UnregisterSubscriberHandler 
 		}
 		# Node sockets
-		self.Connections 			= {}
-		self.LocalSocketServer		= ('localhost', 16999)
-		self.LocalSocketServerRun	= False
-		self.ThreadList				= []
+		self.Connections 					= {}
+		self.LocalSocketServer				= ('localhost', 16999)
+		self.LocalSocketServerRun			= False
+		self.ThreadList						= []
 
 	def SocketClientHandler(self, uuid):
 		print uuid
@@ -102,24 +104,63 @@ class Node():
        	#
        	# SOCK_RDM        	Provides a reliable datagram layer that does not
         #               	guarantee ordering.
+		server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+		server.setblocking(0)
+		server.bind(self.LocalSocketServer)
+		server.listen(5)
 
-		sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-		# sock.setblocking(0)
-		sock.bind(self.LocalSocketServer)
-		sock.listen(1)
+		inputs 	= [server]
+		outputs = []
+		message_queues = {}
 
-		self.LocalSocketServerRun = True
-		print "[DEBUG::Node] Starting socket local server"
+		self.IsNodeLocalServerEnabled 	= True
+		self.LocalSocketServerRun 		= True
 		while True == self.LocalSocketServerRun:
-			conn, clienAddr = sock.accept()
-			# Before recieving check whether we have not reach thread limit
-			data = conn.recv(128)
-			self.Connections[data] = conn
-			currThread = Thread(target=self.SocketClientHandler, args=(data,))
-			currThread.start()
-			self.ThreadList.append(currThread)
-		# Clean all resorses
-		print "[DEBUG::Node] Exit socket local server"
+			readable, writable, exceptional = select.select(inputs, outputs, inputs, 0.5)
+
+			for s in readable:
+				if s is server:
+					connection, client_address = s.accept()
+					connection.setblocking(0)
+					inputs.append(connection)
+					message_queues[connection] = Queue.Queue()
+				else:
+					data = s.recv(1024)
+					if data:
+						message_queues[s].put(data)
+						if s not in outputs:
+							outputs.append(s)
+					else:
+						if s in outputs:
+							outputs.remove(s)
+						inputs.remove(s)
+						s.close()
+						del message_queues[s]
+
+			for s in writable:
+				try:
+					next_msg = message_queues[s].get_nowait()
+				except Queue.Empty:
+					outputs.remove(s)
+				else:
+					s.send(next_msg)
+
+			for s in exceptional:
+				inputs.remove(s)
+				if s in outputs:
+					outputs.remove(s)
+				s.close()
+				del message_queues[s]
+
+			# Clean all resorses
+			# data = conn.recv(128)
+			# self.Connections[data] = conn
+			# currThread = Thread(target=self.SocketClientHandler, args=(data,))
+			# currThread.start()
+			# self.ThreadList.append(currThread)
+
+		print "[DEBUG::Node] Exit local socket server"
+		self.ExitLocalServerEvent.set()
 	
 	def ScanForNodes(self):
 		print "ScanForNodes"
@@ -135,7 +176,8 @@ class Node():
 		sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 		serverAddr = (ip_addr, 16999)
 		sock.connect(serverAddr)
-		# Open thread to communicate only if no_thread is False
+		# Open thread to communicate only if no_thread is False.
+		# If continues connection, store socket in DB.
 
 	def CreateConnectionToNode(self, uuid):
 		print "CreateConnectionToNode"
@@ -418,17 +460,32 @@ class Node():
 			self.Device.Disconnect()
 		self.ExitEvent.set()
 
+	def SetLocalServerStatus(self, is_enabled):
+		self.IsNodeLocalServerEnabled = is_enabled
+
+	def SetConnectivityStatus(self, is_enabled):
+		self.IsNodeMainEnabled = is_enabled
+
 	def Run (self, callback):
 		self.ExitEvent.clear()
-		# thread.start_new_thread(self.NodeWorker, (callback, ))
+		self.ExitLocalServerEvent.clear()
+		
 		print MkSUtils.get_lan_ip()
-		# thread.start_new_thread(self.NodeLocalNetworkConectionListener, ())
+
+		if True == self.IsNodeMainEnabled:
+			thread.start_new_thread(self.NodeWorker, (callback, ))
+		if True == self.IsNodeLocalServerEnabled:
+			thread.start_new_thread(self.NodeLocalNetworkConectionListener, ())
+
 		# Waiting here till SIGNAL from OS will come.
 		while self.IsRunnig:
 			time.sleep(0.5)
 		
 		if True == self.IsNodeMainEnabled:
 			self.ExitEvent.wait()
+
+		if True == self.IsNodeLocalServerEnabled:
+			self.ExitLocalServerEvent.wait()
 	
 	def Stop (self):
 		print "[DEBUG::Node] Stop"
