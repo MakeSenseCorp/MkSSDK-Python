@@ -56,7 +56,7 @@ def ScanLocalNetwork(network_ip):
 
 def ScanLocalNetworkForMasterPort(network_ip):
 	machines = []
-	for i in range(1, 10):
+	for i in range(1, 16):
 		IPAddress = network_ip + str(i)
 
 		sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)

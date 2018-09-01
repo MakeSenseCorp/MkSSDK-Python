@@ -14,6 +14,13 @@ from mksdk import MkSNetMachine
 from mksdk import MkSDevice
 from mksdk import MkSUtils
 
+class LocalClient():
+	def __init__(self, ip, port, uuid, sock):
+		self.IP 	= ip
+		self.Port 	= port
+		self.UUID 	= uuid
+		self.Socket = sock
+
 class Node():
 	"""Node respomsable for coordinate between web services
 	and adaptor (in most cases serial)"""
@@ -78,6 +85,7 @@ class Node():
 		}
 		# Node sockets
 		self.MyLocalIP						= ""
+		self.SlaveListenerPort 				= 0
 		self.Connections 					= {}
 		self.MasterNodeServer				= ('', 16999)
 		self.LocalSocketServer				= ('', 10000)
@@ -86,10 +94,19 @@ class Node():
 		self.SendingSockets					= []
 		self.MasterNodesList				= []
 		self.ServerSocket					= None
+		self.MasterSocket					= None
+		# Slave state
+		self.SlaveState						= 'IDLE'
+		self.SlaveStates = {
+			'IDLE': 						self.SlaveStateIdle,
+			'CONNECT_MASTER':				self.SlaveStateConnectMaster,
+			'CONNECTED': 					self.SlaveConnected
+		}
 		# Master Section
 		self.MasterVersion					= "1.0.1"
 		self.PackagesList					= ["Gateway","LinuxTerminal","USBManager"] # Default Master capabilities.
 		self.PortsForClients				= [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32]
+		self.LocalSlaveList					= []
 		# Master Node Request Handlers
 		self.Handlers						= {
 			'get_port': 					self.GetPort_MasterHandler,
@@ -116,26 +133,87 @@ class Node():
 			jsonData 	= json.loads(data)
 			command 	= jsonData['command']
 			direction 	= jsonData['direction']
+			ip 			= self.Connections[sock][0][0]
 
 			if "get_port" == command:
 				if "request" == direction:
-					sock.send("MKS: Data\n{\"command\":\"get_port\",\"direction\":\"response\",\"port\":10001}\n")
+					uuid = jsonData['uuid']
+					if self.PortsForClients:
+						existingSlave = None
+						for slave in self.LocalSlaveList:
+							if slave.UUID == uuid:
+								existingSlave = slave
+								continue
+
+						if None == existingSlave:
+							port = 10000 + self.PortsForClients.pop()
+							print self.PortsForClients
+							self.LocalSlaveList.append(LocalClient(ip, port, uuid, sock))
+							payload = "MKS: Data\n{\"command\":\"get_port\",\"direction\":\"response\",\"port\":" + str(port) + "}\n"
+							sock.send(payload)
+						else:
+							payload = "MKS: Data\n{\"command\":\"get_port\",\"direction\":\"response\",\"port\":" + str(existingSlave.Port) + "}\n"
+							sock.send(payload)
+					else:
+						sock.send("MKS: Data\n{\"command\":\"get_port\",\"direction\":\"response\",\"port\":0,\"error:\":\"NO_PORT\"}\n")
 				elif "response" == direction:
-					print "Execute RESPONSE handler for \"get_port\""
+					print "Execute RESPONSE handler for \"get_port\"", data
+					self.SlaveListenerPort = int(jsonData['port'])
 			elif "get_local_nodes" == command:
 				if "request" == direction:
-					sock.send("MKS: Data\n{\"command\":\"get_local_nodes\",\"direction\":\"response\",\"nodes\":[]}\n")
+					nodes = ""
+					if self.LocalSlaveList:
+						for node in self.LocalSlaveList:
+							nodes = nodes + "{\"ip\":\"" + str(node.IP) + "\",\"port\":" + str(node.Port) + ",\"uuid\":\"" + node.UUID + "\"},"
+						nodes = nodes[:-1]
+					payload = "MKS: Data\n{\"command\":\"get_local_nodes\",\"direction\":\"response\",\"nodes\":[" + nodes + "]}\n"
+					sock.send(payload)
 				elif "response" == direction:
-					print "Execute RESPONSE handler for \"get_local_nodes\""
+					print "Execute RESPONSE handler for \"get_local_nodes\"", data
 			elif "get_master_info" == command:
 				if "request" == direction:
 					print "get_master_info"
 				elif "response" == direction:
-					print "Execute RESPONSE handler for \"get_master_info\""
+					print "Execute RESPONSE handler for \"get_master_info\"", data
 			else:
 				print "[Node Server] Does NOT support this command", command
 		except:
-			print "[Node Server] HandlerRouter ERROR"
+			print "[Node Server] HandlerRouter ERROR", sys.exc_info()[0]
+
+	def SlaveStateIdle(self):
+		self.SlaveState = "CONNECT_MASTER"
+		# Init state logic must be here.
+
+	def SlaveStateConnectMaster(self):
+		print "SlaveStateConnectMaster"
+		# Find all master nodes on the network.
+		masterIPPortList = MkSUtils.FindLocalMasterNodes()
+		self.MasterNodesList = []
+		for masterIpPort in masterIPPortList:
+			sock, status = self.ConnectNodeSocket(masterIpPort)
+			if True == status:
+				self.MasterNodesList.append([sock, masterIpPort[0]])
+			else:
+				print "[Node Server] Could not connect"
+		# Foreach master node need to send request of list nodes related to  master,
+		# also if master is local than node need to ask for port.
+		for master in self.MasterNodesList:
+			# Find local master and get port port number.
+			if self.MyLocalIP in master[1]:
+				self.SlaveState 	= "CONNECTED"
+				self.MasterSocket 	= master[0]
+				# This is node's master, thus send port request.
+				self.MasterSocket.send("MKS: Data\n{\"command\":\"get_port\",\"direction\":\"request\",\"uuid\":\"" + self.UUID + "\"}\n")
+				self.MasterSocket.send("MKS: Data\n{\"command\":\"get_local_nodes\",\"direction\":\"request\",\"uuid\":\"" + self.UUID + "\"}\n")
+			else:
+				master[0].send("MKS: Data\n{\"command\":\"get_local_nodes\",\"direction\":\"request\"}\n")
+
+	def SlaveConnected(self):
+		self.SlaveState = "CONNECTED"
+		# Check if slave has a port.
+		if 0 == self.SlaveListenerPort:
+			self.SlaveState = "CONNECT_MASTER"
+
 	def NodeLocalNetworkConectionListener(self):
 		# AF_UNIX, AF_LOCAL   Local communication
        	# AF_INET             IPv4 Internet protocols
@@ -178,6 +256,12 @@ class Node():
 		while True == self.LocalSocketServerRun:
 			readable, writable, exceptional = select.select(self.RecievingSockets, self.SendingSockets, self.RecievingSockets, 0.5)
 
+			# Running slave state machine.
+			if False == self.IsMasterNode:
+				self.SlaveMethod = self.SlaveStates[self.SlaveState]
+				self.SlaveMethod()
+
+			# Socket management.
 			for sock in readable:
 				if sock is self.ServerSocket and True == self.IsListenerEnabled:
 					conn, clientAddr = sock.accept()
@@ -194,7 +278,7 @@ class Node():
 						print "[Node Server] Recieve ERROR"
 					else:
 						if data:
-							# print data
+							print data
 							# Client sending data.
 							# self.Connections[sock][1].put(data)
 							# if sock not in self.SendingSockets:
@@ -207,13 +291,31 @@ class Node():
 							else:
 								print "[Node Server] Data Invalid"
 						else:
-							print "[Node Server] Closing connection"
-							# Client might be disconnected.
-							if sock in self.SendingSockets:
-								self.SendingSockets.remove(sock)
-							self.RecievingSockets.remove(sock)
-							sock.close()
-							del self.Connections[sock]
+							try:
+								print "[Node Server] Closing connection"
+
+								# If disconnected socket is master, slave need to find 
+								# a master again and send request for port.
+								if sock == self.MasterSocket:
+									self.SlaveState 		= "CONNECT_MASTER"
+									self.MasterNodesList 	= []
+									self.SlaveListenerPort 	= 0
+
+								# If this is a master it have to return a port to stack.
+								for slave in self.LocalSlaveList:
+									if slave.Socket == sock:
+										self.PortsForClients.append(slave.Port - 10000)
+										continue
+
+								print self.PortsForClients
+								# Clean all sockets instances and close the socket..
+								if sock in self.SendingSockets:
+									self.SendingSockets.remove(sock)
+								self.RecievingSockets.remove(sock)
+								sock.close()
+								del self.Connections[sock]
+							except:
+								print "[Node Server] Connection Close [ERROR]", sys.exc_info()[0]
 
 			#for sock in writable:
 			#	try:
@@ -231,12 +333,6 @@ class Node():
 					self.SendingSockets.remove(sock)
 				sock.close()
 				del self.Connections[sock]
-
-		# data = conn.recv(128)
-		# self.Connections[data] = conn
-		# currThread = Thread(target=self.SocketClientHandler, args=(data,))
-		# currThread.start()
-		# self.ThreadList.append(currThread)
 
 		# Clean all resorses before exit.
 		self.Connections.clear()
@@ -513,8 +609,6 @@ class Node():
 		return data
 
 	def NodeWorker (self, callback):
-		# Read sytem configuration
-		self.LoadSystemConfig()
 		self.WorkingCallback = callback
 		self.State = "CONNECT_DEVICE"
 		
@@ -567,27 +661,8 @@ class Node():
 		self.ExitLocalServerEvent.clear()
 
 		self.MyLocalIP = MkSUtils.GetLocalIP()
-		
-		if False == self.IsMasterNode:
-			# Find all master nodes on the network.
-			masterIPPortList = MkSUtils.FindLocalMasterNodes()
-			for masterIpPort in masterIPPortList:
-				sock, status = self.ConnectNodeSocket(masterIpPort)
-				if True == status:
-					self.MasterNodesList.append([sock, masterIpPort[0]])
-				else:
-					print "[Node Server] Could not connect"
-			# Foreach master node need to send request of list nodes related to  master,
-			# also if master is local than node need to ask for port.
-			for master in self.MasterNodesList:
-				# Find local master and get port port number.
-				if self.MyLocalIP in master[1]:
-					print "This is my master"
-					# This is node's master, thus send port request.
-					master[0].send("MKS: Data\n{\"command\":\"get_port\",\"direction\":\"request\"}\n")
-					master[0].send("MKS: Data\n{\"command\":\"get_local_nodes\",\"direction\":\"request\"}\n")
-				else:
-					master[0].send("MKS: Data\n{\"command\":\"get_local_nodes\",\"direction\":\"request\"}\n")
+		# Read sytem configuration
+		self.LoadSystemConfig()
 
 		if True == self.IsNodeMainEnabled:
 			thread.start_new_thread(self.NodeWorker, (callback, ))
