@@ -185,13 +185,31 @@ class Node():
 		self.SlaveState = "CONNECT_MASTER"
 		# Init state logic must be here.
 
+	def ConnectNodeSocket(self, ip_addr_port):
+		sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+		sock.settimeout(5)
+		try:
+			print "Connecting to", ip_addr_port
+			sock.connect(ip_addr_port)
+			self.RecievingSockets.append(sock)
+			self.Connections[sock] = [ip_addr_port[0], Queue.Queue(), sock]
+			return sock, True
+		except:
+			print "Could not connect server", ip_addr_port
+			return None, False
+
+	def DisconnectNode(self, sock):
+		sock.close()
+		self.RecievingSockets.remove(sock)
+		del self.Connections[sock]
+		print "[Node Server] Closing connection", sock
+
 	def CleanMasterList(self):
 		for master in self.MasterNodesList:
-			master[0].close()
+			self.DisconnectNode(master[0])
 		self.MasterNodesList = []
 
 	def SlaveStateConnectMaster(self):
-		print "SlaveStateConnectMaster"
 		# Find all master nodes on the network.
 		masterIPPortList = MkSUtils.FindLocalMasterNodes()
 		# Clean master nodes list.
@@ -272,13 +290,13 @@ class Node():
 			for sock in readable:
 				if sock is self.ServerSocket and True == self.IsListenerEnabled:
 					conn, clientAddr = sock.accept()
-					print "[Node Server] Accept new connection", clientAddr
+					print "[Node Server] Accept", clientAddr, sock
 					conn.setblocking(0)
 					self.RecievingSockets.append(conn)
 					# self.SendingSockets.append(conn)
 					self.Connections[conn] = [clientAddr, Queue.Queue(), conn]
 				else:
-					print "[Node Server] Client communicate", self.Connections[sock][0]
+					# print "[Node Server] Client communicate", self.Connections[sock][0]
 					try:
 						data = sock.recv(1024)
 					except:
@@ -299,8 +317,6 @@ class Node():
 								print "[Node Server] Data Invalid"
 						else:
 							try:
-								print "[Node Server] Closing connection"
-
 								# If disconnected socket is master, slave need to find 
 								# a master again and send request for port.
 								if sock == self.MasterSocket:
@@ -316,11 +332,9 @@ class Node():
 
 								print self.PortsForClients
 								# Clean all sockets instances and close the socket..
-								if sock in self.SendingSockets:
-									self.SendingSockets.remove(sock)
-								self.RecievingSockets.remove(sock)
-								sock.close()
-								del self.Connections[sock]
+								# if sock in self.SendingSockets:
+								#	self.SendingSockets.remove(sock)
+								self.DisconnectNode()
 							except:
 								print "[Node Server] Connection Close [ERROR]", sys.exc_info()[0]
 
@@ -360,19 +374,6 @@ class Node():
 	def GetUUIDFromIP(self, uuid):
 		ip_addr = ""
 		return ip_addr
-
-	def ConnectNodeSocket(self, ip_addr_port):
-		sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-		sock.settimeout(5)
-		try:
-			print "Connecting to", ip_addr_port
-			sock.connect(ip_addr_port)
-			self.RecievingSockets.append(sock)
-			self.Connections[sock] = [ip_addr_port[0], Queue.Queue(), sock]
-			return sock, True
-		except:
-			print "Could not connect server", ip_addr_port
-			return None, False
 
 	def CreateConnectionToNode(self, uuid):
 		print "CreateConnectionToNode"
