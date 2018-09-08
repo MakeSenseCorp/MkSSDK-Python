@@ -94,7 +94,7 @@ class Node():
 		self.SlaveListenerPort 				= 0
 		self.Connections 					= []
 		self.MasterNodeServer				= ('', 16999)
-		self.LocalSocketServer				= ('', 10000)
+		self.LocalSocketServer				= None
 		self.LocalSocketServerRun			= False
 		self.RecievingSockets				= []
 		self.SendingSockets					= []
@@ -108,7 +108,8 @@ class Node():
 		self.SlaveStates = {
 			'IDLE': 						self.SlaveStateIdle,
 			'CONNECT_MASTER':				self.SlaveStateConnectMaster,
-			'CONNECTED': 					self.SlaveConnected
+			'CONNECTED': 					self.SlaveConnected,
+			'START_LISTENER':				self.SlaveStartListener
 		}
 		# Master Section
 		self.MasterVersion					= "1.0.1"
@@ -176,7 +177,9 @@ class Node():
 						sock.send("MKS: Data\n{\"command\":\"get_port\",\"direction\":\"response\",\"port\":0,\"error:\":\"NO_PORT\"}\n")
 				elif "response" == direction:
 					print "Execute RESPONSE handler for \"get_port\""
-					self.SlaveListenerPort = int(jsonData['port'])
+					self.SlaveListenerPort 		= int(jsonData['port'])
+					self.LocalSocketServer 		= ('', self.SlaveListenerPort)
+					self.SlaveState 			= "START_LISTENER"
 			elif "get_local_nodes" == command:
 				if "request" == direction:
 					nodes = ""
@@ -197,6 +200,9 @@ class Node():
 				print "[Node Server] Does NOT support this command", command
 		except:
 			print "[Node Server] HandlerRouter ERROR", sys.exc_info()[0]
+
+	def HandleMKSNodeRequest(self, data):
+		print data
 
 	def SlaveStateIdle(self):
 		self.SlaveState = "CONNECT_MASTER"
@@ -280,6 +286,12 @@ class Node():
 		if 0 == self.SlaveListenerPort:
 			self.SlaveState = "CONNECT_MASTER"
 
+	def SlaveStartListener(self):
+		status = self.TryStartListener()
+		if True == status:
+			self.IsListenerEnabled = True
+			self.SlaveState = "CONNECTED"
+
 	def TryStartListener(self):
 		try:
 			print "[Node Server] Start listener..."
@@ -297,10 +309,11 @@ class Node():
 
 			self.ServerSocket.listen(32)
 			self.LocalSocketServerRun = True
+			return True
 		except:
 			self.ServerSocket.close()
 			print "[Server Node] Bins socket ERROR"
-			return;
+			return False;
 
 	def NodeLocalNetworkConectionListener(self):
 		# AF_UNIX, AF_LOCAL   Local communication
@@ -357,7 +370,10 @@ class Node():
 							if "MKS" in data[:3]:
 								multiData = data.split("MKS: ")
 								for data in multiData[1:]:
-									self.HandlerRouter((data.split('\n'))[1], sock)
+									if True == self.IsMasterNode or False == self.IsListenerEnabled:
+										self.HandlerRouter((data.split('\n'))[1], sock)
+									else:
+										self.HandleMKSNodeRequest((data.split('\n'))[1])
 							else:
 								print "[Node Server] Data Invalid"
 						else:
