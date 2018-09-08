@@ -78,5 +78,4 @@ def FindLocalMasterNodes():
 	networkIP = '.'.join((localIP.split('.'))[:-1]) + '.'
 	machines = ScanLocalNetworkForMasterPort(networkIP)
 	print "Found machines,", machines
-	print "Scan for Masters Nodes DONE"
 	return machines
