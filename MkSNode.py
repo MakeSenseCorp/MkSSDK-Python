@@ -152,6 +152,7 @@ class Node():
 							payload = "MKS: Data\n{\"command\":\"get_port\",\"direction\":\"response\",\"port\":" + str(port) + "}\n"
 							sock.send(payload)
 						else:
+							existingSlave.Socket = sock
 							payload = "MKS: Data\n{\"command\":\"get_port\",\"direction\":\"response\",\"port\":" + str(existingSlave.Port) + "}\n"
 							sock.send(payload)
 					else:
@@ -184,11 +185,17 @@ class Node():
 		self.SlaveState = "CONNECT_MASTER"
 		# Init state logic must be here.
 
+	def CleanMasterList(self):
+		for master in self.MasterNodesList:
+			master[0].close()
+		self.MasterNodesList = []
+
 	def SlaveStateConnectMaster(self):
 		print "SlaveStateConnectMaster"
 		# Find all master nodes on the network.
 		masterIPPortList = MkSUtils.FindLocalMasterNodes()
-		self.MasterNodesList = []
+		# Clean master nodes list.
+		self.CleanMasterList()
 		for masterIpPort in masterIPPortList:
 			sock, status = self.ConnectNodeSocket(masterIpPort)
 			if True == status:
