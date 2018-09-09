@@ -90,6 +90,7 @@ class Node():
 			'unregister_subscriber':		self.UnregisterSubscriberHandler 
 		}
 		# Node sockets
+		self.LocalServerDataArrivedCallback = None
 		self.MyLocalIP						= ""
 		self.SlaveListenerPort 				= 0
 		self.Connections 					= []
@@ -103,6 +104,10 @@ class Node():
 		self.MasterSocket					= None
 		self.OpenSocketsCounter				= 0
 		self.Ticker							= 0
+		self.ServerNodeHandlers				= {
+			'get_node_info': 				self.GetNodeInfo_ServerHandler,
+			'get_node_status': 				self.GetNodeStatus_ServerHandler
+		}
 		# Slave state
 		self.SlaveState						= 'IDLE'
 		self.SlaveStates = {
@@ -117,14 +122,14 @@ class Node():
 		self.PortsForClients				= [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32]
 		self.LocalSlaveList					= []
 		# Master Node Request Handlers
-		self.Handlers						= {
+		self.MasterNodeHandlers				= {
 			'get_port': 					self.GetPort_MasterHandler,
 			'get_local_nodes': 				self.GetLocalNodes_MasterHandler,
 			'get_master_info':				self.GetMasterInfo_MasterHandler
 		}
 
 	def GetPort_MasterHandler(self, sock):
-		port =self.PortsForClients.pop()
+		port = self.PortsForClients.pop()
 		print "GetPort_MasterHandler"
 
 	def GetLocalNodes_MasterHandler(self):
@@ -132,6 +137,12 @@ class Node():
 
 	def GetMasterInfo_MasterHandler(self):
 		print "GetMasterInfo_MasterHandler"
+
+	def GetNodeInfo_ServerHandler(self, data):
+		print "GetNodeInfo_ServerHandler"
+	
+	def GetNodeStatus_ServerHandler(self, data):
+		print "GetNodeStatus_ServerHandler"
 
 	def SocketClientHandler(self, uuid):
 		print uuid
@@ -148,8 +159,6 @@ class Node():
 			jsonData 	= json.loads(data)
 			command 	= jsonData['command']
 			direction 	= jsonData['direction']
-			#ip 			= self.Connections[sock][0][0]
-
 			conn 		= self.GetConnection(sock)
 			ip 			= conn.IP
 
@@ -202,7 +211,18 @@ class Node():
 			print "[Node Server] HandlerRouter ERROR", sys.exc_info()[0]
 
 	def HandleMKSNodeRequest(self, data):
-		print data
+		try:
+			jsonData 	= json.loads(data)
+			command 	= jsonData['command']
+			direction 	= jsonData['direction']
+
+			if command in ["get_node_info", "get_node_status"]:
+				self.ServerNodeHandlers[command](data)
+			else:
+				if None is not self.LocalServerDataArrivedCallback:
+					self.LocalServerDataArrivedCallback(data)
+		except:
+			print "[Node Server] HandlerRouter ERROR", sys.exc_info()[0]
 
 	def SlaveStateIdle(self):
 		self.SlaveState = "CONNECT_MASTER"
@@ -512,7 +532,7 @@ class Node():
 
 	def GetNodeInfoHandler(self, message_type, source, data):
 		if True == self.SystemLoaded:
-			print self.UserDefined
+			# print self.UserDefined
 			res_payload = "\"state\":\"response\",\"status\":\"ok\",\"ts\":" + str(time.time()) + ",\"name\":\"" + self.Name + "\",\"description\":\"" + self.Description + "\", \"user\":" + json.dumps(self.UserDefined)
 			print res_payload
 			self.SendMessage(message_type, source, "get_node_info", res_payload)
@@ -530,11 +550,10 @@ class Node():
 	
 	def WebSocketDataArrivedCallback (self, json):
 		self.State = "WORK"
-		#print "[NETWORK IN] - " + str(json)
 		messageType = self.Network.GetMessageTypeFromJson(json)
 		source = self.Network.GetSourceFromJson(json)
 		command = self.Network.GetCommandFromJson(json)
-		print "[DEBUG::Node Network(In)] " + command
+		print "[DEBUG::Node Network(In)] " + str(json)
 		if messageType == "CUSTOM":
 			return;
 		elif messageType == "DIRECT" or messageType == "PRIVATE" or messageType == "BROADCAST" or messageType == "WEBFACE":
@@ -552,7 +571,7 @@ class Node():
 	
 	def SendMessage (self, message_type, destination, command, payload):
 		message = self.Network.BuildMessage(message_type, destination, command, payload)
-		print "[DEBUG::Node Network(Out)] " + command
+		print "[DEBUG::Node Network(Out)] " + message
 		ret = self.Network.SendMessage(message)
 		if False == ret:
 			self.State = "ACCESS"
