@@ -62,6 +62,7 @@ class Node():
 		self.IsNodeLocalServerEnabled 		= False
 		self.IsMasterNode					= False
 		self.IsListenerEnabled 				= False
+		self.isPureSlave					= False
 		# Inner state
 		self.States = {
 			'IDLE': 						self.StateIdle,
@@ -91,6 +92,7 @@ class Node():
 		}
 		# Node sockets
 		self.LocalServerDataArrivedCallback = None
+		self.OnMasterFoundCallback			= None
 		self.MyLocalIP						= ""
 		self.SlaveListenerPort 				= 0
 		self.Connections 					= []
@@ -291,7 +293,7 @@ class Node():
 			# also if master is local than node need to ask for port.
 			for master in self.MasterNodesList:
 				# Find local master and get port port number.
-				if self.MyLocalIP in master[1]:
+				if self.MyLocalIP in master[1] and False == self.isPureSlave:
 					self.SlaveState 	= "CONNECTED"
 					self.MasterSocket 	= master[0]
 					# This is node's master, thus send port request.
@@ -299,11 +301,16 @@ class Node():
 					self.MasterSocket.send("MKS: Data\n{\"command\":\"get_local_nodes\",\"direction\":\"request\",\"uuid\":\"" + self.UUID + "\"}\n")
 				else:
 					master[0].send("MKS: Data\n{\"command\":\"get_local_nodes\",\"direction\":\"request\"}\n")
+					if True == self.isPureSlave:
+						self.SlaveState = "CONNECTED"
+			if len(self.MasterNodesList) > 0:
+				if self.OnMasterFoundCallback is not None:
+					self.OnMasterFoundCallback(self.MasterNodesList)
 
 	def SlaveConnected(self):
 		self.SlaveState = "CONNECTED"
 		# Check if slave has a port.
-		if 0 == self.SlaveListenerPort:
+		if (0 == self.SlaveListenerPort and False == self.isPureSlave) or (0 == len(self.MasterNodesList) and True == self.isPureSlave):
 			self.SlaveState = "CONNECT_MASTER"
 
 	def SlaveStartListener(self):
@@ -390,10 +397,14 @@ class Node():
 							if "MKS" in data[:3]:
 								multiData = data.split("MKS: ")
 								for data in multiData[1:]:
+									req = (data.split('\n'))[1]
 									if True == self.IsMasterNode or False == self.IsListenerEnabled:
-										self.HandlerRouter((data.split('\n'))[1], sock)
+										if True == self.isPureSlave:
+											self.LocalServerDataArrivedCallback(req)
+										else:
+											self.HandlerRouter(req, sock)
 									else:
-										self.HandleMKSNodeRequest((data.split('\n'))[1])
+										self.HandleMKSNodeRequest(req)
 							else:
 								print "[Node Server] Data Invalid"
 						else:
@@ -716,6 +727,9 @@ class Node():
 	def SetMasterNodeStatus(self, is_enabled):
 		self.IsMasterNode 		= is_enabled
 		self.IsListenerEnabled 	= is_enabled
+
+	def SetPureSlaveStatus(self, is_enabled):
+		self.isPureSlave = is_enabled
 
 	def Run (self, callback):
 		self.ExitEvent.clear()
