@@ -91,8 +91,6 @@ class Node():
 			'unregister_subscriber':		self.UnregisterSubscriberHandler 
 		}
 		# Node sockets
-		self.LocalServerDataArrivedCallback = None
-		self.OnMasterFoundCallback			= None
 		self.MyLocalIP						= ""
 		self.SlaveListenerPort 				= 0
 		self.Connections 					= []
@@ -106,6 +104,11 @@ class Node():
 		self.MasterSocket					= None
 		self.OpenSocketsCounter				= 0
 		self.Ticker							= 0
+		# Callbacks
+		self.LocalServerDataArrivedCallback = None
+		self.OnMasterSearchCallback			= None
+		self.OnMasterFoundCallback			= None
+		self.OnMasterDisconnectedCallback	= None
 		self.ServerNodeHandlers				= {
 			'get_node_info': 				self.GetNodeInfo_ServerHandler,
 			'get_node_status': 				self.GetNodeStatus_ServerHandler
@@ -119,6 +122,7 @@ class Node():
 			'START_LISTENER':				self.SlaveStartListener
 		}
 		# Master Section
+		self.MasterHostName					= socket.gethostname()
 		self.MasterVersion					= "1.0.1"
 		self.PackagesList					= ["Gateway","LinuxTerminal","USBManager"] # Default Master capabilities.
 		self.PortsForClients				= [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32]
@@ -206,7 +210,13 @@ class Node():
 				if "request" == direction:
 					print "get_master_info"
 				elif "response" == direction:
-					print "Execute RESPONSE handler for \"get_master_info\""
+					nodes = ""
+					if self.LocalSlaveList:
+						for node in self.LocalSlaveList:
+							nodes = nodes + "{\"ip\":\"" + str(node.IP) + "\",\"port\":" + str(node.Port) + ",\"uuid\":\"" + node.UUID + "\"},"
+						nodes = nodes[:-1]
+					payload = "MKS: Data\n{\"command\":\"get_master_info\",\"direction\":\"response\",\"info\":{\"hostname\":\"" + self.MasterHostName + "\",\"nodes\":[" + nodes + "]}}\n"
+					sock.send(payload)
 			else:
 				print "[Node Server] Does NOT support this command", command
 		except:
@@ -279,6 +289,8 @@ class Node():
 
 	def SlaveStateConnectMaster(self):
 		if 0 == self.Ticker % 20:
+			if self.OnMasterSearchCallback is not None:
+				self.OnMasterSearchCallback()
 			# Find all master nodes on the network.
 			masterIPPortList = MkSUtils.FindLocalMasterNodes()
 			# Clean master nodes list.
@@ -341,6 +353,12 @@ class Node():
 			self.ServerSocket.close()
 			print "[Server Node] Bins socket ERROR"
 			return False;
+
+	def GetMasterInfo(self, ip):
+		for master in self.MasterNodesList:
+			if master[1] == ip:
+				payload = "MKS: Data\n{\"command\":\"get_master_info\",\"direction\":\"response\"}\n"
+				master[0].send(payload)
 
 	def NodeLocalNetworkConectionListener(self):
 		# AF_UNIX, AF_LOCAL   Local communication
@@ -413,6 +431,8 @@ class Node():
 							# a master again and send request for port.
 							if sock == self.MasterSocket:
 								print "[Node Slave] Master disconnected"
+								if self.OnMasterDisconnectedCallback is not None:
+									self.OnMasterDisconnectedCallback()
 								self.SlaveState 		= "CONNECT_MASTER"
 								self.CleanMasterList()
 								self.SlaveListenerPort 	= 0
