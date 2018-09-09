@@ -433,15 +433,16 @@ class Node():
 								print "[Node Slave] Master disconnected"
 								if self.OnMasterDisconnectedCallback is not None:
 									self.OnMasterDisconnectedCallback()
-								self.SlaveState 		= "CONNECT_MASTER"
+								self.SlaveState = "CONNECT_MASTER"
 								self.CleanMasterList()
-								self.SlaveListenerPort 	= 0
+								self.SlaveListenerPort = 0
 
 							# If this is a master it have to return a port to stack.
 							if True == self.IsMasterNode:
 								for slave in self.LocalSlaveList:
 									if slave.Socket == sock:
 										self.PortsForClients.append(slave.Port - 10000)
+										self.LocalSlaveList.remove(slave)
 										continue
 								# print self.PortsForClients
 
