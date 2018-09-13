@@ -20,12 +20,14 @@ class LocalConnection:
 		self.Port 	= port
 		self.Socket = sock
 
+# TODO - LocalConnection should be nested in LocalClient
 class LocalClient():
-	def __init__(self, ip, port, uuid, sock):
+	def __init__(self, ip, port, uuid, node_type, sock):
 		self.IP 	= ip
 		self.Port 	= port
 		self.UUID 	= uuid
 		self.Socket = sock
+		self.Type 	= node_type
 
 class Node():
 	"""Node respomsable for coordinate between web services
@@ -100,15 +102,18 @@ class Node():
 		self.RecievingSockets				= []
 		self.SendingSockets					= []
 		self.MasterNodesList				= []
-		self.ServerSocket					= None
-		self.MasterSocket					= None
+		self.ServerSocket					= None # This is server socket (for Master and Slave)
+		self.MasterSocket					= None # This socket is for Slave use.
 		self.OpenSocketsCounter				= 0
 		self.Ticker							= 0
 		# Callbacks
+		self.OnLocalServerStartedCallback	= None
 		self.LocalServerDataArrivedCallback = None
 		self.OnMasterSearchCallback			= None
 		self.OnMasterFoundCallback			= None
 		self.OnMasterDisconnectedCallback	= None
+		self.OnMasterAppendNodeCallback 	= None
+		self.OnMasterRemoveNodeCallback		= None
 		self.ServerNodeHandlers				= {
 			'get_node_info': 				self.GetNodeInfo_ServerHandler,
 			'get_node_status': 				self.GetNodeStatus_ServerHandler
@@ -126,7 +131,7 @@ class Node():
 		self.MasterVersion					= "1.0.1"
 		self.PackagesList					= ["Gateway","LinuxTerminal","USBManager"] # Default Master capabilities.
 		self.PortsForClients				= [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32]
-		self.LocalSlaveList					= []
+		self.LocalSlaveList					= [] # Used ONLY by Master.
 		# Master Node Request Handlers
 		self.MasterNodeHandlers				= {
 			'get_port': 					self.GetPort_MasterHandler,
@@ -159,9 +164,21 @@ class Node():
 				return conn
 		return None
 
+	def GetLocalConnection(self, ip, port):
+		for item in self.Connections:
+			if item.IP == ip and item.Port == port:
+				return item
+		return None
+
+	def GetSlaveNode(self, uuid):
+		for item in self.LocalSlaveList:
+			if item.UUID == uuid:
+				return item
+		return None
+
 	# Handler triggered by request and response
 	def HandlerRouter (self, data, sock):
-		try:
+		#try:
 			jsonData 	= json.loads(data)
 			command 	= jsonData['command']
 			direction 	= jsonData['direction']
@@ -171,17 +188,25 @@ class Node():
 			if "get_port" == command:
 				if "request" == direction:
 					uuid = jsonData['uuid']
+					nodeType = jsonData['type']
 					if self.PortsForClients:
 						existingSlave = None
 						for slave in self.LocalSlaveList:
 							if slave.UUID == uuid:
+								# NOTE - Should we delete the old slave?
+								# 		 Also should we send to clients about new slave?
 								existingSlave = slave
 								continue
 
 						if None == existingSlave:
 							port = 10000 + self.PortsForClients.pop()
-							# print self.PortsForClients
-							self.LocalSlaveList.append(LocalClient(ip, port, uuid, sock))
+							# Send message to all nodes.
+							for client in self.Connections:
+								if client.Socket == self.ServerSocket:
+									pass
+								else:
+									client.Socket.send("MKS: Data\n{\"command\":\"master_append_node\",\"direction\":\"request\",\"node\":{\"ip\":\"" + str(ip) + "\",\"port\":" + str(port) + ",\"uuid\":\"" + uuid + "\",\"type\":" + str(nodeType) + "}}\n")
+							self.LocalSlaveList.append(LocalClient(ip, port, uuid, nodeType, sock))
 							payload = "MKS: Data\n{\"command\":\"get_port\",\"direction\":\"response\",\"port\":" + str(port) + "}\n"
 							sock.send(payload)
 						else:
@@ -200,7 +225,7 @@ class Node():
 					nodes = ""
 					if self.LocalSlaveList:
 						for node in self.LocalSlaveList:
-							nodes = nodes + "{\"ip\":\"" + str(node.IP) + "\",\"port\":" + str(node.Port) + ",\"uuid\":\"" + node.UUID + "\"},"
+							nodes = nodes + "{\"ip\":\"" + str(node.IP) + "\",\"port\":" + str(node.Port) + ",\"uuid\":\"" + node.UUID + "\",\"type\":" + str(node.Type) + "},"
 						nodes = nodes[:-1]
 					payload = "MKS: Data\n{\"command\":\"get_local_nodes\",\"direction\":\"response\",\"nodes\":[" + nodes + "]}\n"
 					sock.send(payload)
@@ -213,28 +238,49 @@ class Node():
 					nodes = ""
 					if self.LocalSlaveList:
 						for node in self.LocalSlaveList:
-							nodes = nodes + "{\"ip\":\"" + str(node.IP) + "\",\"port\":" + str(node.Port) + ",\"uuid\":\"" + node.UUID + "\"},"
+							nodes = nodes + "{\"ip\":\"" + str(node.IP) + "\",\"port\":" + str(node.Port) + ",\"uuid\":\"" + node.UUID + "\",\"type\":" + str(node.Type) + "},"
 						nodes = nodes[:-1]
 					payload = "MKS: Data\n{\"command\":\"get_master_info\",\"direction\":\"response\",\"info\":{\"hostname\":\"" + self.MasterHostName + "\",\"nodes\":[" + nodes + "]}}\n"
 					sock.send(payload)
+			elif "master_append_node" == command:
+				info 		= jsonData['node']
+				uuid 		= info['uuid']
+				port 		= info['port']
+				nodeType 	= info['type']
+				ip 			= info['ip']
+
+				print "[master_append_node]", ip, port
+				if self.OnMasterAppendNodeCallback is not None:
+					nodeStr = "{\"ip\":\"" + str(ip) + "\",\"port\":" + str(port) + ",\"uuid\":\"" + uuid + "\",\"type\":" + str(nodeType) + "}"
+					self.OnMasterAppendNodeCallback(nodeStr)
+			elif "master_remove_node" == command:
+				info 		= jsonData['node']
+				uuid 		= info['uuid']
+				port 		= info['port']
+				nodeType 	= info['type']
+				
+				if self.OnMasterRemoveNodeCallback is not None:
+					nodeStr = "{\"ip\":\"" + str(ip) + "\",\"port\":" + str(port) + ",\"uuid\":\"" + uuid + "\",\"type\":" + str(nodeType) + "}"
+					self.OnMasterRemoveNodeCallback(nodeStr)
 			else:
 				print "[Node Server] Does NOT support this command", command
-		except:
-			print "[Node Server] HandlerRouter ERROR", sys.exc_info()[0]
+		#except:
+		#	print "[Node Server] HandlerRouter ERROR", sys.exc_info()[0]
 
-	def HandleMKSNodeRequest(self, data):
-		try:
+	def HandleMKSNodeRequest(self, data, sock):
+		#try:
 			jsonData 	= json.loads(data)
 			command 	= jsonData['command']
 			direction 	= jsonData['direction']
 
+			print command
 			if command in ["get_node_info", "get_node_status"]:
 				self.ServerNodeHandlers[command](data)
 			else:
 				if None is not self.LocalServerDataArrivedCallback:
-					self.LocalServerDataArrivedCallback(data)
-		except:
-			print "[Node Server] HandlerRouter ERROR", sys.exc_info()[0]
+					self.LocalServerDataArrivedCallback(data, sock)
+		#except:
+		#	print "[Node Server] HandleMKSNodeRequest ERROR", sys.exc_info()[0]
 
 	def SlaveStateIdle(self):
 		self.SlaveState = "CONNECT_MASTER"
@@ -309,8 +355,8 @@ class Node():
 					self.SlaveState 	= "CONNECTED"
 					self.MasterSocket 	= master[0]
 					# This is node's master, thus send port request.
-					self.MasterSocket.send("MKS: Data\n{\"command\":\"get_port\",\"direction\":\"request\",\"uuid\":\"" + self.UUID + "\"}\n")
-					self.MasterSocket.send("MKS: Data\n{\"command\":\"get_local_nodes\",\"direction\":\"request\",\"uuid\":\"" + self.UUID + "\"}\n")
+					self.MasterSocket.send("MKS: Data\n{\"command\":\"get_port\",\"direction\":\"request\",\"uuid\":\"" + self.UUID + "\",\"type\":" + str(self.Type) + "}\n")
+					self.MasterSocket.send("MKS: Data\n{\"command\":\"get_local_nodes\",\"direction\":\"request\",\"uuid\":\"" + self.UUID + "\",\"type\":" + str(self.Type) + "}\n")
 				else:
 					master[0].send("MKS: Data\n{\"command\":\"get_local_nodes\",\"direction\":\"request\"}\n")
 					if True == self.isPureSlave:
@@ -388,6 +434,8 @@ class Node():
 		else:
 			self.LocalSocketServerRun = True
 		print "[Node Server] Server is running..."
+		if self.OnLocalServerStartedCallback is not None:
+			self.OnLocalServerStartedCallback()
 		while True == self.LocalSocketServerRun:
 			readable, writable, exceptional = select.select(self.RecievingSockets, self.SendingSockets, self.RecievingSockets, 0.5)
 			self.Ticker = self.Ticker + 1;
@@ -418,11 +466,12 @@ class Node():
 									req = (data.split('\n'))[1]
 									if True == self.IsMasterNode or False == self.IsListenerEnabled:
 										if True == self.isPureSlave:
-											self.LocalServerDataArrivedCallback(req)
+											self.LocalServerDataArrivedCallback(req, sock)
+											self.HandlerRouter(req, sock)
 										else:
 											self.HandlerRouter(req, sock)
 									else:
-										self.HandleMKSNodeRequest(req)
+										self.HandleMKSNodeRequest(req, sock)
 							else:
 								print "[Node Server] Data Invalid"
 						else:
@@ -442,6 +491,13 @@ class Node():
 								for slave in self.LocalSlaveList:
 									if slave.Socket == sock:
 										self.PortsForClients.append(slave.Port - 10000)
+										# Send to all nodes
+										for client in self.Connections:
+											if client.Socket == self.ServerSocket:
+												pass
+											else:
+												if client.Socket is not None:
+													client.Socket.send("MKS: Data\n{\"command\":\"master_remove_node\",\"direction\":\"request\",\"node\":{\"ip\":\"" + str(slave.IP) + "\",\"port\":" + str(slave.Port) + ",\"uuid\":\"" + slave.UUID + "\",\"type\":" + str(slave.Type) + "}}\n")
 										self.LocalSlaveList.remove(slave)
 										continue
 								# print self.PortsForClients
@@ -556,7 +612,7 @@ class Node():
 				return
 	
 	def StateWork (self):
-		self.WorkingCallback()
+		pass
 	
 	def WebSocketConnectedCallback (self):
 		self.State = "WORK"
@@ -753,6 +809,7 @@ class Node():
 		self.isPureSlave = is_enabled
 
 	def Run (self, callback):
+		self.WorkingCallback = callback
 		self.ExitEvent.clear()
 		self.ExitLocalServerEvent.clear()
 
@@ -767,6 +824,7 @@ class Node():
 
 		# Waiting here till SIGNAL from OS will come.
 		while self.IsRunnig:
+			self.WorkingCallback()
 			time.sleep(0.5)
 		
 		if True == self.IsNodeMainEnabled:
