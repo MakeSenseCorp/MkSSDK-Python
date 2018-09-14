@@ -114,6 +114,8 @@ class Node():
 		self.OnMasterDisconnectedCallback	= None
 		self.OnMasterAppendNodeCallback 	= None
 		self.OnMasterRemoveNodeCallback		= None
+		self.OnAceptNewConnectionCallback	= None
+		self.OnTerminateConnectionCallback	= None
 		self.ServerNodeHandlers				= {
 			'get_node_info': 				self.GetNodeInfo_ServerHandler,
 			'get_node_status': 				self.GetNodeStatus_ServerHandler
@@ -452,6 +454,8 @@ class Node():
 					print "[Node Server] Accept", clientAddr
 					conn.setblocking(0)
 					self.AppendConnection(conn, clientAddr[0], clientAddr[1])
+					if self.OnAceptNewConnectionCallback is not None:
+						self.OnAceptNewConnectionCallback(conn)
 				else:
 					try:
 						data = sock.recv(1024)
@@ -503,6 +507,8 @@ class Node():
 								# print self.PortsForClients
 
 							self.RemoveConnection(sock)
+							if self.OnTerminateConnectionCallback is not None:
+								self.OnTerminateConnectionCallback(sock)
 							#except:
 							#	print "[Node Server] Connection Close [ERROR]", sys.exc_info()[0]
 
