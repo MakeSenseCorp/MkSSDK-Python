@@ -13,31 +13,18 @@ from mksdk import MkSFile
 from mksdk import MkSNetMachine
 from mksdk import MkSDevice
 from mksdk import MkSUtils
-
-class LocalConnection:
-	def __init__(self, ip, port, sock):
-		self.IP 	= ip
-		self.Port 	= port
-		self.Socket = sock
-
-# TODO - LocalConnection should be nested in LocalClient
-class LocalClient():
-	def __init__(self, ip, port, uuid, node_type, sock):
-		self.IP 	= ip
-		self.Port 	= port
-		self.UUID 	= uuid
-		self.Socket = sock
-		self.Type 	= node_type
+from mksdk import MkSAbstractNode
 
 class Node():
 	"""Node respomsable for coordinate between web services
 	and adaptor (in most cases serial)"""
 	   
-	def __init__(self, node_type):
+	def __init__(self, node_type, local_service_node):
 		# Objects node depend on
 		self.File 							= MkSFile.File()
 		self.Device 						= None
 		self.Network						= None
+		self.LocalServiceNode 				= local_service_node
 		# Node connection to WS information
 		self.ApiUrl 						= ""
 		self.WsUrl							= ""
@@ -65,6 +52,7 @@ class Node():
 		self.IsMasterNode					= False
 		self.IsListenerEnabled 				= False
 		self.isPureSlave					= False
+		self.MasterNodeLocatorRunning		= False
 		# Inner state
 		self.States = {
 			'IDLE': 						self.StateIdle,
@@ -92,79 +80,18 @@ class Node():
 			'register_subscriber':			self.RegisterSubscriberHandler,
 			'unregister_subscriber':		self.UnregisterSubscriberHandler 
 		}
+
 		# Node sockets
-		self.MyLocalIP						= ""
-		self.SlaveListenerPort 				= 0
-		self.Connections 					= []
-		self.MasterNodeServer				= ('', 16999)
-		self.LocalSocketServer				= None
 		self.LocalSocketServerRun			= False
-		self.RecievingSockets				= []
-		self.SendingSockets					= []
-		self.MasterNodesList				= []
-		self.ServerSocket					= None # This is server socket (for Master and Slave)
-		self.MasterSocket					= None # This socket is for Slave use.
-		self.OpenSocketsCounter				= 0
-		self.Ticker							= 0
 		# Callbacks
-		self.OnLocalServerStartedCallback	= None
-		self.LocalServerDataArrivedCallback = None
-		self.OnMasterSearchCallback			= None
 		self.OnMasterFoundCallback			= None
 		self.OnMasterDisconnectedCallback	= None
 		self.OnMasterAppendNodeCallback 	= None
 		self.OnMasterRemoveNodeCallback		= None
-		self.OnAceptNewConnectionCallback	= None
 		self.OnTerminateConnectionCallback	= None
-		self.ServerNodeHandlers				= {
-			'get_node_info': 				self.GetNodeInfo_ServerHandler,
-			'get_node_status': 				self.GetNodeStatus_ServerHandler
-		}
-		# Slave state
-		self.SlaveState						= 'IDLE'
-		self.SlaveStates = {
-			'IDLE': 						self.SlaveStateIdle,
-			'CONNECT_MASTER':				self.SlaveStateConnectMaster,
-			'CONNECTED': 					self.SlaveConnected,
-			'START_LISTENER':				self.SlaveStartListener
-		}
-		# Master Section
-		self.MasterHostName					= socket.gethostname()
-		self.MasterVersion					= "1.0.1"
-		self.PackagesList					= ["Gateway","LinuxTerminal","USBManager"] # Default Master capabilities.
-		self.PortsForClients				= [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32]
-		self.LocalSlaveList					= [] # Used ONLY by Master.
-		# Master Node Request Handlers
-		self.MasterNodeHandlers				= {
-			'get_port': 					self.GetPort_MasterHandler,
-			'get_local_nodes': 				self.GetLocalNodes_MasterHandler,
-			'get_master_info':				self.GetMasterInfo_MasterHandler
-		}
-
-	def GetPort_MasterHandler(self, sock):
-		port = self.PortsForClients.pop()
-		print "GetPort_MasterHandler"
-
-	def GetLocalNodes_MasterHandler(self):
-		print "GetLocalNodes_MasterHandler"
-
-	def GetMasterInfo_MasterHandler(self):
-		print "GetMasterInfo_MasterHandler"
-
-	def GetNodeInfo_ServerHandler(self, data):
-		print "GetNodeInfo_ServerHandler"
-	
-	def GetNodeStatus_ServerHandler(self, data):
-		print "GetNodeStatus_ServerHandler"
 
 	def SocketClientHandler(self, uuid):
 		print uuid
-
-	def GetConnection(self, sock):
-		for conn in self.Connections:
-			if conn.Socket == sock:
-				return conn
-		return None
 
 	def GetLocalConnection(self, ip, port):
 		for item in self.Connections:
@@ -269,42 +196,6 @@ class Node():
 		#except:
 		#	print "[Node Server] HandlerRouter ERROR", sys.exc_info()[0]
 
-	def HandleMKSNodeRequest(self, data, sock):
-		#try:
-			jsonData 	= json.loads(data)
-			command 	= jsonData['command']
-			direction 	= jsonData['direction']
-
-			print command
-			if command in ["get_node_info", "get_node_status"]:
-				self.ServerNodeHandlers[command](data)
-			else:
-				if None is not self.LocalServerDataArrivedCallback:
-					self.LocalServerDataArrivedCallback(data, sock)
-		#except:
-		#	print "[Node Server] HandleMKSNodeRequest ERROR", sys.exc_info()[0]
-
-	def SlaveStateIdle(self):
-		self.SlaveState = "CONNECT_MASTER"
-		# Init state logic must be here.
-
-	def AppendConnection(self, sock, ip, port):
-		print "[Node] Append connection, port", port
-		# Append to recieving data sockets.
-		self.RecievingSockets.append(sock)
-		# Append to list of all connections.
-		self.Connections.append(LocalConnection(ip, port, sock))
-		self.OpenSocketsCounter = self.OpenSocketsCounter + 1
-
-	def RemoveConnection(self, sock):
-		conn = self.GetConnection(sock)
-		if None is not conn:
-			print "[Node] Remove connection, port", conn.Port
-			self.RecievingSockets.remove(conn.Socket)
-			conn.Socket.close()
-			self.Connections.remove(conn)
-			self.OpenSocketsCounter = self.OpenSocketsCounter - 1
-
 	def ConnectNodeSocket(self, ip_addr_port):
 		sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 		sock.settimeout(5)
@@ -320,208 +211,11 @@ class Node():
 	def DisconnectNodeSocket(self, sock):
 		self.RemoveConnection(sock)
 
-	def CleanMasterList(self):
-		# print "[DEBUG] CleanMasterList", len(self.MasterNodesList)
-		for master in self.MasterNodesList:
-			self.RemoveConnection(master[0])
-		self.MasterNodesList = []
-
-	def CleanAllSockets(self):
-		for conn in self.Connections:
-			self.RemoveConnection(conn.Socket)
-		
-		if len(self.Connections) > 0:
-			print "Still live socket exist"
-			for conn in self.Connections:
-				self.RemoveConnection(conn.Socket)
-
-	def SlaveStateConnectMaster(self):
-		if 0 == self.Ticker % 20:
-			if self.OnMasterSearchCallback is not None:
-				self.OnMasterSearchCallback()
-			# Find all master nodes on the network.
-			masterIPPortList = MkSUtils.FindLocalMasterNodes()
-			# Clean master nodes list.
-			self.CleanMasterList()
-			for masterIpPort in masterIPPortList:
-				sock, status = self.ConnectNodeSocket(masterIpPort)
-				if True == status:
-					self.MasterNodesList.append([sock, masterIpPort[0]])
-				else:
-					print "[Node Server] Could not connect"
-			# Foreach master node need to send request of list nodes related to  master,
-			# also if master is local than node need to ask for port.
-			for master in self.MasterNodesList:
-				# Find local master and get port port number.
-				if self.MyLocalIP in master[1] and False == self.isPureSlave:
-					self.SlaveState 	= "CONNECTED"
-					self.MasterSocket 	= master[0]
-					# This is node's master, thus send port request.
-					self.MasterSocket.send("MKS: Data\n{\"command\":\"get_port\",\"direction\":\"request\",\"uuid\":\"" + self.UUID + "\",\"type\":" + str(self.Type) + "}\n")
-					self.MasterSocket.send("MKS: Data\n{\"command\":\"get_local_nodes\",\"direction\":\"request\",\"uuid\":\"" + self.UUID + "\",\"type\":" + str(self.Type) + "}\n")
-				else:
-					master[0].send("MKS: Data\n{\"command\":\"get_local_nodes\",\"direction\":\"request\"}\n")
-					if True == self.isPureSlave:
-						self.SlaveState = "CONNECTED"
-			if len(self.MasterNodesList) > 0:
-				if self.OnMasterFoundCallback is not None:
-					self.OnMasterFoundCallback(self.MasterNodesList)
-
-	def SlaveConnected(self):
-		self.SlaveState = "CONNECTED"
-		# Check if slave has a port.
-		if (0 == self.SlaveListenerPort and False == self.isPureSlave) or (0 == len(self.MasterNodesList) and True == self.isPureSlave):
-			self.SlaveState = "CONNECT_MASTER"
-
-	def SlaveStartListener(self):
-		status = self.TryStartListener()
-		if True == status:
-			self.IsListenerEnabled = True
-			self.SlaveState = "CONNECTED"
-
-	def TryStartListener(self):
-		try:
-			print "[Node Server] Start listener..."
-			self.ServerSocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-			self.ServerSocket.setblocking(0)
-
-			if True == self.IsMasterNode:
-				print "[Node Server] Mount Master..."
-				self.ServerSocket.bind(self.MasterNodeServer)
-				self.AppendConnection(self.ServerSocket, self.MasterNodeServer[0], self.MasterNodeServer[1])
-			else:
-				print "[Node Server] Mount Server..."
-				self.ServerSocket.bind(self.LocalSocketServer)
-				self.AppendConnection(self.ServerSocket, self.LocalSocketServer[0], self.LocalSocketServer[1])
-
-			self.ServerSocket.listen(32)
-			self.LocalSocketServerRun = True
-			return True
-		except:
-			self.ServerSocket.close()
-			print "[Server Node] Bins socket ERROR"
-			return False;
-
 	def GetMasterInfo(self, ip):
 		for master in self.MasterNodesList:
 			if master[1] == ip:
 				payload = "MKS: Data\n{\"command\":\"get_master_info\",\"direction\":\"response\"}\n"
 				master[0].send(payload)
-
-	def NodeLocalNetworkConectionListener(self):
-		# AF_UNIX, AF_LOCAL   Local communication
-       	# AF_INET             IPv4 Internet protocols
-       	# AF_INET6            IPv6 Internet protocols
-       	# AF_PACKET           Low level packet interface
-       	#
-       	# SOCK_STREAM     	Provides sequenced, reliable, two-way, connection-
-        #               	based byte streams.  An out-of-band data transmission
-        #               	mechanism may be supported.
-        #
-        # SOCK_DGRAM      	Supports datagrams (connectionless, unreliable
-        #               	messages of a fixed maximum length).
-        #
-       	# SOCK_SEQPACKET  	Provides a sequenced, reliable, two-way connection-
-        #               	based data transmission path for datagrams of fixed
-        #               	maximum length; a consumer is required to read an
-        #               	entire packet with each input system call.
-        #
-       	# SOCK_RAW        	Provides raw network protocol access.
-       	#
-       	# SOCK_RDM        	Provides a reliable datagram layer that does not
-        #               	guarantee ordering.
-		if True == self.IsListenerEnabled:
-			while False == self.LocalSocketServerRun:
-				self.TryStartListener()
-		else:
-			self.LocalSocketServerRun = True
-		print "[Node Server] Server is running..."
-		if self.OnLocalServerStartedCallback is not None:
-			self.OnLocalServerStartedCallback()
-		while True == self.LocalSocketServerRun:
-			readable, writable, exceptional = select.select(self.RecievingSockets, self.SendingSockets, self.RecievingSockets, 0.5)
-			self.Ticker = self.Ticker + 1;
-
-			# Running slave state machine.
-			if False == self.IsMasterNode:
-				self.SlaveMethod = self.SlaveStates[self.SlaveState]
-				self.SlaveMethod()
-
-			# Socket management.
-			for sock in readable:
-				if sock is self.ServerSocket and True == self.IsListenerEnabled:
-					conn, clientAddr = sock.accept()
-					print "[Node Server] Accept", clientAddr
-					conn.setblocking(0)
-					self.AppendConnection(conn, clientAddr[0], clientAddr[1])
-					if self.OnAceptNewConnectionCallback is not None:
-						self.OnAceptNewConnectionCallback(conn)
-				else:
-					try:
-						data = sock.recv(1024)
-					except:
-						print "[Node Server] Recieve ERROR"
-					else:
-						if data:
-							print "[Node Socket] DATA"
-							if "MKS" in data[:3]:
-								multiData = data.split("MKS: ")
-								for data in multiData[1:]:
-									req = (data.split('\n'))[1]
-									if True == self.IsMasterNode or False == self.IsListenerEnabled:
-										if True == self.isPureSlave:
-											self.LocalServerDataArrivedCallback(req, sock)
-											self.HandlerRouter(req, sock)
-										else:
-											self.HandlerRouter(req, sock)
-									else:
-										self.HandleMKSNodeRequest(req, sock)
-							else:
-								print "[Node Server] Data Invalid"
-						else:
-							#try:
-							# If disconnected socket is master, slave need to find 
-							# a master again and send request for port.
-							if sock == self.MasterSocket:
-								print "[Node Slave] Master disconnected"
-								if self.OnMasterDisconnectedCallback is not None:
-									self.OnMasterDisconnectedCallback()
-								self.SlaveState = "CONNECT_MASTER"
-								self.CleanMasterList()
-								self.SlaveListenerPort = 0
-
-							# If this is a master it have to return a port to stack.
-							if True == self.IsMasterNode:
-								for slave in self.LocalSlaveList:
-									if slave.Socket == sock:
-										self.PortsForClients.append(slave.Port - 10000)
-										# Send to all nodes
-										for client in self.Connections:
-											if client.Socket == self.ServerSocket:
-												pass
-											else:
-												if client.Socket is not None:
-													client.Socket.send("MKS: Data\n{\"command\":\"master_remove_node\",\"direction\":\"request\",\"node\":{\"ip\":\"" + str(slave.IP) + "\",\"port\":" + str(slave.Port) + ",\"uuid\":\"" + slave.UUID + "\",\"type\":" + str(slave.Type) + "}}\n")
-										self.LocalSlaveList.remove(slave)
-										continue
-								# print self.PortsForClients
-
-							self.RemoveConnection(sock)
-							if self.OnTerminateConnectionCallback is not None:
-								self.OnTerminateConnectionCallback(sock)
-							#except:
-							#	print "[Node Server] Connection Close [ERROR]", sys.exc_info()[0]
-
-			for sock in exceptional:
-				print "[DEBUG] Socket Exceptional"
-
-		# Clean all resorses before exit.
-		self.CleanAllSockets()
-
-		print "[Node] Open sockets count...", self.OpenSocketsCounter
-		print "[Node] Connections dictonary items count...", len(self.Connections)
-		print "[DEBUG::Node] Exit local socket server"
-		self.ExitLocalServerEvent.set()
 
 	def CreateConnectionToNode(self, uuid):
 		print "CreateConnectionToNode"
@@ -801,6 +495,21 @@ class Node():
 			self.Device.Disconnect()
 		self.ExitEvent.set()
 
+	def StartMasterNodeLocator(self):
+		self.MasterNodeLocatorRunning = True
+
+	def StopMasterNodeLocator(self):
+		self.MasterNodeLocatorRunning = False
+
+	def MasterNodeLocator(self):
+		self.StartMasterNodeLocator()
+		while True == self.MasterNodeLocatorRunning:
+			print "[Node] MasterNodeLocator WORKING"
+			# Search network.
+			self.FindMasters()
+			# Rest for several seconds.
+			time.sleep(10)
+
 	def SetLocalServerStatus(self, is_enabled):
 		self.IsNodeLocalServerEnabled = is_enabled
 
@@ -819,7 +528,6 @@ class Node():
 		self.ExitEvent.clear()
 		self.ExitLocalServerEvent.clear()
 
-		self.MyLocalIP = MkSUtils.GetLocalIP()
 		# Read sytem configuration
 		self.LoadSystemConfig()
 
@@ -827,6 +535,8 @@ class Node():
 			thread.start_new_thread(self.NodeWorker, (callback, ))
 		if True == self.IsNodeLocalServerEnabled:
 			thread.start_new_thread(self.NodeLocalNetworkConectionListener, ())
+
+		thread.start_new_thread(self.MasterNodeLocator, ())
 
 		# Waiting here till SIGNAL from OS will come.
 		while self.IsRunnig:

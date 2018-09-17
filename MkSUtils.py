@@ -64,7 +64,7 @@ def ScanLocalNetworkForMasterPort(network_ip):
 		sock.settimeout(1)
 		try:
 			sock.connect(serverAddr)
-			machines.append(serverAddr)
+			machines.append(IPAddress)
 			sock.close()
 		except:
 			pass
@@ -73,9 +73,9 @@ def ScanLocalNetworkForMasterPort(network_ip):
 # Locking for Server Nodes and getting list of Nodes 
 # attached to each machine.
 def FindLocalMasterNodes():
-	print "Scanning for Master Nodes"
+	print "[Utils] Scanning for Master Nodes"
 	localIP = GetLocalIP()
 	networkIP = '.'.join((localIP.split('.'))[:-1]) + '.'
 	machines = ScanLocalNetworkForMasterPort(networkIP)
-	print "Found machines,", machines
+	print "[Utils] Found machines,", machines
 	return machines
