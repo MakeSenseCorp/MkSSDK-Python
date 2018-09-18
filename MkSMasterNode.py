@@ -27,6 +27,8 @@ class MasterNode(AbstractNode):
 			'get_local_nodes': 				self.GetLocalNodesHandler,
 			'get_master_info':				self.GetMasterInfoHandler
 		}
+		# Flags
+		self.IsListenerEnabled 				= True
 
 		self.ChangeState("IDLE")
 

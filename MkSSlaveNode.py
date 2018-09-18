@@ -24,18 +24,13 @@ class SlaveNode(AbstractNode):
 		}
 		# Callbacks
 		self.LocalServerDataArrivedCallback			= None
+		self.IsListenerEnabled 						= False
 
 		self.ChangeState("IDLE")
 
 	def SlaveStateIdle(self):
 		self.ChangeState("CONNECT_MASTER")
 		# Init state logic must be here.
-
-	def CleanMasterList(self):
-		# print "[DEBUG] CleanMasterList", len(self.MasterNodesList)
-		for master in self.MasterNodesList:
-			self.RemoveConnection(master[0])
-		self.MasterNodesList = []
 
 	def SlaveStateConnectMaster(self):
 		if 0 == self.Ticker % 20:
@@ -86,3 +81,25 @@ class SlaveNode(AbstractNode):
 	def HandlerRouter(self, sock, data):
 		if None is not self.LocalServerDataArrivedCallback:
 			self.LocalServerDataArrivedCallback(data, sock)
+
+	def NodeConnectHandler(self, conn, addr):
+		pass
+
+	def HandlerRouter(self, sock, req):
+		if None is not self.LocalServerDataArrivedCallback:
+			self.LocalServerDataArrivedCallback(data, sock)
+
+	def NodeDisconnectHandler(self, sock):
+		# If disconnected socket is master, slave need to find 
+		# a master again and send request for port.
+		pass
+
+	def NodeMasterAvailable(self, sock):
+		# Get Master slave nodes.
+		packet = self.CommandsGetLocalNodes()
+		sock.send(packet)
+	
+	def CleanMasterList(self):
+		for node in self.MasterNodesList:
+			self.RemoveConnection(node.Socket)
+		self.MasterNodesList = []
