@@ -77,9 +77,6 @@ class Node():
 			'unregister_subscriber':		self.UnregisterSubscriberHandler 
 		}
 
-		# Node sockets
-		self.LocalSocketServerRun			= False
-
 	def DeviceDisconnectedCallback(self, data):
 		print "[DEBUG::Node] DeviceDisconnectedCallback"
 		if True == self.IsHardwareBased:
@@ -386,13 +383,13 @@ class Node():
 		if True == self.IsNodeMainEnabled:
 			self.ExitEvent.wait()
 
-		if True == self.LocalSocketServerRun:
+		if True == self.LocalServiceNode.LocalSocketServerRun:
 			self.ExitLocalServerEvent.wait()
 	
 	def Stop (self):
 		print "[DEBUG::Node] Stop"
 		self.IsRunnig 				= False
-		self.LocalSocketServerRun 	= False
+		self.LocalServiceNode.LocalSocketServerRun 	= False
 	
 	def Pause (self):
 		print "Pause"

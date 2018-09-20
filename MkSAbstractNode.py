@@ -296,5 +296,6 @@ class AbstractNode():
 			for conn in self.Connections:
 				self.RemoveConnection(conn.Socket)
 
-	
+	def GetConnections(self):
+		return self.Connections;
 

@@ -88,23 +88,27 @@ class ApplicationNode(MkSAbstractNode.AbstractNode):
 			self.ChangeState("WORKING")
 			thread.start_new_thread(self.MasterNodeLocator, ())
 		else:
-			self.ChangeState("SEARCH_MASTER")
+			self.ChangeState("SEARCH_MASTERS")
 			self.SearchDontClean = False
 
 	def StateSearchMasters(self):
 		if 0 == self.Ticker % 20:
 			ret = self.SearchForMasters()
 			if ret > 0:
-				self.SwitchState("WORKING")
+				self.ChangeState("WORKING")
 
 	def StateWorking(self):
 		if 0 == self.Ticker % 40:
 			# Check for master list.
 			if not self.MasterNodesList:
 				# Master list is empty
-				self.ChangeState("SEARCH_MASTER")
+				self.ChangeState("SEARCH_MASTERS")
 				self.SearchDontClean = False
 				self.StopMasterNodeLocator()
+
+			payload = self.Commands.GetLocalNodes()
+			for item in self.MasterNodesList:
+				item.Socket.send(payload)
 
 	def StartMasterNodeLocator(self):
 		self.MasterNodeLocatorRunning = True
@@ -164,3 +168,9 @@ class ApplicationNode(MkSAbstractNode.AbstractNode):
 				packet = self.Commands.GetLocalNodes()
 				node.Socket.send(packet)
 				return
+
+	def GetNodeByUUID(self, uuid):
+		for conn in self.Connections:
+			if conn.UUID == uuid:
+				return conn
+		return None
