@@ -31,10 +31,14 @@ class LocalNodeCommands:
 		packet += "{\"command\":\"get_master_info\",\"direction\":\"request\"}"
 		packet += self.GetFooter()
 
+		return packet
+
 	def GetMasterInfoResponse(self, host_name, nodes):
 		packet = self.GetHeader()
 		packet += "{\"command\":\"get_master_info\",\"direction\":\"response\",\"info\":{\"hostname\":\"" + host_name + "\",\"nodes\":[" + nodes + "]}}"
 		packet += self.GetFooter()
+
+		return packet
 
 	def SetSensorInfoRequest(self, uuid, sensors):
 		packet = self.GetHeader()
@@ -46,6 +50,11 @@ class LocalNodeCommands:
 	def GetSensorInfoRequest(self):
 		packet = self.GetHeader()
 		packet += "{\"command\":\"get_sensor_info\",\"direction\":\"request\"}"
+		packet += self.GetFooter()
+
+	def GetSensorInfoResponse(self, uuid, sensors):
+		packet = self.GetHeader()
+		packet += "{\"command\":\"get_sensor_info\",\"direction\":\"response\",\"uuid\":\"" + uuid + "\",\"sensors\":[" + sensors + "]}"
 		packet += self.GetFooter()
 
 		return packet

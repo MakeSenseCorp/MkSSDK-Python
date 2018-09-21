@@ -47,6 +47,9 @@ class SlaveNode(MkSAbstractNode.AbstractNode):
 		self.OnMasterAppendNodeResponseCallback		= None
 		self.OnMasterRemoveNodeResponseCallback 	= None
 		self.OnGetSensorInfoResponseCallback 		= None
+
+		self.OnGetSensorInfoRequestCallback			= None
+		self.OnSetSensorInfoRequestCallback 		= None
 		# Flags
 		self.IsListenerEnabled 						= False
 		# Counters
@@ -94,6 +97,10 @@ class SlaveNode(MkSAbstractNode.AbstractNode):
 		self.MasterSocket.send(payload)
 		self.ChangeState("WAIT_FOR_PORT")
 
+	def SendSensorInfoResponse(self, sock, sensors):
+		payload = self.Commands.GetSensorInfoResponse(self.UUID, sensors)
+		sock.send(payload)
+
 	def StateWaitForPort(self):
 		if 0 == self.Ticker % 20:
 			if 0 == self.SlaveListenerPort:
@@ -119,11 +126,12 @@ class SlaveNode(MkSAbstractNode.AbstractNode):
 		command 	= jsonData['command']
 		direction 	= jsonData['direction']
 
-		if command in self.ResponseHandlers:
-			if "response" == direction:
+		if "response" == direction:
+			if command in self.ResponseHandlers:
 				self.ResponseHandlers[command](jsonData)
-		elif command in self.RequestHandlers:
-			pass
+		elif "request" == direction:
+			if command in self.RequestHandlers:
+				self.RequestHandlers[command](jsonData, sock)
 
 	def NodeConnectHandler(self, conn, addr):
 		pass
@@ -138,6 +146,7 @@ class SlaveNode(MkSAbstractNode.AbstractNode):
 		packet = self.CommandsGetLocalNodes()
 		sock.send(packet)
 
+	# RESPONSE Handlers >
 
 	def GetLocalNodeResponseHandler(self):
 		pass
@@ -151,16 +160,24 @@ class SlaveNode(MkSAbstractNode.AbstractNode):
 	def SetSensorInfoResponseHandler(self):
 		pass
 
-	def GetSensorInfoRequestHandler(self):
-		pass
-
-	def SetSensorInfoRequestHandler(self):
-		pass
-
 	def GetPortResponseHandler(self, json_data):
 		self.SlaveListenerPort = json_data["port"]
 		self.ChangeState("START_LISTENER")
 		# Raise event
 
-	def UndefindHandler(self):
-		pass
+	# RESPONSE Handlers <
+	# REQUEST Handlers <
+
+	def GetSensorInfoRequestHandler(self, json_data, sock):
+		if self.OnGetSensorInfoRequestCallback is not None:
+			self.OnGetSensorInfoRequestCallback(json_data, sock)
+
+	def SetSensorInfoRequestHandler(self, json_data, sock):
+		if self.OnSetSensorInfoRequestCallback is not None:
+			self.OnSetSensorInfoRequestCallback(json_data, sock)
+
+	# REQUEST Handlers <	
+
+	def UndefindHandler(self, data, sock):
+		if None is not self.LocalServerDataArrivedCallback:
+			self.LocalServerDataArrivedCallback(data, sock)
