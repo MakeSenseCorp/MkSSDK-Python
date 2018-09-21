@@ -97,6 +97,8 @@ class ApplicationNode(MkSAbstractNode.AbstractNode):
 				sock, status = self.ConnectMaster(ip)
 				if status is True:
 					self.NodeMasterAvailable(sock)
+					if self.OnMasterFoundCallback is not None:
+						self.OnMasterFoundCallback([sock, ip])
 			self.ChangeState("WORKING")
 
 	def StateSearchMasters(self):
@@ -110,6 +112,8 @@ class ApplicationNode(MkSAbstractNode.AbstractNode):
 					sock, status = self.ConnectMaster(ip)
 					if status is True:
 						self.NodeMasterAvailable(sock)
+						if self.OnMasterFoundCallback is not None:
+							self.OnMasterFoundCallback([sock, ip])
 				self.ChangeState("WORKING")
 
 	def StateWorking(self):
