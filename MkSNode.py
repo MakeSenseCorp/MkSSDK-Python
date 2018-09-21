@@ -373,6 +373,8 @@ class Node():
 		if True == self.IsNodeMainEnabled:
 			thread.start_new_thread(self.NodeWorker, (callback, ))
 		if True == self.IsNodeLocalServerEnabled:
+			self.LocalServiceNode.SetNodeUUID(self.UUID)
+			self.LocalServiceNode.SetNodeType(self.Type)
 			thread.start_new_thread(self.LocalServiceNode.NodeLocalNetworkConectionListener, ())
 
 		# Waiting here till SIGNAL from OS will come.

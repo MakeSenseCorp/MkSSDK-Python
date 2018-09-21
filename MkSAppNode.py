@@ -135,8 +135,9 @@ class ApplicationNode(MkSAbstractNode.AbstractNode):
 		command 	= jsonData['command']
 		direction 	= jsonData['direction']
 
-		if "response" == direction:
-			self.ResponseHandlers[command](jsonData)
+		if command in self.ResponseHandlers:
+			if "response" == direction:
+				self.ResponseHandlers[command](jsonData)
 
 	def NodeDisconnectHandler(self, sock):
 		# Check if disconneced connection is a master.

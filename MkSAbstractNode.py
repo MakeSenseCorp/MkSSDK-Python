@@ -21,6 +21,8 @@ class LocalNode():
 class AbstractNode():
 	def __init__(self):
 		self.Ticker 							= 0
+		self.UUID 								= ""
+		self.Type 								= 0
 		# Callbacks
 		self.OnLocalServerStartedCallback 			= None
 		self.LocalServerDataArrivedCallback			= None
@@ -130,7 +132,6 @@ class AbstractNode():
 		#try:
 		jsonData 	= json.loads(data)
 		command 	= jsonData['command']
-		direction 	= jsonData['direction']
 
 		if command in ["get_node_info", "get_node_status"]:
 			self.ServerNodeHandlers[command](data)
@@ -299,3 +300,8 @@ class AbstractNode():
 	def GetConnections(self):
 		return self.Connections;
 
+	def SetNodeUUID(self, uuid):
+		self.UUID = uuid
+
+	def SetNodeType(self, node_type):
+		self.Type = node_type

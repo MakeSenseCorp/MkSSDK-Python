@@ -8,5 +8,5 @@ import MkSUtils
 import MkSLocalNodesCommands
 import MkSAbstractNode
 import MkSAppNode
-#import MkSSlaveNode
+import MkSSlaveNode
 #import MkSMasterNode
