@@ -72,7 +72,7 @@ class ApplicationNode(MkSAbstractNode.AbstractNode):
 		if self.OnGetSensorInfoResponseCallback is not None:
 			self.OnGetSensorInfoResponseCallback(data)
 
-	def UndefindHandler(self):
+	def UndefindHandler(self, data, sock):
 		if None is not self.LocalServerDataArrivedCallback:
 			self.LocalServerDataArrivedCallback(data, sock)
 
