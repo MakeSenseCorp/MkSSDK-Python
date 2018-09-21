@@ -11,9 +11,10 @@ from mksdk import MkSAbstractNode
 from mksdk import MkSLocalNodesCommands
 
 class ApplicationNode(MkSAbstractNode.AbstractNode):
-	def __init__(self):
+	def __init__(self, master_ip_list):
 		MkSAbstractNode.AbstractNode.__init__(self)
 		self.Commands 								= MkSLocalNodesCommands.LocalNodeCommands()
+		self.MasterStaticIPList 					= master_ip_list
 		self.MasterNodesList						= []
 		# Sates
 		self.States = {
@@ -83,18 +84,32 @@ class ApplicationNode(MkSAbstractNode.AbstractNode):
 		return self.FindMasters()
 
 	def StateIdle(self):
-		ret = self.SearchForMasters()
-		if ret > 0:
-			self.ChangeState("WORKING")
-			thread.start_new_thread(self.MasterNodeLocator, ())
+		if self.MasterStaticIPList is None:
+			ret = self.SearchForMasters()
+			if ret > 0:
+				self.ChangeState("WORKING")
+				thread.start_new_thread(self.MasterNodeLocator, ())
+			else:
+				self.ChangeState("SEARCH_MASTERS")
+				self.SearchDontClean = False
 		else:
-			self.ChangeState("SEARCH_MASTERS")
-			self.SearchDontClean = False
+			for ip in self.MasterStaticIPList:
+				sock, status = self.ConnectMaster(ip)
+				if status is True:
+					self.NodeMasterAvailable(sock)
+			self.ChangeState("WORKING")
 
 	def StateSearchMasters(self):
 		if 0 == self.Ticker % 20:
-			ret = self.SearchForMasters()
-			if ret > 0:
+			if self.MasterStaticIPList is None:
+				ret = self.SearchForMasters()
+				if ret > 0:
+					self.ChangeState("WORKING")
+			else:
+				for ip in self.MasterStaticIPList:
+					sock, status = self.ConnectMaster(ip)
+					if status is True:
+						self.NodeMasterAvailable(sock)
 				self.ChangeState("WORKING")
 
 	def StateWorking(self):
@@ -150,6 +165,7 @@ class ApplicationNode(MkSAbstractNode.AbstractNode):
 	def NodeMasterAvailable(self, sock):
 		# Append new master to the list
 		conn = self.GetConnection(sock)
+		# TODO - Check if we don't have this connection already
 		self.MasterNodesList.append(conn)
 		# Get Master slave nodes.
 		packet = self.Commands.GetLocalNodes()

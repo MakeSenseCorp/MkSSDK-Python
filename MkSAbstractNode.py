@@ -263,6 +263,13 @@ class AbstractNode():
 			node.LocalType = "NODE"
 		return sock, status
 
+	def ConnectMaster(self, ip):
+		sock, status = self.ConnectNodeSocket((ip, 16999))
+		if status is True:
+			node = self.AppendConnection(sock, ip, 16999)
+			node.LocalType = "MASTER"
+		return sock, status
+
 	def FindMasters(self):
 		# Let user know master search started.
 		if self.OnMasterSearchCallback is not None:
