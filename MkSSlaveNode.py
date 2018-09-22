@@ -2,6 +2,7 @@
 import os
 import sys
 import json
+import time
 import thread
 import threading
 import socket
@@ -63,6 +64,8 @@ class SlaveNode(MkSAbstractNode.AbstractNode):
 		self.MasterNodesList = []
 
 	def SearchForMasters(self):
+		if self.OnMasterSearchCallback is not None:
+			self.OnMasterSearchCallback()
 		# Clean master nodes list.
 		if False == self.SearchDontClean:
 			self.CleanMasterList()
@@ -75,10 +78,14 @@ class SlaveNode(MkSAbstractNode.AbstractNode):
 			node = self.AppendConnection(sock, self.MyLocalIP, 16999)
 			node.LocalType = "MASTER"
 			self.ChangeState("GET_PORT")
+			self.MasterNodesList.append(node)
+			if self.OnMasterFoundCallback is not None:
+				self.OnMasterFoundCallback([sock, self.MyLocalIP])
 			# Save socket as master socket
 			self.MasterSocket = sock
 		else:
 			self.ChangeState("CONNECT_MASTER")
+			time.sleep(5)
 
 	def StateIdle(self):
 		# Init state logic must be here.
@@ -126,6 +133,7 @@ class SlaveNode(MkSAbstractNode.AbstractNode):
 		command 	= jsonData['command']
 		direction 	= jsonData['direction']
 
+		# TODO - IF command type is not in list call unknown callback in user code.
 		if "response" == direction:
 			if command in self.ResponseHandlers:
 				self.ResponseHandlers[command](jsonData)
@@ -133,15 +141,27 @@ class SlaveNode(MkSAbstractNode.AbstractNode):
 			if command in self.RequestHandlers:
 				self.RequestHandlers[command](jsonData, sock)
 
+	# Only used for socket listening.
 	def NodeConnectHandler(self, conn, addr):
 		pass
 
 	def NodeDisconnectHandler(self, sock):
-		# If disconnected socket is master, slave need to find 
-		# a master again and send request for port.
-		pass
+		print "NodeDisconnectHandler"
+		# Check if disconneced connection is a master.
+		for node in self.MasterNodesList:
+			if sock == node.Socket:
+				self.MasterNodesList.remove(node)
+				# If master terminated we need to close node.
+				self.ChangeState("CONNECT_MASTER")
+				if self.OnMasterDisconnectedCallback is not None:
+					self.OnMasterDisconnectedCallback()
 
 	def NodeMasterAvailable(self, sock):
+		print "NodeMasterAvailable"
+		# Append new master to the list
+		conn = self.GetConnection(sock)
+		# TODO - Check if we don't have this connection already
+		self.MasterNodesList.append(conn)
 		# Get Master slave nodes.
 		packet = self.CommandsGetLocalNodes()
 		sock.send(packet)
@@ -181,3 +201,6 @@ class SlaveNode(MkSAbstractNode.AbstractNode):
 	def UndefindHandler(self, data, sock):
 		if None is not self.LocalServerDataArrivedCallback:
 			self.LocalServerDataArrivedCallback(data, sock)
+
+	def GetMasters(self):
+		return self.MasterNodesList
