@@ -52,6 +52,8 @@ class LocalNodeCommands:
 		packet += "{\"command\":\"get_sensor_info\",\"direction\":\"request\"}"
 		packet += self.GetFooter()
 
+		return packet
+
 	def GetSensorInfoResponse(self, uuid, sensors):
 		packet = self.GetHeader()
 		packet += "{\"command\":\"get_sensor_info\",\"direction\":\"response\",\"uuid\":\"" + uuid + "\",\"sensors\":[" + sensors + "]}"
