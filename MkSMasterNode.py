@@ -52,6 +52,7 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 
 	def GetPortRequestHandler(self, json_data, sock):
 		nodeType = json_data['type']
+		uuid = json_data['uuid']
 		# Do we have available port.
 		if self.PortsForClients:
 			node = self.GetConnection(sock)
@@ -63,10 +64,13 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 			if None == existingSlave:
 				# New request
 				port = 10000 + self.PortsForClients.pop()
-				# Send message to all nodes.
-				paylod = self.Commands.MasterAppendNodeResponse(node.IP, port, node.UUID, nodeType)
+				# Update node
 				node.Type = nodeType
 				node.Port = port
+				node.UUID = uuid
+
+				# Send message to all nodes.
+				paylod = self.Commands.MasterAppendNodeResponse(node.IP, port, node.UUID, nodeType)
 				for client in self.Connections:
 					if client.Socket == self.ServerSocket:
 						pass
