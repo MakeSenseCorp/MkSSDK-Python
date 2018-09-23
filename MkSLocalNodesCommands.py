@@ -12,16 +12,30 @@ class LocalNodeCommands:
 	def GetFooter(self):
 		return "\n"
 
-	def GetLocalNodes(self):
+	def GetLocalNodesRequest(self):
 		packet = self.GetHeader()
 		packet += "{\"command\":\"get_local_nodes\",\"direction\":\"request\"}"
 		packet += self.GetFooter()
 
 		return packet
 
-	def GetPort(self, uuid, node_type):
+	def GetLocalNodesResponse(self, nodes):
+		packet = self.GetHeader()
+		packet += "{\"command\":\"get_local_nodes\",\"direction\":\"response\",\"nodes\":[" + nodes + "]}"
+		packet += self.GetFooter()
+
+		return packet
+
+	def GetPortRequest(self, uuid, node_type):
 		packet = self.GetHeader()
 		packet += "{\"command\":\"get_port\",\"direction\":\"request\",\"uuid\":\"" + uuid + "\",\"type\":" + str(node_type) + "}"
+		packet += self.GetFooter()
+
+		return packet
+
+	def GetPortResponse(self, port):
+		packet = self.GetHeader()
+		packet += "{\"command\":\"get_port\",\"direction\":\"response\",\"port\":" + str(port) + "}"
 		packet += self.GetFooter()
 
 		return packet
@@ -36,6 +50,20 @@ class LocalNodeCommands:
 	def GetMasterInfoResponse(self, host_name, nodes):
 		packet = self.GetHeader()
 		packet += "{\"command\":\"get_master_info\",\"direction\":\"response\",\"info\":{\"hostname\":\"" + host_name + "\",\"nodes\":[" + nodes + "]}}"
+		packet += self.GetFooter()
+
+		return packet
+
+	def MasterAppendNodeResponse(self, ip, port, uuid, node_type):
+		packet = self.GetHeader()
+		packet += "{\"command\":\"master_append_node\",\"direction\":\"response\",\"node\":{\"ip\":\"" + str(ip) + "\",\"port\":" + str(port) + ",\"uuid\":\"" + uuid + "\",\"type\":" + str(node_type) + "}}"
+		packet += self.GetFooter()
+
+		return packet
+
+	def MasterRemoveNodeResponse(self, ip, port, uuid, node_type):
+		packet = self.GetHeader()
+		packet += "{\"command\":\"master_remove_node\",\"direction\":\"response\",\"node\":{\"ip\":\"" + str(ip) + "\",\"port\":" + str(port) + ",\"uuid\":\"" + uuid + "\",\"type\":" + str(node_type) + "}}"
 		packet += self.GetFooter()
 
 		return packet

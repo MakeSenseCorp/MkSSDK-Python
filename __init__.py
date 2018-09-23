@@ -9,4 +9,4 @@ import MkSLocalNodesCommands
 import MkSAbstractNode
 import MkSAppNode
 import MkSSlaveNode
-#import MkSMasterNode
+import MkSMasterNode
