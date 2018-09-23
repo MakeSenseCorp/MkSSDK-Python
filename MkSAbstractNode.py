@@ -112,6 +112,7 @@ class AbstractNode():
 	def TryStartListener(self):
 		try:
 			print "[Node Server] Start listener..."
+			print self.ServerAdderss
 			self.ServerSocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 			self.ServerSocket.setblocking(0)
 
@@ -199,7 +200,7 @@ class AbstractNode():
 		else:
 			self.LocalSocketServerRun = True
 
-		print "[Node Server] Server is running..."
+		print "[Node Server] Local network is started..."
 		# Raise event for user
 		if self.OnLocalServerStartedCallback is not None:
 			self.OnLocalServerStartedCallback()

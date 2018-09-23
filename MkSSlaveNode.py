@@ -100,7 +100,7 @@ class SlaveNode(MkSAbstractNode.AbstractNode):
 			self.MasterConnectionTries += 1
 
 	def StateGetPort(self):
-		payload = self.Commands.GetPort(self.UUID, self.Type)
+		payload = self.Commands.GetPortRequest(self.UUID, self.Type)
 		self.MasterSocket.send(payload)
 		self.ChangeState("WAIT_FOR_PORT")
 
@@ -129,6 +129,7 @@ class SlaveNode(MkSAbstractNode.AbstractNode):
 		pass
 
 	def HandlerRouter(self, sock, data):
+		print data
 		jsonData 	= json.loads(data)
 		command 	= jsonData['command']
 		direction 	= jsonData['direction']
