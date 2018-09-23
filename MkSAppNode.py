@@ -172,7 +172,7 @@ class ApplicationNode(MkSAbstractNode.AbstractNode):
 		# TODO - Check if we don't have this connection already
 		self.MasterNodesList.append(conn)
 		# Get Master slave nodes.
-		packet = self.Commands.GetLocalNodes()
+		packet = self.Commands.GetLocalNodesRequest()
 		sock.send(packet)
 	
 	def CleanMasterList(self):
@@ -186,7 +186,7 @@ class ApplicationNode(MkSAbstractNode.AbstractNode):
 	def GetMasterNodes(self, ip):
 		for node in self.MasterNodesList:
 			if ip == node.IP:
-				packet = self.Commands.GetLocalNodes()
+				packet = self.Commands.GetLocalNodesRequest()
 				node.Socket.send(packet)
 				return
 
