@@ -125,7 +125,7 @@ class ApplicationNode(MkSAbstractNode.AbstractNode):
 				self.SearchDontClean = False
 				self.StopMasterNodeLocator()
 
-			payload = self.Commands.GetLocalNodes()
+			payload = self.Commands.GetLocalNodesRequest()
 			for item in self.MasterNodesList:
 				item.Socket.send(payload)
 
