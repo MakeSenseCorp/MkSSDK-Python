@@ -24,7 +24,8 @@ def GetLocalIP():
 			"ath0",
 			"ath1",
 			"ppp0",
-			"enp0s3"
+			"enp0s3",
+			"wlp2s0"
 			]
 		for ifname in interfaces:
 			try:
