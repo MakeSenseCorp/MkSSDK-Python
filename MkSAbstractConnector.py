@@ -6,9 +6,10 @@ import thread
 import threading
 
 class AbstractConnector():
-	def __init__(self):
+	def __init__(self, local_device):
 		self.Protocol 		= None
 		self.Adaptor 		= None
+		self.LocalDevice 	= local_device
 
 	def SetProtocol(self, protocol):
 		self.Protocol = protocol

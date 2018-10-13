@@ -34,7 +34,6 @@ class Node():
 		# Device information
 		self.Type 							= 0
 		self.UUID 							= ""
-		self.IsHardwareBased 				= False
 		self.OSType 						= ""
 		self.OSVersion 						= ""
 		self.BrandName 						= ""
@@ -48,11 +47,14 @@ class Node():
 		self.RegisteredNodes  				= []
 		self.SystemLoaded					= False
 		self.IsNodeMainEnabled  			= False
-		self.IsNodeLocalServerEnabled 		= False
+		self.IsHardwareBased 				= False
+		self.IsNodeWSServiceEnabled 		= False # Based on HTTP requests and web sockets
+		self.IsNodeLocalServerEnabled 		= False # Based on regular sockets
 		# Inner state
 		self.States = {
 			'IDLE': 						self.StateIdle,
 			'CONNECT_DEVICE':				self.StateConnectDevice,
+			'INIT_NETWORK':					self.StateInitNetwork,
 			'ACCESS': 						self.StateGetAccess,
 			'WORK': 						self.StateWork
 		}
@@ -151,8 +153,11 @@ class Node():
 				self.Exit()
 				return
 
-		self.State = "ACCESS"
+		self.State = "INIT_NETWORK"
 	
+	def StateInitNetwork(self):
+		self.State = "ACCESS"
+
 	def StateGetAccess (self):
 		print "[DEBUG::Node] StateGetAccess"
 		# Let the state machine know that this state was entered.
