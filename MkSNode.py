@@ -22,7 +22,7 @@ class Node():
 	def __init__(self, node_type, local_service_node):
 		# Objects node depend on
 		self.File 							= MkSFile.File()
-		self.Device 						= None
+		self.Connector 						= None
 		self.Network						= None
 		self.LocalServiceNode 				= local_service_node
 		# Node connection to WS information
@@ -64,7 +64,7 @@ class Node():
 		self.OnNodeSystemLoaded 			= None
 		# Locks and Events
 		self.NetworkAccessTickLock 			= threading.Lock()
-		self.DeviceLock			 			= threading.Lock()
+		self.ConnectorLock			 		= threading.Lock()
 		self.ExitEvent 						= threading.Event()
 		self.ExitLocalServerEvent			= threading.Event()
 		# Debug
@@ -80,7 +80,7 @@ class Node():
 	def DeviceDisconnectedCallback(self, data):
 		print "[DEBUG::Node] DeviceDisconnectedCallback"
 		if True == self.IsHardwareBased:
-			self.Device.Disconnect()
+			self.Connector.Disconnect()
 		self.Network.Disconnect()
 		self.Stop()
 		self.Run(self.WorkingCallback)
@@ -115,9 +115,11 @@ class Node():
 		
 		self.DeviceInfo = MkSDevice.Device(self.UUID, self.Type, self.OSType, self.OSVersion, self.BrandName)
 	
-	def SetDevice(self, device):
-		print "SetDevice"
-		self.Device = device
+	# If this method called, this Node is HW enabled. 
+	def SetConnector(self, connector):
+		print "[Node] SetDevice"
+		self.Connector = connector
+		self.IsHardwareBased = True
 		
 	def SetNetwork(self):
 		print "SetNetwork"
@@ -128,18 +130,18 @@ class Node():
 	def StateConnectDevice (self):
 		print "StateConnectDevice"
 		if True == self.IsHardwareBased:
-			if None == self.Device:
+			if None == self.Connector:
 				print "Error: [Run] Device did not specified"
 				self.Exit()
 				return
 			
-			if False == self.Device.Connect(self.NodeType):
+			if False == self.Connector.Connect(self.Type):
 				print "Error: [Run] Could not connect device"
 				self.Exit()
 				return
 			
-			self.Device.SetDeviceDisconnectCallback(self.DeviceDisconnectedCallback)
-			deviceUUID = self.Device.GetUUID()
+			self.Connector.SetDeviceDisconnectCallback(self.DeviceDisconnectedCallback)
+			deviceUUID = self.Connector.GetUUID()
 			if len(deviceUUID) > 30:
 				self.UUID = deviceUUID
 				print "Device UUID: " + self.UUID
@@ -295,21 +297,21 @@ class Node():
 	
 	def GetSensorHWValue (self, id):
 		"""Get HW device sensor value"""
-		self.DeviceLock.acquire()
-		error, device_id, value = self.Device.GetSensor(id)
+		self.ConnectorLock.acquire()
+		error, device_id, value = self.Connector.GetSensor(id)
 		if error == True:
-			error, device_id, value = self.Device.GetSensor(id)
+			error, device_id, value = self.Connector.GetSensor(id)
 			if error == True:
-				self.DeviceLock.release()
+				self.ConnectorLock.release()
 				return True, 0, 0
-		self.DeviceLock.release()
+		self.ConnectorLock.release()
 		return False, device_id, value
 
 	def SetSensorHWValue (self, id, value):
 		"""Set HW device with sensor value"""
-		self.DeviceLock.acquire()
-		data = self.Device.SetSensor(id, value)
-		self.DeviceLock.release()
+		self.ConnectorLock.acquire()
+		data = self.Connector.SetSensor(id, value)
+		self.ConnectorLock.release()
 		return data
 
 	def NodeWorker (self, callback):
@@ -347,7 +349,7 @@ class Node():
 		
 		print "[DEBUG::Node] Exit NodeWork"
 		if True == self.IsHardwareBased:
-			self.Device.Disconnect()
+			self.Connector.Disconnect()
 		self.ExitEvent.set()
 
 	def SetLocalServerStatus(self, is_enabled):

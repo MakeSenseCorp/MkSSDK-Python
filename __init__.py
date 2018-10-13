@@ -10,3 +10,7 @@ import MkSAbstractNode
 import MkSAppNode
 import MkSSlaveNode
 import MkSMasterNode
+import MkSAbstract
+import MkSAbstract
+import MkSLocalHWAdaptor
+import MkSLocalHWConnector
