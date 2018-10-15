@@ -10,6 +10,8 @@ class AbstractConnector():
 		self.Protocol 		= None
 		self.Adaptor 		= None
 		self.LocalDevice 	= local_device
+		# Flags
+		self.IsConnected = False
 
 	def SetProtocol(self, protocol):
 		self.Protocol = protocol
@@ -17,16 +19,19 @@ class AbstractConnector():
 	def SetAdaptor(self, adaptor):
 		self.Adaptor = adaptor
 
-	def Connect(self):
-		return True
+	def Connect(self, type):
+		return self.IsConnected
 
 	def Disconnect(self):
-		return True
+		return self.IsConnected
 
 	def IsValidDevice(self):
 		return True
 
 	def GetUUID(self):
+		return ""
+
+	def GetDeviceInfo(self):
 		return ""
 
 	def SetSensorInfo(self, info):

@@ -19,11 +19,11 @@ class AbstractDevice():
 
 	def Connect(self):
 		self.IsConnected = True
-		return True
+		return self.IsConnected
 
-	def DisConnect(self):
+	def Disconnect(self):
 		self.IsConnected = False
-		return True
+		return self.IsConnected
 
 	def Send(self, data):
 		return "Abstract"

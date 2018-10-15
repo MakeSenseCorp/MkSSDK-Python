@@ -122,6 +122,9 @@ class Node():
 		print "[Node] SetDevice"
 		self.Connector = connector
 		self.IsHardwareBased = True
+
+	def GetConnector(self):
+		return self.Connector
 		
 	def SetNetwork(self):
 		print "SetNetwork"
@@ -142,16 +145,16 @@ class Node():
 				self.Exit()
 				return
 			
-			self.Connector.SetDeviceDisconnectCallback(self.DeviceDisconnectedCallback)
-			deviceUUID = self.Connector.GetUUID()
-			if len(deviceUUID) > 30:
-				self.UUID = deviceUUID
-				print "Device UUID: " + self.UUID
-				self.Network.SetDeviceUUID(self.UUID)
-			else:
-				print "Error: [Run] Could not connect device"
-				self.Exit()
-				return
+			#self.Connector.SetDeviceDisconnectCallback(self.DeviceDisconnectedCallback)
+			#deviceUUID = self.Connector.GetUUID()
+			#if len(deviceUUID) > 30:
+			#	self.UUID = deviceUUID
+			#	print "Device UUID: " + self.UUID
+			#	self.Network.SetDeviceUUID(self.UUID)
+			#else:
+			#	print "Error: [Run] Could not connect device"
+			#	self.Exit()
+			#	return
 
 		self.State = "INIT_NETWORK"
 	
