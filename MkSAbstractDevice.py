@@ -6,13 +6,16 @@ import thread
 import threading
 
 class AbstractDevice():
-	def __init__(self, on_data_ready_callback):
+	def __init__(self):
 		self.Type 					= None
 		self.UUID 					= ""
 		# Flags
 		self.IsConnected 			= False
 		# Events
-		self.OnDataReadyCallback 	= on_data_ready_callback
+		self.OnDataReadyCallback 	= None
+
+	def RegisterOnDataReadyCallback(self, on_data_ready_callback):
+		self.OnDataReadyCallback = on_data_ready_callback
 
 	def Connect(self):
 		self.IsConnected = True

@@ -16,3 +16,21 @@ class AbstractConnector():
 
 	def SetAdaptor(self, adaptor):
 		self.Adaptor = adaptor
+
+	def Connect(self):
+		return True
+
+	def Disconnect(self):
+		return True
+
+	def IsValidDevice(self):
+		return True
+
+	def GetUUID(self):
+		return ""
+
+	def SetSensorInfo(self, info):
+		return True
+
+	def GetSensorInfo(self):
+		return ""

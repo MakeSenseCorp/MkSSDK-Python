@@ -156,25 +156,53 @@ class Node():
 		self.State = "INIT_NETWORK"
 	
 	def StateInitNetwork(self):
-		self.State = "ACCESS"
+		if True == self.IsNodeWSServiceEnabled:
+			self.Network = MkSNetMachine.Network(self.ApiUrl, self.WsUrl)
+			self.Network.SetDeviceType(self.Type)
+			self.Network.SetDeviceUUID(self.UUID)
+			self.Network.OnConnectionCallback  		= self.WebSocketConnectedCallback
+			self.Network.OnDataArrivedCallback 		= self.WebSocketDataArrivedCallback
+			self.Network.OnConnectionClosedCallback = self.WebSocketConnectionClosedCallback
+			self.Network.OnErrorCallback 			= self.WebSocketErrorCallback
+
+			self.State = "ACCESS"
+		else:
+			self.State = "WORK"
 
 	def StateGetAccess (self):
-		print "[DEBUG::Node] StateGetAccess"
-		# Let the state machine know that this state was entered.
-		self.NetworkAccessTickLock.acquire()
-		try:
-			self.AccessTick = 1
-		finally:
-			self.NetworkAccessTickLock.release()
-		payloadStr = "[]"
-		if self.Network.Connect(self.UserName, self.Password, payloadStr) == True:
-			print "Register Device ..."
-			data, error = self.Network.RegisterDevice(self.DeviceInfo)
-			if error == False:
-				return
+		if True == self.IsNodeWSServiceEnabled:
+			print "[DEBUG::Node] StateGetAccess"
+			# Let the state machine know that this state was entered.
+			self.NetworkAccessTickLock.acquire()
+			try:
+				self.AccessTick = 1
+			finally:
+				self.NetworkAccessTickLock.release()
+			payloadStr = "[]"
+			if self.Network.Connect(self.UserName, self.Password, payloadStr) == True:
+				print "Register Device ..."
+				data, error = self.Network.RegisterDevice(self.DeviceInfo)
+				if error == False:
+					return
+		else:
+			self.State = "WORK"
 	
 	def StateWork (self):
-		pass
+		if False == self.SystemLoaded:
+			self.SystemLoaded = True # Update node that system done loading.
+			self.OnNodeSystemLoaded()
+
+		# TODO - If not connected switch state and try to connect WS.
+		# If state is accessing network and it ia only the first time.
+		#if self.State == "ACCESS" and self.AccessTick > 0:
+		#	self.NetworkAccessTickLock.acquire()
+		#	try:
+		#		self.AccessTick = self.AccessTick + 1
+		#	finally:
+		#		self.NetworkAccessTickLock.release()
+		#	if self.AccessTick < 10:
+		#		print "Waiting for web service ... " + str(self.AccessTick)
+		#		continue
 	
 	def WebSocketConnectedCallback (self):
 		self.State = "WORK"
@@ -323,32 +351,10 @@ class Node():
 		self.WorkingCallback = callback
 		self.State = "CONNECT_DEVICE"
 		
-		self.Network = MkSNetMachine.Network(self.ApiUrl, self.WsUrl)
-		self.Network.SetDeviceType(self.Type)
-		self.Network.SetDeviceUUID(self.UUID)
-		self.Network.OnConnectionCallback  		= self.WebSocketConnectedCallback
-		self.Network.OnDataArrivedCallback 		= self.WebSocketDataArrivedCallback
-		self.Network.OnConnectionClosedCallback = self.WebSocketConnectionClosedCallback
-		self.Network.OnErrorCallback 			= self.WebSocketErrorCallback
-
-		self.SystemLoaded = True # Update node that system done loading.
-		self.OnNodeSystemLoaded()
-		
 		# We need to know if this worker is running for waiting mechanizm
 		self.IsNodeMainEnabled = True
 		while self.IsRunnig:
 			time.sleep(0.5)
-			# If state is accessing network and it ia only the first time.
-			if self.State == "ACCESS" and self.AccessTick > 0:
-				self.NetworkAccessTickLock.acquire()
-				try:
-					self.AccessTick = self.AccessTick + 1
-				finally:
-					self.NetworkAccessTickLock.release()
-				if self.AccessTick < 10:
-					print "Waiting for web service ... " + str(self.AccessTick)
-					continue
-			
 			self.Method = self.States[self.State]
 			self.Method()
 		
@@ -357,11 +363,11 @@ class Node():
 			self.Connector.Disconnect()
 		self.ExitEvent.set()
 
+	def SetWebServiceStatus(self, is_enabled):
+		self.IsNodeWSServiceEnabled = is_enabled
+
 	def SetLocalServerStatus(self, is_enabled):
 		self.IsNodeLocalServerEnabled = is_enabled
-
-	def SetConnectivityStatus(self, is_enabled):
-		self.IsNodeMainEnabled = is_enabled
 
 	def SetMasterNodeStatus(self, is_enabled):
 		self.IsMasterNode 		= is_enabled
@@ -377,8 +383,9 @@ class Node():
 		# Read sytem configuration
 		self.LoadSystemConfig()
 
-		if True == self.IsNodeMainEnabled:
-			thread.start_new_thread(self.NodeWorker, (callback, ))
+		# Start Node worker thread
+		thread.start_new_thread(self.NodeWorker, (callback, ))
+
 		if True == self.IsNodeLocalServerEnabled:
 			self.LocalServiceNode.SetNodeUUID(self.UUID)
 			self.LocalServiceNode.SetNodeType(self.Type)

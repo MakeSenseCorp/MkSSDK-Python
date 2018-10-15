@@ -8,5 +8,5 @@ import threading
 from mksdk import MkSAbstractConnector
 
 class LocalHWConnector(MkSAbstractConnector.AbstractConnector):
-	def __init__(self):
-		MkSAbstractConnector.AbstractConnector.__init__(self)
+	def __init__(self, local_device):
+		MkSAbstractConnector.AbstractConnector.__init__(self, local_device)
