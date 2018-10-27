@@ -12,12 +12,17 @@ class AbstractConnector():
 		self.LocalDevice 	= local_device
 		# Flags
 		self.IsConnected = False
+		# Callbacks
+		self.SetDeviceDisconnectCallback = None
 
 	def SetProtocol(self, protocol):
 		self.Protocol = protocol
 
 	def SetAdaptor(self, adaptor):
 		self.Adaptor = adaptor
+
+	def SetDeviceDisconnectCallback(self, callback):
+		pass
 
 	def Connect(self, type):
 		return self.IsConnected
@@ -38,4 +43,7 @@ class AbstractConnector():
 		return True
 
 	def GetSensorInfo(self):
+		return ""
+
+	def GetSensorListInfo(self):
 		return ""

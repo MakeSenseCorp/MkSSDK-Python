@@ -64,6 +64,7 @@ class Node():
 		self.OnWSConnected 					= None
 		self.OnWSConnectionClosed 			= None
 		self.OnNodeSystemLoaded 			= None
+		self.OnDeviceConnected 				= None
 		# Locks and Events
 		self.NetworkAccessTickLock 			= threading.Lock()
 		self.ConnectorLock			 		= threading.Lock()
@@ -146,15 +147,17 @@ class Node():
 				return
 			
 			#self.Connector.SetDeviceDisconnectCallback(self.DeviceDisconnectedCallback)
-			#deviceUUID = self.Connector.GetUUID()
-			#if len(deviceUUID) > 30:
-			#	self.UUID = deviceUUID
-			#	print "Device UUID: " + self.UUID
-			#	self.Network.SetDeviceUUID(self.UUID)
-			#else:
-			#	print "Error: [Run] Could not connect device"
-			#	self.Exit()
-			#	return
+			deviceUUID = self.Connector.GetUUID()
+			if len(deviceUUID) > 30:
+				self.UUID = deviceUUID
+				if None != self.OnDeviceConnected:
+					self.OnDeviceConnected()
+				if True == self.IsNodeWSServiceEnabled: 
+					self.Network.SetDeviceUUID(self.UUID)
+			else:
+				print "[Node] (ERROR) UUID is NOT correct."
+				self.Exit()
+				return
 
 		self.State = "INIT_NETWORK"
 	

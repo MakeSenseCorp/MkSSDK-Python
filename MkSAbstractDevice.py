@@ -5,14 +5,26 @@ import json
 import thread
 import threading
 
+from mksdk import MkSFile
+
 class AbstractDevice():
 	def __init__(self):
+		self.File 					= MkSFile.File()
 		self.Type 					= None
 		self.UUID 					= ""
 		# Flags
 		self.IsConnected 			= False
 		# Events
 		self.OnDataReadyCallback 	= None
+
+		jsonSystemStr = self.File.LoadStateFromFile("system.json")
+		try:
+			dataSystem 				= json.loads(jsonSystemStr)
+			self.UUID = dataSystem["node"]["uuid"]
+			self.DeviceInfoJson = dataSystem["device"]
+		except:
+			print "Error: [LoadSystemConfig] Wrong system.json format"
+			self.Exit()
 
 	def RegisterOnDataReadyCallback(self, on_data_ready_callback):
 		self.OnDataReadyCallback = on_data_ready_callback

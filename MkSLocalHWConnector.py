@@ -2,8 +2,6 @@
 import os
 import sys
 import json
-import thread
-import threading
 
 from mksdk import MkSAbstractConnector
 
@@ -26,18 +24,37 @@ class LocalHWConnector(MkSAbstractConnector.AbstractConnector):
 		return True
 
 	def GetUUID(self):
-		request = "JSON"
-		return ""
+		request 	= "{\"cmd\":\"get_device_uuid\",\"payload\":{}}"
+		response 	= self.LocalDevice.Send(request)
+
+		jsonData 	= json.loads(response)
+		return jsonData["payload"]["uuid"]
 
 	def GetDeviceInfo(self):
-		request = "{\"cmd\":\"get_device_info\",\"payload\":\"\"}"
-		response = self.LocalDevice.Send(request)
-		return response
+		request 	= "{\"cmd\":\"get_device_info\",\"payload\":{}}"
+		response 	= self.LocalDevice.Send(request)
+
+		jsonData 	= json.loads(response)
+		return jsonData["payload"]
 
 	def SetSensorInfo(self, info):
-		request = "JSON"
-		return True
+		request 	= "{\"cmd\":\"set_sensor_info\",\"payload\":" + info + "}"
+		response 	= self.LocalDevice.Send(request)
+
+		jsonData 	= json.loads(response)
+		return jsonData["payload"]
 
 	def GetSensorInfo(self):
-		request = "JSON"
-		return ""
+		request 	= "{\"cmd\":\"get_sensor_info\",\"payload\":{}}"
+		response 	= self.LocalDevice.Send(request)
+
+		jsonData 	= json.loads(response)
+		return jsonData["payload"]
+
+	def GetSensorListInfo(self):
+		request 	= "{\"cmd\":\"get_sensor_list_info\",\"payload\":{}}"
+		response 	= self.LocalDevice.Send(request)
+
+		# print response
+		jsonData 	= json.loads(response)
+		return jsonData["payload"]
