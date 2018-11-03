@@ -119,7 +119,9 @@ class AbstractNode():
 			self.ServerSocket.bind(self.ServerAdderss)
 			# [socket, ip_address, port]
 			node = self.AppendConnection(self.ServerSocket, self.ServerAdderss[0], self.ServerAdderss[1])
-			node.LocalType = "LISTENER"
+			node.LocalType 	= "LISTENER"
+			node.UUID 		= self.UUID
+			node.Type 		= self.Type
 
 			self.ServerSocket.listen(32)
 			self.LocalSocketServerRun = True
