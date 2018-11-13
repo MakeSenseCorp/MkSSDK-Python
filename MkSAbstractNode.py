@@ -31,6 +31,7 @@ class AbstractNode():
 		self.OnMasterSearchCallback					= None
 		self.OnMasterDisconnectedCallback			= None
 		self.OnTerminateConnectionCallback 			= None
+		self.OnLocalServerListenerStartedCallback	= None
 		# Network
 		self.ServerSocket 						= None
 		self.ServerAdderss						= None
@@ -116,7 +117,7 @@ class AbstractNode():
 			self.ServerSocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 			self.ServerSocket.setblocking(0)
 
-			self.ServerSocket.bind(self.ServerAdderss)
+			print (self.ServerSocket.bind(self.ServerAdderss))
 			# [socket, ip_address, port]
 			node = self.AppendConnection(self.ServerSocket, self.ServerAdderss[0], self.ServerAdderss[1])
 			node.LocalType 	= "LISTENER"
@@ -125,10 +126,14 @@ class AbstractNode():
 
 			self.ServerSocket.listen(32)
 			self.LocalSocketServerRun = True
+
+			if self.OnLocalServerListenerStartedCallback is not None:
+				self.OnLocalServerListenerStartedCallback(self.ServerSocket, self.MyLocalIP, self.ServerAdderss[1])
+
 			return True
 		except:
-			self.ServerSocket.close()
-			print "[Server Node] Bind socket ERROR"
+			self.RemoveConnection(self.ServerSocket)
+			print "[Server Node] Bind socket ERROR on TryStartListener", str(self.ServerAdderss[1])
 			return False
 
 	def DataSocketInputHandler(self, sock, data):
