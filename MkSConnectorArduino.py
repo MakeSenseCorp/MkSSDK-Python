@@ -6,10 +6,11 @@ import struct
 import MkSUSBAdaptor
 import MkSProtocol
 
-class Connector ():
-	def __init__ (self, adaptor, protocol):
-		self.Adaptor  = adaptor
-		self.Protocol = protocol
+from mksdk import MkSAbstractConnector
+
+class Connector (MkSAbstractConnector.AbstractConnector):
+	def __init__ (self, local_device):
+		MkSAbstractConnector.AbstractConnector.__init__(self, local_device)
 
 	def Connect (self, device_type):
 		idx = 1
@@ -23,10 +24,11 @@ class Connector ():
 					magic_one, magic_two, op_code, content_length = struct.unpack("BBHB", rxPacket[0:5])
 					if (magic_one == 0xde and magic_two == 0xad):
 						deviceType = rxPacket[5:-1]
-						print deviceType + " <?> " + device_type
-						if deviceType == device_type:
+						print str(deviceType) + " <?> " + str(device_type)
+						if str(deviceType) == str(device_type):
 							print "Device Type: " + deviceType
 							deviceFound = True
+							self.IsConnected = True
 							return True
 					else:
 						self.Adaptor.DisconnectDevice()
@@ -36,17 +38,48 @@ class Connector ():
 					print "Not a MakeSense complient device... "
 			idx = idx + 1
 			self.Adaptor.DisconnectDevice()
+		self.IsConnected = False
 		return False
 	
 	def Disconnect(self):
 		print "[DEBUG::Connector] Disconnect"
+		self.IsConnected = False
 		self.Adaptor.DisconnectDevice()
 		print "Connector ... [DISCONNECTED]"
+
+	def IsValidDevice(self):
+		return self.IsConnected
 	
 	def GetUUID (self):
 		txPacket = self.Protocol.GetDeviceUUIDCommand()
 		rxPacket = self.Adaptor.Send(txPacket)
 		return rxPacket[5:-1] # "-1" is for removing "\n" at the end (no unpack used)
+
+	def GetDeviceInfo(self):
+		txPacket = self.Protocol.GetDeviceInfoCommand()
+		rxPacket = self.Adaptor.Send(txPacket)
+		return rxPacket[5:-1]
+
+	def SetSensorInfo(self, info):
+		txPacket = self.Protocol.SetArduinoNanoUSBSensorValueCommand(info.Id, info.Value)
+		rxPacket = self.Adaptor.Send(txPacket)
+		return "{\"status\":\"OK\"}"
+
+	def GetSensorInfo(self, info):
+		txPacket = self.Protocol.GetArduinoNanoUSBSensorValueCommand(info.Id)
+		rxPacket = self.Adaptor.Send(txPacket)
+		if (len(rxPacket) > 7):
+			MagicOne, MagicTwo, Opcode, Length, Id, Value = struct.unpack("BBHBBH", rxPacket[0:8])
+			return "{\"status\":\"OK\",\"payload\":{\"id\":" + str(Id) + ",\"value\":" + str(Value) + "}}"
+		else:
+			return "{\"status\":\"FAILED\"}"
+
+	def GetSensorListInfo(self):
+		return ""
+
+
+
+
 
 	def SetSensor (self, id, value):
 		txPacket = self.Protocol.SetArduinoNanoUSBSensorValueCommand(id, value)

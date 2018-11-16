@@ -146,10 +146,12 @@ class Node():
 				self.Exit()
 				return
 			
+			# TODO - Make it work.
 			#self.Connector.SetDeviceDisconnectCallback(self.DeviceDisconnectedCallback)
 			deviceUUID = self.Connector.GetUUID()
 			if len(deviceUUID) > 30:
-				self.UUID = deviceUUID
+				self.UUID = str(deviceUUID)
+				print "Serial Device UUID:",self.UUID
 				if None != self.OnDeviceConnected:
 					self.OnDeviceConnected()
 				if True == self.IsNodeWSServiceEnabled: 

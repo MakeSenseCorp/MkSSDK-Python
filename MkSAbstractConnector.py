@@ -13,7 +13,7 @@ class AbstractConnector():
 		# Flags
 		self.IsConnected = False
 		# Callbacks
-		self.SetDeviceDisconnectCallback = None
+		self.OnDeviceDisconnectCallback = None
 
 	def SetProtocol(self, protocol):
 		self.Protocol = protocol
@@ -22,7 +22,7 @@ class AbstractConnector():
 		self.Adaptor = adaptor
 
 	def SetDeviceDisconnectCallback(self, callback):
-		pass
+		self.OnDeviceDisconnectCallback = callback
 
 	def Connect(self, type):
 		return self.IsConnected
@@ -42,7 +42,7 @@ class AbstractConnector():
 	def SetSensorInfo(self, info):
 		return True
 
-	def GetSensorInfo(self):
+	def GetSensorInfo(self, info):
 		return ""
 
 	def GetSensorListInfo(self):

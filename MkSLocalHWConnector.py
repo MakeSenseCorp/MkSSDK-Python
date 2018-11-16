@@ -44,8 +44,8 @@ class LocalHWConnector(MkSAbstractConnector.AbstractConnector):
 		jsonData 	= json.loads(response)
 		return jsonData["payload"]
 
-	def GetSensorInfo(self):
-		request 	= "{\"cmd\":\"get_sensor_info\",\"payload\":{}}"
+	def GetSensorInfo(self, info):
+		request 	= "{\"cmd\":\"get_sensor_info\",\"payload\":" + info + "}"
 		response 	= self.LocalDevice.Send(request)
 
 		jsonData 	= json.loads(response)
