@@ -2,6 +2,7 @@
 import os
 import time
 import struct
+import json
 
 import MkSUSBAdaptor
 import MkSProtocol
@@ -58,11 +59,22 @@ class Connector (MkSAbstractConnector.AbstractConnector):
 	def GetDeviceInfo(self):
 		txPacket = self.Protocol.GetDeviceInfoCommand()
 		rxPacket = self.Adaptor.Send(txPacket)
-		return rxPacket[5:-1]
+
+		MagicOne, MagicTwo, Opcode, Length, InfoSize, SensorsCount = struct.unpack("BBHBBB", rxPacket[0:7])
+
+		payload = "\"sensors_count\":" + str(SensorsCount) + ",\"sensors\":["
+		for i in range(0,SensorsCount):
+			pin, id, value, group, direction = struct.unpack("BBBBB", rxPacket[7 + (5 * i):7 + (5 * (i + 1))])
+			payload += "{\"id\":" + str(id) + ",\"value\":" + str(value) + ",\"group\":" + str(group) + ",\"direction\":" + str(direction) + "},"
+
+		payload = payload[0:-1] + "]"
+		ret = "{\"status\":\"OK\",\"payload\":{" + payload + "}}"
+		return json.loads(ret)
 
 	def SetSensorInfo(self, info):
 		txPacket = self.Protocol.SetArduinoNanoUSBSensorValueCommand(info.Id, info.Value)
 		rxPacket = self.Adaptor.Send(txPacket)
+
 		return "{\"status\":\"OK\"}"
 
 	def GetSensorInfo(self, info):
