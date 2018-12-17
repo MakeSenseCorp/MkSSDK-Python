@@ -80,7 +80,7 @@ class AbstractNode():
 		self.SlaveMethod()
 
 	def AppendConnection(self, sock, ip, port):
-		print "[Node] Append connection, port", port
+		# print "[Node] Append connection, port", port
 		# Append to recieving data sockets.
 		self.RecievingSockets.append(sock)
 		# Append to list of all connections.
@@ -92,7 +92,7 @@ class AbstractNode():
 	def RemoveConnection(self, sock):
 		conn = self.GetConnection(sock)
 		if None is not conn:
-			print "[Node] Remove connection, port", conn.Port
+			# print "[Node] Remove connection, port", conn.Port
 			self.RecievingSockets.remove(conn.Socket)
 			conn.Socket.close()
 			self.Connections.remove(conn)
@@ -112,12 +112,11 @@ class AbstractNode():
 
 	def TryStartListener(self):
 		try:
-			print "[Node Server] Start listener..."
-			print self.ServerAdderss
+			# print "[Node Server] Start listener..."
 			self.ServerSocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 			self.ServerSocket.setblocking(0)
 
-			print (self.ServerSocket.bind(self.ServerAdderss))
+			self.ServerSocket.bind(self.ServerAdderss)
 			# [socket, ip_address, port]
 			node = self.AppendConnection(self.ServerSocket, self.ServerAdderss[0], self.ServerAdderss[1])
 			node.LocalType 	= "LISTENER"
@@ -169,7 +168,7 @@ class AbstractNode():
 		sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 		sock.settimeout(5)
 		try:
-			print "[Node] Connecting to", ip_addr_port
+			# print "[Node] Connecting to", ip_addr_port
 			sock.connect(ip_addr_port)
 			return sock, True
 		except:
@@ -207,7 +206,7 @@ class AbstractNode():
 		else:
 			self.LocalSocketServerRun = True
 
-		print "[Node Server] Local network is started..."
+		# print "[Node Server] Local network is started..."
 		# Raise event for user
 		if self.OnLocalServerStartedCallback is not None:
 			self.OnLocalServerStartedCallback()
@@ -221,7 +220,7 @@ class AbstractNode():
 			for sock in readable:
 				if sock is self.ServerSocket and True == self.IsListenerEnabled:
 					conn, addr = sock.accept()
-					print "[Node Server] Accept", addr
+					#print "[Node Server] Accept", addr
 					conn.setblocking(0)
 					self.AppendConnection(conn, addr[0], addr[1])
 					self.NodeConnectHandler(conn, addr)
@@ -235,7 +234,7 @@ class AbstractNode():
 						print "[Node Server] Recieve ERROR"
 					else:
 						if data:
-							print "[Node Socket] DATA"
+							# print "[Node Socket] DATA"
 							if "MKS" in data[:3]:
 								multiData = data.split("MKS: ")
 								for data in multiData[1:]:
@@ -259,9 +258,9 @@ class AbstractNode():
 		# Clean all resorses before exit.
 		self.CleanAllSockets()
 
-		print "[Node] Open sockets count...", self.OpenSocketsCounter
-		print "[Node] Connections dictonary items count...", len(self.Connections)
-		print "[DEBUG::Node] Exit local socket server"
+		#print "[Node] Open sockets count...", self.OpenSocketsCounter
+		#print "[Node] Connections dictonary items count...", len(self.Connections)
+		#print "[DEBUG::Node] Exit local socket server"
 		self.ExitLocalServerEvent.set()
 
 	def ConnectNode(self, ip, port):
@@ -286,7 +285,7 @@ class AbstractNode():
 		ips = MkSUtils.FindLocalMasterNodes()
 		for ip in ips:
 			if self.GetNode(ip, 16999) is None:
-				print "[Node] Found new master", ip
+				# print "[Node] Found new master", ip
 				# Master not in list, can make connection
 				sock, status = self.ConnectNodeSocket((ip, 16999))
 				if True == status:

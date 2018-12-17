@@ -74,9 +74,23 @@ def ScanLocalNetworkForMasterPort(network_ip):
 # Locking for Server Nodes and getting list of Nodes 
 # attached to each machine.
 def FindLocalMasterNodes():
-	print "[Utils] Scanning for Master Nodes"
+	# print "[Utils] Scanning for Master Nodes"
 	localIP = GetLocalIP()
 	networkIP = '.'.join((localIP.split('.'))[:-1]) + '.'
 	machines = ScanLocalNetworkForMasterPort(networkIP)
-	print "[Utils] Found machines,", machines
+	# print "[Utils] Found machines,", machines
 	return machines
+
+def ReadFromSocket(ip, port, data):
+	sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+	serverAddr = (ip, port)
+	sock.settimeout(1)
+	try:
+		sock.connect(serverAddr)
+		sock.sendall(data)
+		response = sock.recv(1024)
+		sock.close()
+		return response
+	except:
+		sock.close()
+		return ""

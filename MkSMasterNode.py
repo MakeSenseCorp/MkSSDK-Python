@@ -104,7 +104,7 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 			for node in self.LocalSlaveList:
 				nodes += "{\"ip\":\"" + str(node.IP) + "\",\"port\":" + str(node.Port) + ",\"uuid\":\"" + node.UUID + "\",\"type\":" + str(node.Type) + "},"
 			nodes = nodes[:-1]
-		payload = self.Commands.GetMasterInfoResponse(nodes)
+		payload = self.Commands.GetMasterInfoResponse(self.UUID, self.MasterHostName, nodes)
 		sock.send(payload)
 
 	def HandlerRouter(self, sock, data):

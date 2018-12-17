@@ -47,9 +47,9 @@ class LocalNodeCommands:
 
 		return packet
 
-	def GetMasterInfoResponse(self, host_name, nodes):
+	def GetMasterInfoResponse(self, uuid, host_name, nodes):
 		packet = self.GetHeader()
-		packet += "{\"command\":\"get_master_info\",\"direction\":\"response\",\"info\":{\"hostname\":\"" + host_name + "\",\"nodes\":[" + nodes + "]}}"
+		packet += "{\"command\":\"get_master_info\",\"direction\":\"response\",\"info\":{\"hostname\":\"" + str(host_name) + "\",\"uuid\":\"" + uuid + "\",\"nodes\":[" + nodes + "]}}"
 		packet += self.GetFooter()
 
 		return packet

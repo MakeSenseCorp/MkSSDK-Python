@@ -412,7 +412,7 @@ class Node():
 	
 	def Stop (self):
 		print "[DEBUG::Node] Stop"
-		self.IsRunnig 				= False
+		self.IsRunnig 								= False
 		self.LocalServiceNode.LocalSocketServerRun 	= False
 	
 	def Pause (self):
