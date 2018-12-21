@@ -141,3 +141,12 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 			if item.UUID == uuid:
 				return item
 		return None
+
+	def ExitRemoteNode(self, uuid):
+		node = self.GetNodeByUUID(uuid)
+		if node is not None:
+			payload = self.Commands.ExitRequest()
+			node.Socket.send(payload)
+
+	def StartRemoteNode(type, uuid):
+		pass

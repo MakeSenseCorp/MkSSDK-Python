@@ -32,6 +32,7 @@ class AbstractNode():
 		self.OnMasterDisconnectedCallback			= None
 		self.OnTerminateConnectionCallback 			= None
 		self.OnLocalServerListenerStartedCallback	= None
+		self.OnExitCallback							= None
 		# Network
 		self.ServerSocket 						= None
 		self.ServerAdderss						= None
@@ -101,6 +102,12 @@ class AbstractNode():
 	def GetConnection(self, sock):
 		for conn in self.Connections:
 			if conn.Socket == sock:
+				return conn
+		return None
+
+	def GetNodeByUUID(self, uuid):
+		for conn in self.Connections:
+			if conn.UUID == uuid:
 				return conn
 		return None
 

@@ -39,6 +39,7 @@ class SlaveNode(MkSAbstractNode.AbstractNode):
 		self.RequestHandlers	= {
 			'get_sensor_info': 						self.GetSensorInfoRequestHandler,
 			'set_sensor_info': 						self.SetSensorInfoRequestHandler,
+			'exit':									self.ExitHandler,
 			'undefined':							self.UndefindHandler
 		}
 		# Callbacks
@@ -205,3 +206,10 @@ class SlaveNode(MkSAbstractNode.AbstractNode):
 
 	def GetMasters(self):
 		return self.MasterNodesList
+
+	def ExitHandler(self, json_data, sock):
+		if self.OnExitCallback is not None:
+			self.OnExitCallback()
+			packet = self.Commands.ExitResponse("OK")
+			sock.send(packet)
+			

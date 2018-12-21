@@ -81,16 +81,17 @@ def FindLocalMasterNodes():
 	# print "[Utils] Found machines,", machines
 	return machines
 
-def ReadFromSocket(ip, port, data):
+def ReadFromSocket(ip, port, data, size=1024):
 	sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 	serverAddr = (ip, port)
 	sock.settimeout(1)
 	try:
 		sock.connect(serverAddr)
 		sock.sendall(data)
-		response = sock.recv(1024)
+		response = sock.recv(size)
 		sock.close()
 		return response
 	except:
+		print "ERROR"
 		sock.close()
 		return ""

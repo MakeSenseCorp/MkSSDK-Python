@@ -88,3 +88,17 @@ class LocalNodeCommands:
 		packet += self.GetFooter()
 
 		return packet
+
+	def ExitRequest(self):
+		packet = self.GetHeader()
+		packet += "{\"command\":\"exit\",\"direction\":\"request\"}"
+		packet += self.GetFooter()
+
+		return packet
+
+	def ExitResponse(self, status):
+		packet = self.GetHeader()
+		packet += "{\"command\":\"exit\",\"direction\":\"response\",\"status\":\"" + str(status) + "\"}"
+		packet += self.GetFooter()
+
+		return packet

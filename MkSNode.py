@@ -80,6 +80,11 @@ class Node():
 			'unregister_subscriber':		self.UnregisterSubscriberHandler 
 		}
 
+		self.LocalServiceNode.OnExitCallback = self.OnExitHandler
+
+	def OnExitHandler(self):
+		self.Exit()
+
 	def DeviceDisconnectedCallback(self, data):
 		print "[DEBUG::Node] DeviceDisconnectedCallback"
 		if True == self.IsHardwareBased:
