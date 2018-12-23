@@ -16,6 +16,7 @@ class LocalNode():
 		self.Socket 	= sock
 		self.Type 		= node_type
 		self.LocalType 	= "UNKNOWN"
+		self.Status 	= "Stopped"
 		self.Obj 		= None
 
 class AbstractNode():

@@ -6,20 +6,36 @@ import time
 import thread
 import threading
 import socket
+import subprocess
+from subprocess import call
 
+from mksdk import MkSFile
 from mksdk import MkSAbstractNode
 from mksdk import MkSLocalNodesCommands
+
+class LocalNode():
+	def __init__(self, ip, port, uuid, node_type, sock):
+		self.IP 		= ip
+		self.Port 		= port
+		self.UUID 		= uuid
+		self.Socket 	= sock
+		self.Type 		= node_type
+		self.LocalType 	= "UNKNOWN"
+		self.Status 	= "Stopped"
+		self.Obj 		= None
 
 class MasterNode(MkSAbstractNode.AbstractNode):
 	def __init__(self):
 		MkSAbstractNode.AbstractNode.__init__(self)
 		# Members
+		self.File 							= MkSFile.File()
 		self.Commands 						= MkSLocalNodesCommands.LocalNodeCommands()
 		self.PortsForClients				= [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32]
 		self.MasterHostName					= socket.gethostname()
 		self.MasterVersion					= "1.0.1"
 		self.PackagesList					= ["Gateway","LinuxTerminal","USBManager"] # Default Master capabilities.
 		self.LocalSlaveList					= [] # Used ONLY by Master.
+		self.InstalledNodes 				= []
 		# Sates
 		self.States = {
 			'IDLE': 						self.StateIdle,
@@ -37,6 +53,20 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 		self.IsListenerEnabled 				= False
 
 		self.ChangeState("IDLE")
+		self.LoadNodesOnMasterStart()
+		self.OnAceptNewConnectionCallback   = self.OnAceptNewConnectionHandler
+		
+	def LoadNodesOnMasterStart(self):
+		jsonInstalledNodesStr 	= self.File.LoadStateFromFile("../../configure/installed_nodes.json")
+		jsonData 				= json.loads(jsonInstalledNodesStr)
+
+		for item in jsonData["installed"]:
+			if 1 == item["type"]:
+				node = LocalNode("", 16999, item["uuid"], item["type"], None)
+				node.Status = "Running"
+			else:
+				node = LocalNode("", 0, item["uuid"], item["type"], None)
+			self.InstalledNodes.append(node)
 
 	def StateIdle (self):
 		self.ServerAdderss = ('', 16999)
@@ -68,6 +98,13 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 				node.Type = nodeType
 				node.Port = port
 				node.UUID = uuid
+
+				for item in self.InstalledNodes:
+					print item.UUID + "<?>" + node.UUID
+					if item.UUID == node.UUID:
+						item.IP 	= node.IP
+						item.Port 	= node.Port
+						item.Status = "Running"
 
 				# Send message to all nodes.
 				paylod = self.Commands.MasterAppendNodeResponse(node.IP, port, node.UUID, nodeType)
@@ -136,11 +173,18 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 				self.LocalSlaveList.remove(slave)
 				continue
 
+	def OnAceptNewConnectionHandler(self, conn):
+		pass
+
 	def GetSlaveNode(self, uuid):
 		for item in self.LocalSlaveList:
 			if item.UUID == uuid:
 				return item
 		return None
+
+	def GetInstalledNodes(self):
+		return self.InstalledNodes
+		#runnigNodes = self.GetConnections()
 
 	def ExitRemoteNode(self, uuid):
 		node = self.GetNodeByUUID(uuid)
@@ -149,4 +193,7 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 			node.Socket.send(payload)
 
 	def StartRemoteNode(type, uuid):
-		pass
+		path = "/home/yevgeniy/workspace/makesense/mksnodes/1981"
+		#os.system('python ../1981/1981.py --path ' + path)
+		proc = subprocess.Popen(["python", "../1981/1981.py", "--path", path], stdout=subprocess.PIPE)
+		#print proc.stdout.read()

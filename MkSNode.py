@@ -8,6 +8,7 @@ import json
 import signal
 import socket, select
 import Queue
+import argparse
 
 from mksdk import MkSFile
 from mksdk import MkSNetMachine
@@ -81,6 +82,14 @@ class Node():
 		}
 
 		self.LocalServiceNode.OnExitCallback = self.OnExitHandler
+
+		parser = argparse.ArgumentParser(description='Execution module called Node')
+		parser.add_argument('--path', action='store',
+					dest='pwd', help='Root folder of a Node')
+		args = parser.parse_args()
+
+		if args.pwd is not None:
+			os.chdir(args.pwd)
 
 	def OnExitHandler(self):
 		self.Exit()
@@ -424,5 +433,4 @@ class Node():
 		print "Pause"
 	
 	def Exit (self):
-		print "Exit with ERROR"
 		self.Stop()
