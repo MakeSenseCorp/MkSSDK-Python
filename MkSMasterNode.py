@@ -36,6 +36,7 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 		self.PackagesList					= ["Gateway","LinuxTerminal","USBManager"] # Default Master capabilities.
 		self.LocalSlaveList					= [] # Used ONLY by Master.
 		self.InstalledNodes 				= []
+		self.StdOut 						= []
 		# Sates
 		self.States = {
 			'IDLE': 						self.StateIdle,
@@ -51,10 +52,13 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 		}
 		# Flags
 		self.IsListenerEnabled 				= False
+		self.PipeStdoutRun					= False
 
 		self.ChangeState("IDLE")
 		self.LoadNodesOnMasterStart()
 		self.OnAceptNewConnectionCallback   = self.OnAceptNewConnectionHandler
+
+		thread.start_new_thread(self.PipeStdoutListener, ())
 		
 	def LoadNodesOnMasterStart(self):
 		jsonInstalledNodesStr 	= self.File.LoadStateFromFile("../../configure/installed_nodes.json")
@@ -99,6 +103,7 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 				node.Port = port
 				node.UUID = uuid
 
+				# Update installed node list (UI will be updated)
 				for item in self.InstalledNodes:
 					print item.UUID + "<?>" + node.UUID
 					if item.UUID == node.UUID:
@@ -162,6 +167,14 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 		for slave in self.LocalSlaveList:
 			if slave.Socket == sock:
 				self.PortsForClients.append(slave.Port - 10000)
+
+				# Update installed node list (UI will be updated)
+				for item in self.InstalledNodes:
+					if item.UUID == slave.UUID:
+						item.IP 	= ""
+						item.Port 	= 0
+						item.Status = "Stopped"
+
 				payload = self.Commands.MasterAppendNodeResponse(slave.IP, slave.Port, slave.UUID, slave.Type)
 				# Send to all nodes
 				for client in self.Connections:
@@ -184,7 +197,6 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 
 	def GetInstalledNodes(self):
 		return self.InstalledNodes
-		#runnigNodes = self.GetConnections()
 
 	def ExitRemoteNode(self, uuid):
 		node = self.GetNodeByUUID(uuid)
@@ -192,8 +204,16 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 			payload = self.Commands.ExitRequest()
 			node.Socket.send(payload)
 
-	def StartRemoteNode(type, uuid):
+	def PipeStdoutListener(self):
+		self.PipeStdoutRun = True
+		while True == self.PipeStdoutRun:
+			for item in self.StdOut:
+				if item.returncode is not None:
+					print str(item.returncode)
+				print item.stdout.readline()
+			time.sleep(0.5)
+
+	def StartRemoteNode(self, uuid):
 		path = "/home/yevgeniy/workspace/makesense/mksnodes/1981"
-		#os.system('python ../1981/1981.py --path ' + path)
-		proc = subprocess.Popen(["python", "../1981/1981.py", "--path", path], stdout=subprocess.PIPE)
-		#print proc.stdout.read()
+		proc = subprocess.Popen(["python", '-u', "../1981/1981.py", "--path", path], stdout=subprocess.PIPE)
+		self.StdOut.append(proc)
