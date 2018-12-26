@@ -13,6 +13,26 @@ from mksdk import MkSFile
 from mksdk import MkSAbstractNode
 from mksdk import MkSLocalNodesCommands
 
+class LocalPipe():
+	def __init__(self, uuid, pipe):
+		self.Uuid 	= uuid
+		self.Pipe 	= pipe
+		self.Buffer = []
+
+	def ReadToBuffer(self):
+		if (len(self.Buffer) > 20):
+			self.Buffer = []
+		self.Buffer.append(self.Pipe.stdout.readline())
+
+	def ReadBuffer(self):
+		return self.Buffer
+
+	def IsPipeError(self):
+		return self.Pipe.returncode is not None
+
+	def GetError(self):
+		return self.Pipe.returncode
+
 class LocalNode():
 	def __init__(self, ip, port, uuid, node_type, sock):
 		self.IP 		= ip
@@ -36,7 +56,7 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 		self.PackagesList					= ["Gateway","LinuxTerminal","USBManager"] # Default Master capabilities.
 		self.LocalSlaveList					= [] # Used ONLY by Master.
 		self.InstalledNodes 				= []
-		self.StdOut 						= []
+		self.Pipes 							= []
 		# Sates
 		self.States = {
 			'IDLE': 						self.StateIdle,
@@ -203,17 +223,29 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 		if node is not None:
 			payload = self.Commands.ExitRequest()
 			node.Socket.send(payload)
+			# Remove pipe (note better to do it on response of exit command)
+			for item in self.Pipes:
+				if item.Uuid == uuid:
+					self.Pipes.remove(item)
+					return
+
+	def GetShellScreen(self, uuid):
+		for item in self.Pipes:
+			if item.Uuid == uuid:
+				return item.ReadBuffer()
 
 	def PipeStdoutListener(self):
 		self.PipeStdoutRun = True
 		while True == self.PipeStdoutRun:
-			for item in self.StdOut:
-				if item.returncode is not None:
-					print str(item.returncode)
-				print item.stdout.readline()
+			for item in self.Pipes:
+				if item.IsPipeError():
+					print str(item.GetError())
+				item.ReadToBuffer()
 			time.sleep(0.5)
 
 	def StartRemoteNode(self, uuid):
 		path = "/home/yevgeniy/workspace/makesense/mksnodes/1981"
 		proc = subprocess.Popen(["python", '-u', "../1981/1981.py", "--path", path], stdout=subprocess.PIPE)
-		self.StdOut.append(proc)
+
+		pipe = LocalPipe(uuid, proc)
+		self.Pipes.append(pipe)
