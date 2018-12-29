@@ -15,11 +15,14 @@ class File ():
 		file = open(filename, "a")
 		file.write(data)
 		file.close()
-	
-	def LoadStateFromFile (self, filename):
+
+	def LoadContent(self, filename):
 		if os.path.isfile(filename) == True:
 			file = open(filename, "r")
 			data = file.read()
 			file.close()
 			return data
 		return ""
+	
+	def LoadStateFromFile (self, filename):
+		return self.LoadContent(filename)

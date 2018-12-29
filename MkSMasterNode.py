@@ -59,6 +59,7 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 		self.LocalSlaveList					= [] # Used ONLY by Master.
 		self.InstalledNodes 				= []
 		self.Pipes 							= []
+		self.InstalledApps 					= None
 		# Sates
 		self.States = {
 			'IDLE': 						self.StateIdle,
@@ -85,6 +86,9 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 	def LoadNodesOnMasterStart(self):
 		jsonInstalledNodesStr 	= self.File.LoadStateFromFile("../../configure/installed_nodes.json")
 		jsonData 				= json.loads(jsonInstalledNodesStr)
+
+		jsonInstalledAppsStr 	= self.File.LoadStateFromFile("../../configure/installed_apps.json")
+		self.InstalledApps		= json.loads(jsonInstalledAppsStr)
 
 		for item in jsonData["installed"]:
 			if 1 == item["type"]:
