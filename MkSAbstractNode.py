@@ -327,3 +327,6 @@ class AbstractNode():
 
 	def SetNodeType(self, node_type):
 		self.Type = node_type
+
+	def ExitRoutine(self):
+		pass
