@@ -6,13 +6,24 @@ import serial
 import struct
 import thread
 
+if OS_TYPE == "win32":
+	import _winreg as winreg
+	import itertools
+
 class Adaptor ():
 	UsbPath = ""
 	Interfaces = ""
 	SerialAdapter = None
 
 	def __init__(self, asyncCallback):
-		self.UsbPath 						  = "/dev/"
+		global OS_TYPE
+		# linux - "/dev/", win32 - COM#
+		if OS_TYPE == "win32":
+			self.UsbPath = "COM"
+		elif OS_TYPE == "linux":
+			self.UsbPath = "/dev/"
+		else:
+			self.UsbPath = "/dev/"
 		self.DataArrived 					  = False
 		self.SendRequest 					  = False
 		self.RXData 						  = ""
@@ -30,9 +41,35 @@ class Adaptor ():
 
 		self.Initiate()
 
-	def Initiate (self):
+	def LinuxInterfaceNames(self):
 		dev = os.listdir(self.UsbPath)
-		self.Interfaces = [item for item in dev if "ttyUSB" in item]
+		return [item for item in dev if "ttyUSB" in item]
+
+	def WindowsInterfaceNames(self):
+		path = 'HARDWARE\\DEVICEMAP\\SERIALCOMM'
+		try:
+			key = winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, path)
+		except WindowsError:
+			raise IterationError
+
+		for i in itertools.count():
+			try:
+				val = winreg.EnumValue(key, i)
+				yield str(val[1])
+			except EnvironmentError:
+				break
+
+	def GetSerialInterfaceNames(self):
+		global OS_TYPE
+		if OS_TYPE == "win32":
+			self.Interfaces = WindowsInterfaceNames()
+		elif OS_TYPE == "linux":
+			self.Interfaces = LinuxInterfaceNames()
+		else:
+			self.Interfaces = LinuxInterfaceNames()
+
+	def Initiate (self):
+		self.GetSerialInterfaceNames()
 		print self.Interfaces
 
 	def ConnectDevice(self, id, withtimeout):

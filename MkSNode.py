@@ -15,6 +15,10 @@ from mksdk import MkSDevice
 from mksdk import MkSUtils
 from mksdk import MkSAbstractNode
 
+# ['linux', 'win32', 'cywin', 'darwin'] 
+OS_TYPE = sys.platform
+print OS_TYPE
+
 class Node():
 	"""Node respomsable for coordinate between web services
 	and adaptor (in most cases serial)"""
@@ -41,6 +45,7 @@ class Node():
 		self.Description					= ""
 		self.DeviceInfo 					= None
 		# Misc
+		self.OSType 						= ""
 		self.State 							= 'IDLE'
 		self.IsRunnig 						= True
 		self.AccessTick 					= 0
