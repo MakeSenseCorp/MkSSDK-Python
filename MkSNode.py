@@ -214,6 +214,7 @@ class Node():
 			self.State = "WORK"
 	
 	def StateAccessWait (self):
+		print "ACCESS_WAIT"
 		if self.AccessTick > 10:
 			self.State 		= "ACCESS"
 			self.AccessTick = 0
@@ -295,7 +296,7 @@ class Node():
 			self.AccessTick = 0
 		finally:
 			self.NetworkAccessTickLock.release()
-		self.State = "ACCESS"
+		self.State = "ACCESS_WAIT"
 
 	def WebSocketErrorCallback (self):
 		print "WebSocketErrorCallback"
@@ -305,7 +306,7 @@ class Node():
 			self.AccessTick = 0
 		finally:
 			self.NetworkAccessTickLock.release()
-		self.State = "ACCESS"
+		self.State = "ACCESS_WAIT"
 
 	def GetFileContent (self, file):
 		return self.File.LoadStateFromFile(file)

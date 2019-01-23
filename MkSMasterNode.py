@@ -85,10 +85,14 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 		thread.start_new_thread(self.PipeStdoutListener, ())
 		
 	def LoadNodesOnMasterStart(self):
+		jsonInstalledNodesStr 	= ""
+		jsonInstalledAppsStr 	= ""
+
 		if MkSGlobals.OS_TYPE == "win32":
 			jsonInstalledNodesStr = self.File.LoadStateFromFile("G:\\workspace\\Development\\Git\\makesense\\misc\\configure\\" + MkSGlobals.OS_TYPE + "\\installed_nodes.json")
 		elif MkSGlobals.OS_TYPE == "linux":
 			jsonInstalledNodesStr = self.File.LoadStateFromFile("../../configure/installed_nodes.json")
+
 		if (jsonInstalledNodesStr is not "" and jsonInstalledNodesStr is not None):
 			# Load installed nodes.
 			jsonData = json.loads(jsonInstalledNodesStr)

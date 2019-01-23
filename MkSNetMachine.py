@@ -103,6 +103,7 @@ class Network ():
 		self.OnConnectionCallback()
 
 	def WSWorker (self):
+		print "-----------------------------------"
 		self.WSConnection.run_forever()
 
 	def Disconnect(self):
