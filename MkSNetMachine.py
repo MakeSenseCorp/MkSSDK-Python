@@ -108,6 +108,19 @@ class Network ():
 	def Disconnect(self):
 		self.WSConnection.close()
 
+	def AccessGateway (self, key, payload):
+		websocket.enableTrace(False)
+		self.WSConnection 				= websocket.WebSocketApp(self.WSServerUri)
+		self.WSConnection.on_message 	= self.WSConnection_OnMessage_Handler
+		self.WSConnection.on_error 		= self.WSConnection_OnError_Handler
+		self.WSConnection.on_close 		= self.WSConnection_OnClose_Handler
+		self.WSConnection.on_open 		= self.WSConnection_OnOpen_Handler
+		self.WSConnection.header		= {'uuid':self.DeviceUUID, 'node_type':str(self.Type), 'payload':str(payload), 'key':key}
+		print self.WSConnection.header
+		thread.start_new_thread(self.WSWorker, ())
+
+		return True
+
 	def Connect (self, username, password, payload):
 		self.UserName = username
 		self.Password = password
@@ -122,7 +135,7 @@ class Network ():
 			self.WSConnection.on_error 		= self.WSConnection_OnError_Handler
 			self.WSConnection.on_close 		= self.WSConnection_OnClose_Handler
 			self.WSConnection.on_open 		= self.WSConnection_OnOpen_Handler
-			self.WSConnection.header		= {'uuid':self.DeviceUUID, 'payload':str(payload), 'key':self.UserDevKey}
+			self.WSConnection.header		= {'uuid':self.DeviceUUID, 'node_type':self.Type, 'payload':str(payload), 'key':self.UserDevKey}
 			thread.start_new_thread(self.WSWorker, ())
 			return True
 

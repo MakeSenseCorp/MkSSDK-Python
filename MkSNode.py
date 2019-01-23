@@ -57,6 +57,7 @@ class Node():
 			'CONNECT_DEVICE':				self.StateConnectDevice,
 			'INIT_NETWORK':					self.StateInitNetwork,
 			'ACCESS': 						self.StateGetAccess,
+			'ACCESS_WAIT':					self.StateAccessWait,
 			'WORK': 						self.StateWork
 		}
 		# Callbacks
@@ -109,6 +110,7 @@ class Node():
 		try:
 			dataSystem 				= json.loads(jsonSystemStr)
 			# Node connection to WS information
+			self.Key 				= dataSystem["key"]
 			self.ApiUrl 			= dataSystem["apiurl"]
 			self.WsUrl				= dataSystem["wsurl"]
 			self.UserName 			= dataSystem["username"]
@@ -186,6 +188,7 @@ class Node():
 			self.Network.OnDataArrivedCallback 		= self.WebSocketDataArrivedCallback
 			self.Network.OnConnectionClosedCallback = self.WebSocketConnectionClosedCallback
 			self.Network.OnErrorCallback 			= self.WebSocketErrorCallback
+			self.AccessTick = 0
 
 			self.State = "ACCESS"
 		else:
@@ -195,20 +198,28 @@ class Node():
 		if True == self.IsNodeWSServiceEnabled:
 			print "[DEBUG::Node] StateGetAccess"
 			# Let the state machine know that this state was entered.
-			self.NetworkAccessTickLock.acquire()
-			try:
-				self.AccessTick = 1
-			finally:
-				self.NetworkAccessTickLock.release()
-			payloadStr = "[]"
-			if self.Network.Connect(self.UserName, self.Password, payloadStr) == True:
-				print "Register Device ..."
-				data, error = self.Network.RegisterDevice(self.DeviceInfo)
-				if error == False:
-					return
+			#self.NetworkAccessTickLock.acquire()
+			#try:
+			#	self.AccessTick = 1
+			#finally:
+			#	self.NetworkAccessTickLock.release()
+			self.Network.AccessGateway(self.Key, "[]")
+			self.State = "ACCESS_WAIT"
+			#if self.Network.Connect(self.UserName, self.Password, payloadStr) == True:
+			#	print "Register Device ..."
+			#	data, error = self.Network.RegisterDevice(self.DeviceInfo)
+			#	if error == False:
+			#		return
 		else:
 			self.State = "WORK"
 	
+	def StateAccessWait (self):
+		if self.AccessTick > 10:
+			self.State 		= "ACCESS"
+			self.AccessTick = 0
+		else:
+			self.AccessTick += 1
+
 	def StateWork (self):
 		if False == self.SystemLoaded:
 			self.SystemLoaded = True # Update node that system done loading.
@@ -392,7 +403,7 @@ class Node():
 		self.IsNodeLocalServerEnabled = is_enabled
 
 	def SetMasterNodeStatus(self, is_enabled):
-		self.IsMasterNode 		= is_enabled
+		self.IsMasterNode = is_enabled
 
 	def SetPureSlaveStatus(self, is_enabled):
 		self.isPureSlave = is_enabled
