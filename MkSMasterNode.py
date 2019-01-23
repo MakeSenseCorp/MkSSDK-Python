@@ -9,6 +9,7 @@ import socket
 import subprocess
 from subprocess import call
 
+import MkSGlobals
 from mksdk import MkSFile
 from mksdk import MkSAbstractNode
 from mksdk import MkSLocalNodesCommands
@@ -84,19 +85,29 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 		thread.start_new_thread(self.PipeStdoutListener, ())
 		
 	def LoadNodesOnMasterStart(self):
-		jsonInstalledNodesStr 	= self.File.LoadStateFromFile("../../configure/installed_nodes.json")
-		jsonData 				= json.loads(jsonInstalledNodesStr)
+		if MkSGlobals.OS_TYPE == "win32":
+			jsonInstalledNodesStr = self.File.LoadStateFromFile("G:\\workspace\\Development\\Git\\makesense\\misc\\configure\\" + MkSGlobals.OS_TYPE + "\\installed_nodes.json")
+		elif MkSGlobals.OS_TYPE == "linux":
+			jsonInstalledNodesStr = self.File.LoadStateFromFile("../../configure/installed_nodes.json")
+		if (jsonInstalledNodesStr is not "" and jsonInstalledNodesStr is not None):
+			# Load installed nodes.
+			jsonData = json.loads(jsonInstalledNodesStr)
+			for item in jsonData["installed"]:
+				if 1 == item["type"]:
+					node = LocalNode("", 16999, item["uuid"], item["type"], None)
+					node.Status = "Running"
+				else:
+					node = LocalNode("", 0, item["uuid"], item["type"], None)
+				self.InstalledNodes.append(node)
 
-		jsonInstalledAppsStr 	= self.File.LoadStateFromFile("../../configure/installed_apps.json")
-		self.InstalledApps		= json.loads(jsonInstalledAppsStr)
+		if MkSGlobals.OS_TYPE == "win32":
+			jsonInstalledAppsStr = self.File.LoadStateFromFile("G:\\workspace\\Development\\Git\\makesense\\misc\\configure\\" + MkSGlobals.OS_TYPE + "\\installed_apps.json")
+		elif MkSGlobals.OS_TYPE == "linux":
+			jsonInstalledAppsStr = self.File.LoadStateFromFile("../../configure/installed_apps.json")
 
-		for item in jsonData["installed"]:
-			if 1 == item["type"]:
-				node = LocalNode("", 16999, item["uuid"], item["type"], None)
-				node.Status = "Running"
-			else:
-				node = LocalNode("", 0, item["uuid"], item["type"], None)
-			self.InstalledNodes.append(node)
+		if (jsonInstalledAppsStr is not "" and jsonInstalledAppsStr is not None):
+			# Load installed applications
+			self.InstalledApps = json.loads(jsonInstalledAppsStr)
 
 	def StateIdle (self):
 		self.ServerAdderss = ('', 16999)
@@ -161,8 +172,10 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 		nodes = ""
 		if self.LocalSlaveList:
 			for node in self.LocalSlaveList:
-				nodes += "{\"ip\":\"" + str(node.IP) + "\",\"port\":" + str(node.Port) + ",\"uuid\":\"" + node.UUID + "\",\"type\":" + str(node.Type) + "},"
-			nodes = nodes[:-1]
+				nodes += "{\"ip\":\"{ip}\",\"port\":\"{port}\",\"uuid\":\"{uuid}\",\"type\":\"{type}\"},".format(ip = str(node.IP), port = str(node.Port), uuid = node.UUID, type = str(node.Type))
+				#nodes += "{\"ip\":\"" + str(node.IP) + "\",\"port\":" + str(node.Port) + ",\"uuid\":\"" + node.UUID + "\",\"type\":" + str(node.Type) + "},"
+			if nodes is not "":
+				nodes = nodes[:-1]
 		payload = self.Commands.GetLocalNodesResponse(nodes)
 		sock.send(payload)
 
@@ -170,8 +183,10 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 		nodes = ""
 		if self.LocalSlaveList:
 			for node in self.LocalSlaveList:
-				nodes += "{\"ip\":\"" + str(node.IP) + "\",\"port\":" + str(node.Port) + ",\"uuid\":\"" + node.UUID + "\",\"type\":" + str(node.Type) + "},"
-			nodes = nodes[:-1]
+				nodes += "{\"ip\":\"{ip}\",\"port\":\"{port}\",\"uuid\":\"{uuid}\",\"type\":\"{type}\"},".format(ip = str(node.IP), port = str(node.Port), uuid = node.UUID, type = str(node.Type))
+				#nodes += "{\"ip\":\"" + str(node.IP) + "\",\"port\":" + str(node.Port) + ",\"uuid\":\"" + node.UUID + "\",\"type\":" + str(node.Type) + "},"
+			if nodes is not "":
+				nodes = nodes[:-1]
 		payload = self.Commands.GetMasterInfoResponse(self.UUID, self.MasterHostName, nodes)
 		sock.send(payload)
 

@@ -120,7 +120,7 @@ class AbstractNode():
 
 	def TryStartListener(self):
 		try:
-			# print "[Node Server] Start listener..."
+			print "[Node Server] Start listener..."
 			self.ServerSocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 			self.ServerSocket.setblocking(0)
 
@@ -208,8 +208,8 @@ class AbstractNode():
        	#
        	# SOCK_RDM        	Provides a reliable datagram layer that does not
         #               	guarantee ordering.
-		if True == self.IsListenerEnabled:
-			while False == self.LocalSocketServerRun:
+		if self.IsListenerEnabled is True:
+			while self.LocalSocketServerRun is False:
 				self.TryStartListener()
 		else:
 			self.LocalSocketServerRun = True
@@ -219,49 +219,49 @@ class AbstractNode():
 		if self.OnLocalServerStartedCallback is not None:
 			self.OnLocalServerStartedCallback()
 
-		while True == self.LocalSocketServerRun:
-			readable, writable, exceptional = select.select(self.RecievingSockets, self.SendingSockets, self.RecievingSockets, 0.5)
-			
+		while self.LocalSocketServerRun is True:
 			self.TickState()
 
-			# Socket management.
-			for sock in readable:
-				if sock is self.ServerSocket and True == self.IsListenerEnabled:
-					conn, addr = sock.accept()
-					#print "[Node Server] Accept", addr
-					conn.setblocking(0)
-					self.AppendConnection(conn, addr[0], addr[1])
-					self.NodeConnectHandler(conn, addr)
-					# Raise event for user
-					if self.OnAceptNewConnectionCallback is not None:
-						self.OnAceptNewConnectionCallback(conn)
-				else:
-					try:
-						data = sock.recv(1024)
-					except:
-						print "[Node Server] Recieve ERROR"
-					else:
-						if data:
-							# print "[Node Socket] DATA"
-							if "MKS" in data[:3]:
-								multiData = data.split("MKS: ")
-								for data in multiData[1:]:
-									req = (data.split('\n'))[1]
-									self.DataSocketInputHandler(sock, req)
-							else:
-								print "[Node Server] Data Invalid"
-						else:
-							#try:
-							self.NodeDisconnectHandler(sock)
-							# Raise event for user
-							if self.OnTerminateConnectionCallback is not None:
-								self.OnTerminateConnectionCallback(sock)
-							self.RemoveConnection(sock)
-							#except:
-							#	print "[Node Server] Connection Close [ERROR]", sys.exc_info()[0]
+			try:
+				readable, writable, exceptional = select.select(self.RecievingSockets, self.SendingSockets, self.RecievingSockets, 0.5)
 
-			for sock in exceptional:
-				print "[DEBUG] Socket Exceptional"
+				# Socket management.
+				for sock in readable:
+					if sock is self.ServerSocket and True == self.IsListenerEnabled:
+						conn, addr = sock.accept()
+						#print "[Node Server] Accept", addr
+						conn.setblocking(0)
+						self.AppendConnection(conn, addr[0], addr[1])
+						self.NodeConnectHandler(conn, addr)
+						# Raise event for user
+						if self.OnAceptNewConnectionCallback is not None:
+							self.OnAceptNewConnectionCallback(conn)
+					else:
+						try:
+							data = sock.recv(1024)
+						except:
+							print "[Node Server] Recieve ERROR"
+						else:
+							if data:
+								# print "[Node Socket] DATA"
+								if "MKS" in data[:3]:
+									multiData = data.split("MKS: ")
+									for data in multiData[1:]:
+										req = (data.split('\n'))[1]
+										self.DataSocketInputHandler(sock, req)
+								else:
+									print "[Node Server] Data Invalid"
+							else:
+								self.NodeDisconnectHandler(sock)
+								# Raise event for user
+								if self.OnTerminateConnectionCallback is not None:
+									self.OnTerminateConnectionCallback(sock)
+								self.RemoveConnection(sock)
+
+				for sock in exceptional:
+					print "[DEBUG] Socket Exceptional"
+			except:
+				print "[Node Server] Connection Close [ERROR]", sys.exc_info()[0]
 
 		# Clean all resorses before exit.
 		self.CleanAllSockets()

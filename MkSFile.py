@@ -17,7 +17,7 @@ class File ():
 		file.close()
 
 	def LoadContent(self, filename):
-		if os.path.isfile(filename) == True:
+		if os.path.isfile(filename) is True:
 			file = open(filename, "r")
 			data = file.read()
 			file.close()
