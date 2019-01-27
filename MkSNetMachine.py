@@ -202,7 +202,7 @@ class Network ():
 		return json['value']
 	
 	def GetMessageTypeFromJson(self, json):
-		return json['message_type']
+		return json['msg_type']
 
 	def GetSourceFromJson(self, json):
 		return json['source']

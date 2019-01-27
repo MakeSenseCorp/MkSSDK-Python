@@ -90,7 +90,7 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 
 		if MkSGlobals.OS_TYPE == "win32":
 			jsonInstalledNodesStr = self.File.LoadStateFromFile("G:\\workspace\\Development\\Git\\makesense\\misc\\configure\\" + MkSGlobals.OS_TYPE + "\\installed_nodes.json")
-		elif MkSGlobals.OS_TYPE == "linux":
+		elif MkSGlobals.OS_TYPE in ["linux", "linux2"]:
 			jsonInstalledNodesStr = self.File.LoadStateFromFile("../../configure/installed_nodes.json")
 
 		if (jsonInstalledNodesStr is not "" and jsonInstalledNodesStr is not None):
@@ -106,7 +106,7 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 
 		if MkSGlobals.OS_TYPE == "win32":
 			jsonInstalledAppsStr = self.File.LoadStateFromFile("G:\\workspace\\Development\\Git\\makesense\\misc\\configure\\" + MkSGlobals.OS_TYPE + "\\installed_apps.json")
-		elif MkSGlobals.OS_TYPE == "linux":
+		elif MkSGlobals.OS_TYPE in ["linux", "linux2"]:
 			jsonInstalledAppsStr = self.File.LoadStateFromFile("../../configure/installed_apps.json")
 
 		if (jsonInstalledAppsStr is not "" and jsonInstalledAppsStr is not None):
