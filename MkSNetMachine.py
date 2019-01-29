@@ -103,13 +103,15 @@ class Network ():
 		self.OnConnectionCallback()
 
 	def WSWorker (self):
-		print "-----------------------------------"
 		self.WSConnection.run_forever()
 
 	def Disconnect(self):
 		self.WSConnection.close()
 
 	def AccessGateway (self, key, payload):
+		# Set user key, commub=nication with applications will be based on key.
+		# Key will be obtain by master on provisioning flow.
+		self.UserDevKey = key
 		websocket.enableTrace(False)
 		self.WSConnection 				= websocket.WebSocketApp(self.WSServerUri)
 		self.WSConnection.on_message 	= self.WSConnection_OnMessage_Handler
@@ -202,7 +204,7 @@ class Network ():
 		return json['value']
 	
 	def GetMessageTypeFromJson(self, json):
-		return json['msg_type']
+		return json['message_type']
 
 	def GetSourceFromJson(self, json):
 		return json['source']
