@@ -152,6 +152,10 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 						item.Port 	= node.Port
 						item.Status = "Running"
 
+				# Send message to Gateway
+				if self.OnNewNodeCallback is not None:
+					self.OnNewNodeCallback({"ip": node.IP, "port":port, "uuid":node.UUID, "type":nodeType})
+
 				# Send message to all nodes.
 				paylod = self.Commands.MasterAppendNodeResponse(node.IP, port, node.UUID, nodeType)
 				for client in self.Connections:

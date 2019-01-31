@@ -82,7 +82,8 @@ class Node():
 			'unregister_subscriber':		self.UnregisterSubscriberHandler 
 		}
 
-		self.LocalServiceNode.OnExitCallback = self.OnExitHandler
+		self.LocalServiceNode.OnExitCallback 		= self.OnExitHandler
+		self.LocalServiceNode.OnNewNodeCallback 	= self.OnNewNodeHandler
 
 		parser = argparse.ArgumentParser(description='Execution module called Node')
 		parser.add_argument('--path', action='store',
@@ -91,6 +92,13 @@ class Node():
 
 		if args.pwd is not None:
 			os.chdir(args.pwd)
+
+	def OnNewNodeHandler(self, node):
+		payload = "\"node:\":" + json.dumps(node)
+		# Send new node info to gateway
+		message = BuildMessage("MASTER", "GATWAY", "update_new_node_info", payload)
+		self.Network.SendWebSocket(message)
+		pass
 
 	def OnExitHandler(self):
 		self.Exit()

@@ -34,6 +34,7 @@ class AbstractNode():
 		self.OnTerminateConnectionCallback 			= None
 		self.OnLocalServerListenerStartedCallback	= None
 		self.OnExitCallback							= None
+		self.OnNewNodeCallback						= None
 		# Network
 		self.ServerSocket 						= None
 		self.ServerAdderss						= None
