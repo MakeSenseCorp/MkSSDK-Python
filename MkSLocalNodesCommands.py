@@ -1,6 +1,7 @@
 #!/usr/bin/python
 import os
 import sys
+import json
 
 class LocalNodeCommands:
 	def __init__(self):
@@ -99,6 +100,16 @@ class LocalNodeCommands:
 	def ExitResponse(self, status):
 		packet = self.GetHeader()
 		packet += "{\"command\":\"exit\",\"direction\":\"response\",\"status\":\"" + str(status) + "\"}"
+		packet += self.GetFooter()
+
+		return packet
+
+	def ProxyMessage(self, payload):
+		packet = self.GetHeader()
+		packet += json.dump({	'command':		'proxy_gateway',
+								'direction':	'request',
+								'payload':		payload
+							})
 		packet += self.GetFooter()
 
 		return packet

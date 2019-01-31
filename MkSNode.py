@@ -82,8 +82,9 @@ class Node():
 			'unregister_subscriber':		self.UnregisterSubscriberHandler 
 		}
 
-		self.LocalServiceNode.OnExitCallback 		= self.OnExitHandler
-		self.LocalServiceNode.OnNewNodeCallback 	= self.OnNewNodeHandler
+		self.LocalServiceNode.OnExitCallback 					= self.OnExitHandler
+		self.LocalServiceNode.OnNewNodeCallback 				= self.OnNewNodeHandler
+		self.LocalServiceNode.OnSlaveNodeDisconnectedCallback 	= self.OnSlaveNodeDisconnected
 
 		parser = argparse.ArgumentParser(description='Execution module called Node')
 		parser.add_argument('--path', action='store',
@@ -94,11 +95,16 @@ class Node():
 			os.chdir(args.pwd)
 
 	def OnNewNodeHandler(self, node):
-		payload = "\"node:\":" + json.dumps(node)
-		# Send new node info to gateway
-		message = BuildMessage("MASTER", "GATWAY", "update_new_node_info", payload)
+		payload = "\"node\":" + json.dumps(node)
+		# Send node connected event to gateway
+		message = self.Network.BuildMessage("MASTER", "GATEWAY", "node_connected", payload)
 		self.Network.SendWebSocket(message)
-		pass
+
+	def OnSlaveNodeDisconnected(self, node):
+		payload = "\"node\":" + json.dumps(node)
+		# Send node disconnected event to gateway
+		message = self.Network.BuildMessage("MASTER", "GATEWAY", "node_disconnected", payload)
+		self.Network.SendWebSocket(message)
 
 	def OnExitHandler(self):
 		self.Exit()

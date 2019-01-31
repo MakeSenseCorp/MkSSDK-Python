@@ -35,6 +35,7 @@ class AbstractNode():
 		self.OnLocalServerListenerStartedCallback	= None
 		self.OnExitCallback							= None
 		self.OnNewNodeCallback						= None
+		self.OnSlaveNodeDisconnectedCallback		= None
 		# Network
 		self.ServerSocket 						= None
 		self.ServerAdderss						= None
@@ -56,7 +57,13 @@ class AbstractNode():
 		self.ServerNodeHandlers					= {
 			'get_node_info': 					self.GetNodeInfoHandler,
 			'get_node_status': 					self.GetNodeStatusHandler
-		}	
+		}
+
+	def NodeWorker(self):
+		pass
+
+	def SendGatewayPing(self):
+		pass
 		
 	def GetNodeInfoHandler(self, data):
 		pass
@@ -79,8 +86,8 @@ class AbstractNode():
 	def TickState(self):
 		self.Ticker += 1;
 		# State machine
-		self.SlaveMethod = self.States[self.CurrentState]
-		self.SlaveMethod()
+		method = self.States[self.CurrentState]
+		method()
 
 	def AppendConnection(self, sock, ip, port):
 		# print "[Node] Append connection, port", port
@@ -234,6 +241,7 @@ class AbstractNode():
 						conn.setblocking(0)
 						self.AppendConnection(conn, addr[0], addr[1])
 						self.NodeConnectHandler(conn, addr)
+						
 						# Raise event for user
 						if self.OnAceptNewConnectionCallback is not None:
 							self.OnAceptNewConnectionCallback(conn)

@@ -56,8 +56,16 @@ class SlaveNode(MkSAbstractNode.AbstractNode):
 		self.IsListenerEnabled 						= False
 		# Counters
 		self.MasterConnectionTries 					= 0
+		self.Ticker 								= 0
 
 		self.ChangeState("IDLE")
+
+	def SendGatewayPing(self):
+		#payload = self.Commands.ProxyMessage({
+		#										''
+		#									})
+		#self.MasterSocket.send(payload)
+		pass
 
 	def CleanMasterList(self):
 		for node in self.MasterNodesList:
@@ -90,9 +98,11 @@ class SlaveNode(MkSAbstractNode.AbstractNode):
 
 	def StateIdle(self):
 		# Init state logic must be here.
+		print "StateIdle"
 		self.ConnectMaster()
 
 	def StateConnectMaster(self):
+		print "StateConnectMaster"
 		if 0 == self.Ticker % 20:
 			if self.MasterConnectionTries > 3:
 				self.ChangeState("EXIT")
@@ -101,6 +111,7 @@ class SlaveNode(MkSAbstractNode.AbstractNode):
 			self.MasterConnectionTries += 1
 
 	def StateGetPort(self):
+		print "StateGetPort"
 		payload = self.Commands.GetPortRequest(self.UUID, self.Type)
 		self.MasterSocket.send(payload)
 		self.ChangeState("WAIT_FOR_PORT")
@@ -110,6 +121,7 @@ class SlaveNode(MkSAbstractNode.AbstractNode):
 		sock.send(payload)
 
 	def StateWaitForPort(self):
+		print "StateWaitForPort"
 		if 0 == self.Ticker % 20:
 			if 0 == self.SlaveListenerPort:
 				self.ChangeState("GET_PORT")
@@ -117,6 +129,7 @@ class SlaveNode(MkSAbstractNode.AbstractNode):
 				self.ChangeState("START_LISTENER")
 
 	def StateStartListener(self):
+		print "StateStartListener"
 		self.ServerAdderss = ('', self.SlaveListenerPort)
 		status = self.TryStartListener()
 		if True == status:
@@ -124,9 +137,12 @@ class SlaveNode(MkSAbstractNode.AbstractNode):
 			self.ChangeState("WORKING")
 
 	def StateWorking(self):
-		pass
+		if 0 == self.Ticker % 10:
+			print "Sending PING"
+			self.SendGatewayPing()
 
 	def StateExit(self):
+		print "StateExit"
 		pass
 
 	def HandlerRouter(self, sock, data):

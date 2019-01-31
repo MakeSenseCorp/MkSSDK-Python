@@ -128,6 +128,7 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 	def GetPortRequestHandler(self, json_data, sock):
 		nodeType = json_data['type']
 		uuid = json_data['uuid']
+		print "[MASTER]: GetPortRequestHandler"
 		# Do we have available port.
 		if self.PortsForClients:
 			node = self.GetConnection(sock)
@@ -146,15 +147,11 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 
 				# Update installed node list (UI will be updated)
 				for item in self.InstalledNodes:
-					print item.UUID + "<?>" + node.UUID
+					# print item.UUID + "<?>" + node.UUID
 					if item.UUID == node.UUID:
 						item.IP 	= node.IP
 						item.Port 	= node.Port
 						item.Status = "Running"
-
-				# Send message to Gateway
-				if self.OnNewNodeCallback is not None:
-					self.OnNewNodeCallback({"ip": node.IP, "port":port, "uuid":node.UUID, "type":nodeType})
 
 				# Send message to all nodes.
 				paylod = self.Commands.MasterAppendNodeResponse(node.IP, port, node.UUID, nodeType)
@@ -165,8 +162,17 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 						client.Socket.send(paylod)
 				self.LocalSlaveList.append(node)
 				payload = self.Commands.GetPortResponse(port)
-				print payload
+				# print payload
 				sock.send(payload)
+
+				# TODO - What will happen when slave node will try to get port when we are not connected to AWS?
+				# Send message to Gateway
+				if self.OnNewNodeCallback is not None:
+					self.OnNewNodeCallback({ 'ip':		str(node.IP), 
+											 'port':	port, 
+											 'uuid':	node.UUID, 
+											 'type':	nodeType 
+											})
 			else:
 				# Already assigned port (resending)
 				payload = self.Commands.GetPortResponse(node.Port)
@@ -180,8 +186,8 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 		nodes = ""
 		if self.LocalSlaveList:
 			for node in self.LocalSlaveList:
-				nodes += "{\"ip\":\"{ip}\",\"port\":\"{port}\",\"uuid\":\"{uuid}\",\"type\":\"{type}\"},".format(ip = str(node.IP), port = str(node.Port), uuid = node.UUID, type = str(node.Type))
-				#nodes += "{\"ip\":\"" + str(node.IP) + "\",\"port\":" + str(node.Port) + ",\"uuid\":\"" + node.UUID + "\",\"type\":" + str(node.Type) + "},"
+				#nodes += "{\"ip\":\"{ip}\",\"port\":\"{port}\",\"uuid\":\"{uuid}\",\"type\":\"{type}\"},".format(ip = str(node.IP), port = str(node.Port), uuid = node.UUID, type = str(node.Type))
+				nodes += "{\"ip\":\"" + str(node.IP) + "\",\"port\":" + str(node.Port) + ",\"uuid\":\"" + node.UUID + "\",\"type\":" + str(node.Type) + "},"
 			if nodes is not "":
 				nodes = nodes[:-1]
 		payload = self.Commands.GetLocalNodesResponse(nodes)
@@ -191,8 +197,8 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 		nodes = ""
 		if self.LocalSlaveList:
 			for node in self.LocalSlaveList:
-				nodes += "{\"ip\":\"{ip}\",\"port\":\"{port}\",\"uuid\":\"{uuid}\",\"type\":\"{type}\"},".format(ip = str(node.IP), port = str(node.Port), uuid = node.UUID, type = str(node.Type))
-				#nodes += "{\"ip\":\"" + str(node.IP) + "\",\"port\":" + str(node.Port) + ",\"uuid\":\"" + node.UUID + "\",\"type\":" + str(node.Type) + "},"
+				#nodes += "{\"ip\":\"{ip}\",\"port\":\"{port}\",\"uuid\":\"{uuid}\",\"type\":\"{type}\"},".format(ip = str(node.IP), port = str(node.Port), uuid = node.UUID, type = str(node.Type))
+				nodes += "{\"ip\":\"" + str(node.IP) + "\",\"port\":" + str(node.Port) + ",\"uuid\":\"" + node.UUID + "\",\"type\":" + str(node.Type) + "},"
 			if nodes is not "":
 				nodes = nodes[:-1]
 		payload = self.Commands.GetMasterInfoResponse(self.UUID, self.MasterHostName, nodes)
@@ -232,6 +238,15 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 					else:
 						if client.Socket is not None:
 							client.Socket.send(payload)
+
+				# Send message to Gateway
+				if self.OnSlaveNodeDisconnectedCallback is not None:
+					self.OnSlaveNodeDisconnectedCallback({ 'ip':	str(slave.IP), 
+														 'port':	slave.Port, 
+														 'uuid':	slave.UUID, 
+														 'type':	slave.Type 
+														})
+
 				self.LocalSlaveList.remove(slave)
 				continue
 
