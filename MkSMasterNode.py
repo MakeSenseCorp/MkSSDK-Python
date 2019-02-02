@@ -73,6 +73,7 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 			'get_master_info':				self.GetMasterInfoRequestHandler
 		}
 		self.ResponseHandlers 				= {
+			'proxy_gateway':				self.ProxyGatewayResponseHandler
 		}
 		# Flags
 		self.IsListenerEnabled 				= False
@@ -84,9 +85,14 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 
 		thread.start_new_thread(self.PipeStdoutListener, ())
 
-	def ProxyGatewayHandler(self, sock, data):
-		print data
+	# PROXY - Slave Node -> Aplication
+	def ProxyGatewayResponseHandler(self, sock, packet):
+		print "[DEBUG MASTER] ProxyGatewayResponseHandler"
+		encapsulatedPayloadPacket = packet["payload"]
+		if self.OnSlaveResponseCallback is not None:
+			self.OnSlaveResponseCallback(encapsulatedPayloadPacket)
 	
+	# PROXY - Application -> Slave Node
 	def HandleExternalRequest(self, packet):
 		print "[DEBUG] External request", packet
 		destination = packet["header"]["destination"]
@@ -146,9 +152,9 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 		if 0 == self.Ticker % 20:
 			pass
 
-	def GetPortRequestHandler(self, json_data, sock):
-		nodeType = json_data['type']
-		uuid = json_data['uuid']
+	def GetPortRequestHandler(self, sock, packet):
+		nodeType 	= packet['type']
+		uuid 		= packet['uuid']
 		print "[MASTER]: GetPortRequestHandler"
 		# Do we have available port.
 		if self.PortsForClients:
@@ -203,7 +209,7 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 			payload = self.Commands.GetPortResponse(0)
 			sock.send(payload)
 
-	def GetLocalNodesRequestHandler(self, json_data, sock):
+	def GetLocalNodesRequestHandler(self, sock, packet):
 		nodes = ""
 		if self.LocalSlaveList:
 			for node in self.LocalSlaveList:
@@ -214,7 +220,7 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 		payload = self.Commands.GetLocalNodesResponse(nodes)
 		sock.send(payload)
 
-	def GetMasterInfoRequestHandler(self, json_data, sock):
+	def GetMasterInfoRequestHandler(self, sock, packet):
 		nodes = ""
 		if self.LocalSlaveList:
 			for node in self.LocalSlaveList:
@@ -233,10 +239,10 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 		# TODO - IF command type is not in list call unknown callback in user code.
 		if "response" == direction:
 			if command in self.ResponseHandlers:
-				self.ResponseHandlers[command](jsonData)
+				self.ResponseHandlers[command](sock, jsonData)
 		elif "request" == direction:
 			if command in self.RequestHandlers:
-				self.RequestHandlers[command](jsonData, sock)
+				self.RequestHandlers[command](sock, jsonData)
 
 	def NodeDisconnectHandler(self, sock):
 		print "NodeDisconnectHandler"

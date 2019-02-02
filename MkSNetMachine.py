@@ -162,12 +162,12 @@ class Network ():
 	def SendKeepAlive(self):
 		self.WSConnection.send("{\"packet_type\":\"keepalive\"}")
 
-	def BuildMessage (self, messageType, destination, command, payload):
+	def BuildMessage (self, messageType, destination, source, command, payload):
 		message = {
 			'header': {
 				'message_type': str(messageType),
 				'destination': str(destination),
-				'source': str(self.DeviceUUID)
+				'source': str(source)
 			},
 			'data': {
 				'header': { 

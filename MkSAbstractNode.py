@@ -36,6 +36,7 @@ class AbstractNode():
 		self.OnExitCallback							= None
 		self.OnNewNodeCallback						= None
 		self.OnSlaveNodeDisconnectedCallback		= None
+		self.OnSlaveResponseCallback				= None
 		# Network
 		self.ServerSocket 						= None
 		self.ServerAdderss						= None
@@ -56,8 +57,7 @@ class AbstractNode():
 		# Handlers
 		self.ServerNodeHandlers					= {
 			'get_node_info': 					self.GetNodeInfoHandler,
-			'get_node_status': 					self.GetNodeStatusHandler,
-			'proxy_gateway':					self.ProxyGatewayHandler
+			'get_node_status': 					self.GetNodeStatusHandler
 		}
 
 	# This method must be implemented by Master node
@@ -74,9 +74,6 @@ class AbstractNode():
 		pass
 	
 	def GetNodeStatusHandler(self, sock, data):
-		pass
-
-	def ProxyGatewayHandler(self, sock, data):
 		pass
 
 	def SetSates (self, states):

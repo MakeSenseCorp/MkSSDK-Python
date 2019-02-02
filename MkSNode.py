@@ -84,7 +84,8 @@ class Node():
 
 		self.LocalServiceNode.OnExitCallback 					= self.OnExitHandler
 		self.LocalServiceNode.OnNewNodeCallback 				= self.OnNewNodeHandler
-		self.LocalServiceNode.OnSlaveNodeDisconnectedCallback 	= self.OnSlaveNodeDisconnected
+		self.LocalServiceNode.OnSlaveNodeDisconnectedCallback 	= self.OnSlaveNodeDisconnectedHandler
+		self.LocalServiceNode.OnSlaveResponseCallback 			= self.OnSlaveResponseHandler
 
 		parser = argparse.ArgumentParser(description='Execution module called Node')
 		parser.add_argument('--path', action='store',
@@ -97,13 +98,21 @@ class Node():
 	def OnNewNodeHandler(self, node):
 		payload = { 'node': node }
 		# Send node connected event to gateway
-		message = self.Network.BuildMessage("MASTER", "GATEWAY", "node_connected", payload)
+		message = self.Network.BuildMessage("MASTER", "GATEWAY", self.UUID, "node_connected", payload)
 		self.Network.SendWebSocket(message)
 
-	def OnSlaveNodeDisconnected(self, node):
+	def OnSlaveNodeDisconnectedHandler(self, node):
 		payload = { 'node': node }
 		# Send node disconnected event to gateway
-		message = self.Network.BuildMessage("MASTER", "GATEWAY", "node_disconnected", payload)
+		message = self.Network.BuildMessage("MASTER", "GATEWAY", self.UUID, "node_disconnected", payload)
+		self.Network.SendWebSocket(message)
+
+	def OnSlaveResponseHandler(self, packet):
+		print "[DEBUG MASTER] OnSlaveResponseHandler"
+		source 	= packet["header"]["source"]
+		command = packet["data"]["command"]
+		payload = packet["data"]["payload"]
+		message = self.Network.BuildMessage("DIRECT", "WEBFACE", source, command, payload)
 		self.Network.SendWebSocket(message)
 
 	def OnExitHandler(self):
