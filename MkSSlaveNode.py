@@ -60,6 +60,44 @@ class SlaveNode(MkSAbstractNode.AbstractNode):
 
 		self.ChangeState("IDLE")
 
+	def PrepareGetNodeInfoResponse(self):
+		response = { 
+				'state': 'response',
+				'status': 'ok',
+		 		'ts': str(time.time()),
+				'name': 'Master',
+				'description': 'Master Node',
+				'user': {
+						'sensors': [
+							{
+								'name': '#1'
+							},
+							{
+								'name': '#1'
+							}
+						]
+					}
+				}
+		return response
+
+	def ProxyGatewayHandler(self, sock, packet):
+		payload = self.PrepareGetNodeInfoResponse()
+		data = {
+			'command': packet["command"],
+			'direction': 'response',
+			'payload': payload
+		}
+		
+		destination = packet["payload"]["header"]["source"]
+		source 		= packet["command"]["header"]["destination"]
+		msg = self.Commands.ProxyMessageResponse(destination, source, data)
+		print msg
+		#sock.send(msg)
+
+	def GetNodeInfoHandler(self, sock, data):
+		response = self.PrepareGetNodeInfoResponse()
+		pass
+
 	def SendGatewayPing(self):
 		#payload = self.Commands.ProxyMessage({
 		#										''

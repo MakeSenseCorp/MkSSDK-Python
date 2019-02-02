@@ -95,13 +95,13 @@ class Node():
 			os.chdir(args.pwd)
 
 	def OnNewNodeHandler(self, node):
-		payload = "\"node\":" + json.dumps(node)
+		payload = { 'node': node }
 		# Send node connected event to gateway
 		message = self.Network.BuildMessage("MASTER", "GATEWAY", "node_connected", payload)
 		self.Network.SendWebSocket(message)
 
 	def OnSlaveNodeDisconnected(self, node):
-		payload = "\"node\":" + json.dumps(node)
+		payload = { 'node': node }
 		# Send node disconnected event to gateway
 		message = self.Network.BuildMessage("MASTER", "GATEWAY", "node_disconnected", payload)
 		self.Network.SendWebSocket(message)
@@ -275,22 +275,32 @@ class Node():
 		print "UnregisterSubscriberHandler"
 	
 	def WebSocketDataArrivedCallback (self, json):
-		self.State = "WORK"
+		self.State 	= "WORK"
 		messageType = self.Network.GetMessageTypeFromJson(json)
-		source = self.Network.GetSourceFromJson(json)
-		command = self.Network.GetCommandFromJson(json)
-		print "[DEBUG::Node Network(In)] " + str(json)
-		if messageType == "CUSTOM":
-			return;
-		elif messageType == "DIRECT" or messageType == "PRIVATE" or messageType == "BROADCAST" or messageType == "WEBFACE":
-			data = self.Network.GetDataFromJson(json)
-			# If commands located in the list below, do not forward this message and handle it in this context.
-			if command in ["get_node_info", "get_node_status"]:
-				self.Handlers[command](messageType, source, data)
+		source 		= self.Network.GetSourceFromJson(json)
+		destination = self.Network.GetDestinationFromJson(json)
+		command 	= self.Network.GetCommandFromJson(json)
+
+		print "\n[DEBUG::Node Network(In)] " + str(json) + "\n"
+
+		# Is this packet for me?
+		if destination in self.UUID:
+			if messageType == "CUSTOM":
+				return;
+			elif messageType == "DIRECT" or messageType == "PRIVATE" or messageType == "BROADCAST" or messageType == "WEBFACE":
+				data = self.Network.GetDataFromJson(json)
+				# If commands located in the list below, do not forward this message and handle it in this context.
+				if command in ["get_node_info", "get_node_status"]:
+					self.Handlers[command](messageType, source, data)
+				else:
+					self.OnWSDataArrived(messageType, source, data)
 			else:
-				self.OnWSDataArrived(messageType, source, data)
+				print "Error: Not support " + request + " request type."
 		else:
-			print "Error: Not support " + request + " request type."
+			# Find who has this destination adderes.
+			print "[DEBUG] External request"
+			self.LocalServiceNode.HandleExternalRequest(json)
+
 
 	def IsNodeRegistered(self, subscriber_uuid):
 		return subscriber_uuid in self.RegisteredNodes

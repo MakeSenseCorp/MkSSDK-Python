@@ -163,39 +163,28 @@ class Network ():
 		self.WSConnection.send("{\"packet_type\":\"keepalive\"}")
 
 	def BuildMessage (self, messageType, destination, command, payload):
-		messageType = "\"message_type\":\"" + messageType + "\""
-		destination = "\"destination\":\"" + destination + "\""
-		source = "\"source\":\"" + str(self.DeviceUUID) + "\""
-		
-		device = "\"uuid\":\"" + str(self.DeviceUUID) + "\","
-		device = device + "\"type\":" + str(self.Type) + ","
-		device = device + "\"command\":\"" + str(command) + "\","
-		device = device + "\"timestamp\":" + str(int(time.time()))
+		message = {
+			'header': {
+				'message_type': str(messageType),
+				'destination': str(destination),
+				'source': str(self.DeviceUUID)
+			},
+			'data': {
+				'header': { 
+					'command': str(command), 
+					'timestamp': str(int(time.time())) 
+				},
+				'payload': payload
+			},
+			'user': {
+				'key': str(self.UserDevKey)
+			},
+			'additional': {
 
-		data = "\"device\":{"
-		data = data + device + "},"
-		data = data + "\"payload\":{"
-		data = data + payload + "}"
+			}
+		}
 
-		user = "\"key\":\"" + str(self.UserDevKey) + "\""
-		additional = ""
-
-		message = "{"
-		message = message + messageType + ","
-		message = message + destination + ","
-		message = message + source + ","
-		message = message + "\"data\":{"
-		message = message + data
-		message = message + "},"
-		message = message + "\"user\":{"
-		message = message + user
-		message = message + "},"
-		message = message + "\"additional\":{"
-		message = message + additional
-		message = message + "}"
-		message = message + "}"
-		
-		return message
+		return json.dumps(message)
 	
 	def GetUUIDFromJson(self, json):
 		return json['uuid']
@@ -204,16 +193,19 @@ class Network ():
 		return json['value']
 	
 	def GetMessageTypeFromJson(self, json):
-		return json['message_type']
+		return json['header']['message_type']
 
 	def GetSourceFromJson(self, json):
-		return json['source']
+		return json['header']['source']
+
+	def GetDestinationFromJson(self, json):
+		return json['header']['destination']
 
 	def GetDataFromJson(self, json):
 		return json['data']
 
 	def GetCommandFromJson(self, json):
-		return json['data']['device']['command']
+		return json['data']['header']['command']
 
 	def GetPayloadFromJson(self, json):
 		return json['data']['payload']

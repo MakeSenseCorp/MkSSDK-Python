@@ -56,8 +56,13 @@ class AbstractNode():
 		# Handlers
 		self.ServerNodeHandlers					= {
 			'get_node_info': 					self.GetNodeInfoHandler,
-			'get_node_status': 					self.GetNodeStatusHandler
+			'get_node_status': 					self.GetNodeStatusHandler,
+			'proxy_gateway':					self.ProxyGatewayHandler
 		}
+
+	# This method must be implemented by Master node
+	def HandleExternalRequest(self, data):
+		pass
 
 	def NodeWorker(self):
 		pass
@@ -65,10 +70,13 @@ class AbstractNode():
 	def SendGatewayPing(self):
 		pass
 		
-	def GetNodeInfoHandler(self, data):
+	def GetNodeInfoHandler(self, sock, data):
 		pass
 	
-	def GetNodeStatusHandler(self, data):
+	def GetNodeStatusHandler(self, sock, data):
+		pass
+
+	def ProxyGatewayHandler(self, sock, data):
 		pass
 
 	def SetSates (self, states):
@@ -157,7 +165,7 @@ class AbstractNode():
 		command 	= jsonData['command']
 
 		if command in ["get_node_info", "get_node_status"]:
-			self.ServerNodeHandlers[command](data)
+			self.ServerNodeHandlers[command](sock, data)
 		else:
 			# Call for handler.
 			self.HandlerRouter(sock, data)
@@ -241,7 +249,7 @@ class AbstractNode():
 						conn.setblocking(0)
 						self.AppendConnection(conn, addr[0], addr[1])
 						self.NodeConnectHandler(conn, addr)
-						
+
 						# Raise event for user
 						if self.OnAceptNewConnectionCallback is not None:
 							self.OnAceptNewConnectionCallback(conn)

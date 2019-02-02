@@ -83,7 +83,28 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 		self.OnAceptNewConnectionCallback   = self.OnAceptNewConnectionHandler
 
 		thread.start_new_thread(self.PipeStdoutListener, ())
-		
+
+	def ProxyGatewayHandler(self, sock, data):
+		print data
+	
+	def HandleExternalRequest(self, packet):
+		print "[DEBUG] External request", packet
+		destination = packet["header"]["destination"]
+		source		= packet["header"]["source"]
+		node = self.GetSlaveNode(destination)
+		if node is not None:
+			# This node in slave list.
+			data = {
+				'command': packet["data"]["header"]["command"],
+				'direction': 'request',
+				'payload': packet["data"]["payload"]
+			}
+			msg = self.Commands.ProxyMessageRequest(destination, self.UUID, data)
+			node.Socket.send(msg)
+		else:
+			# Need to look at other masters list.
+			pass
+
 	def LoadNodesOnMasterStart(self):
 		jsonInstalledNodesStr 	= ""
 		jsonInstalledAppsStr 	= ""

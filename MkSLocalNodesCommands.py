@@ -104,11 +104,35 @@ class LocalNodeCommands:
 
 		return packet
 
-	def ProxyMessage(self, payload):
+	def ProxyMessageRequest(self, destination, source, data):
 		packet = self.GetHeader()
-		packet += json.dump({	'command':		'proxy_gateway',
-								'direction':	'request',
-								'payload':		payload
+		packet += json.dumps({	
+								'command': 'proxy_gateway',
+								'direction': 'request',
+								'payload': {
+									'header': {
+										'destination': str(destination),
+										'source': str(source)
+									},
+									'data': data
+								}
+							})
+		packet += self.GetFooter()
+
+		return packet
+
+	def ProxyMessageResponse(self, destination, source, data):
+		packet = self.GetHeader()
+		packet += json.dumps({	
+								'command': 'proxy_gateway',
+								'direction': 'response',
+								'payload': {
+									'header': {
+										'destination': str(destination),
+										'source': str(source)
+									},
+									'data': data
+								}
 							})
 		packet += self.GetFooter()
 
