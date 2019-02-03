@@ -73,7 +73,6 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 			'get_master_info':				self.GetMasterInfoRequestHandler
 		}
 		self.ResponseHandlers 				= {
-			'proxy_gateway':				self.ProxyGatewayResponseHandler
 		}
 		# Flags
 		self.IsListenerEnabled 				= False
@@ -85,27 +84,34 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 
 		thread.start_new_thread(self.PipeStdoutListener, ())
 
-	# PROXY - Slave Node -> Aplication
-	def ProxyGatewayResponseHandler(self, sock, packet):
-		print "[DEBUG MASTER] ProxyGatewayResponseHandler"
-		encapsulatedPayloadPacket = packet["payload"]
+	def GetNodeInfoResponseHandler(self, sock, packet):
+		print "[DEBUG MASTER] GetNodeInfoResponseHandler"
+		source 		= packet["payload"]["header"]["source"]
+		destination = packet["payload"]["header"]["destination"]
+		command 	= packet["command"]
+		payload 	= packet["payload"]["data"]
 		if self.OnSlaveResponseCallback is not None:
-			self.OnSlaveResponseCallback(encapsulatedPayloadPacket)
+			self.OnSlaveResponseCallback(destination, source, command, payload)
+
+	def GetNodeInfoRequestHandler(self, sock, packet):
+		pass
+
+	def GetNodeStatusRequestHandler(self, sock, packet):
+		pass
+		
+	
+	def GetNodeStatusResponseHandler(self, sock, packet):
+		pass
 	
 	# PROXY - Application -> Slave Node
 	def HandleExternalRequest(self, packet):
-		print "[DEBUG] External request", packet
 		destination = packet["header"]["destination"]
-		source		= packet["header"]["source"]
-		node = self.GetSlaveNode(destination)
+		source 		= packet["header"]["source"]
+		data 		= packet["data"]["payload"]
+		command 	= packet["data"]["header"]["command"]
+		node 		= self.GetSlaveNode(destination)
 		if node is not None:
-			# This node in slave list.
-			data = {
-				'command': packet["data"]["header"]["command"],
-				'direction': 'request',
-				'payload': packet["data"]["payload"]
-			}
-			msg = self.Commands.ProxyMessageRequest(destination, self.UUID, data)
+			msg = self.Commands.ProxyRequest(destination, source, command, data)
 			node.Socket.send(msg)
 		else:
 			# Need to look at other masters list.
@@ -243,6 +249,27 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 		elif "request" == direction:
 			if command in self.RequestHandlers:
 				self.RequestHandlers[command](sock, jsonData)
+		elif "proxy_request" == direction:
+			if command in self.RequestHandlers:
+				self.RequestHandlers[command](sock, jsonData)
+			else:
+				source 		= jsonData["payload"]["header"]["source"]
+				destination = jsonData["payload"]["header"]["destination"]
+				payload 	= jsonData["payload"]["data"]
+				if self.OnSlaveResponseCallback is not None:
+					self.OnSlaveResponseCallback(destination, source, command, payload)
+		elif "proxy_response" == direction:
+			print "DEBUG #1"
+			if command in self.ResponseHandlers:
+				self.ResponseHandlers[command](sock, jsonData)
+			else:
+				print "DEBUG #2"
+				source 		= jsonData["payload"]["header"]["source"]
+				destination = jsonData["payload"]["header"]["destination"]
+				payload 	= jsonData["payload"]["data"]
+				print "DEBUG #3"
+				if self.OnSlaveResponseCallback is not None:
+					self.OnSlaveResponseCallback(destination, source, command, payload)
 
 	def NodeDisconnectHandler(self, sock):
 		print "NodeDisconnectHandler"

@@ -104,6 +104,100 @@ class LocalNodeCommands:
 
 		return packet
 
+	def SendPingRequest(self, destination, source):
+		packet = self.GetHeader()
+		packet += json.dumps({	
+								'command': 'ping',
+								'direction': 'proxy_request',
+								'payload': {
+									'header': {
+										'destination': str(destination),
+										'source': str(source)
+									},
+									'data': {
+
+									}
+								}
+							})
+		packet += self.GetFooter()
+		return packet
+
+	def ProxyRequest(self, destination, source, command, data):
+		packet = self.GetHeader()
+		packet += json.dumps({	
+								'command': command,
+								'direction': 'proxy_request',
+								'payload': {
+									'header': {
+										'destination': str(destination),
+										'source': str(source)
+									},
+									'data': data
+								}
+							})
+		packet += self.GetFooter()
+		return packet
+
+	def ProxyResponse(self, data, payload):
+		packet = self.GetHeader()
+
+		source 		= data["payload"]["header"]["source"]
+		destination = data["payload"]["header"]["destination"]
+
+		data["direction"] 							= 'proxy_response'
+		data["payload"]["header"]["source"] 		= destination
+		data["payload"]["header"]["destination"] 	= source
+		data["payload"]["data"] 					= payload
+
+		packet += json.dumps(data)
+		packet += self.GetFooter()
+		return packet
+
+# =============== GetNodeInfo ==============================================================================================
+
+	def GetNodeInfoRequest(self, destination, source, data, is_proxy):
+		packet = self.GetHeader()
+
+		if (True == is_proxy):
+			direction = 'proxy_request'
+		else:
+			direction = 'request'
+
+		packet += json.dumps({	
+								'command': 'get_node_info',
+								'direction': direction,
+								'payload': {
+									'header': {
+										'destination': str(destination),
+										'source': str(source)
+									},
+									'data': data
+								}
+							})
+		packet += self.GetFooter()
+		return packet
+
+	def GetNodeInfoResponse(self, data):
+		packet = self.GetHeader()
+
+		if ("proxy" in data["direction"]):
+			direction = 'proxy_response'
+		else:
+			direction = 'response'
+
+		source 		= data["payload"]["header"]["source"]
+		destination = data["payload"]["header"]["destination"]
+
+		data["direction"] 							= direction
+		data["payload"]["header"]["source"] 		= destination
+		data["payload"]["header"]["destination"] 	= source
+
+		packet += json.dumps(data)
+		packet += self.GetFooter()
+		return packet
+
+# =============== GetNodeInfo ==============================================================================================
+
 	def ProxyMessageRequest(self, destination, source, data):
 		packet = self.GetHeader()
 		packet += json.dumps({	

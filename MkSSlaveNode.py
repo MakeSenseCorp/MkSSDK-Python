@@ -39,8 +39,6 @@ class SlaveNode(MkSAbstractNode.AbstractNode):
 		self.RequestHandlers	= {
 			'get_sensor_info': 						self.GetSensorInfoRequestHandler,
 			'set_sensor_info': 						self.SetSensorInfoRequestHandler,
-			'get_node_info':						self.GetNodeInfoHandler,
-			'proxy_gateway':						self.ProxyGatewayRequestHandler,
 			'exit':									self.ExitHandler,
 			'undefined':							self.UndefindHandler
 		}
@@ -54,6 +52,7 @@ class SlaveNode(MkSAbstractNode.AbstractNode):
 
 		self.OnGetSensorInfoRequestCallback			= None
 		self.OnSetSensorInfoRequestCallback 		= None
+		self.OnGetNodeInfoRequestCallback 			= None
 		# Flags
 		self.IsListenerEnabled 						= False
 		# Counters
@@ -62,56 +61,25 @@ class SlaveNode(MkSAbstractNode.AbstractNode):
 
 		self.ChangeState("IDLE")
 
-	def PrepareGetNodeInfoResponse(self):
-		response = { 
-				'state': 'response',
-				'status': 'ok',
-		 		'ts': str(time.time()),
-				'name': 'Master',
-				'description': 'Master Node',
-				'user': {
-						'sensors': [
-							{
-								'name': '#1'
-							},
-							{
-								'name': '#1'
-							}
-						]
-					}
-				}
-		return response
-
-	def ProxyGatewayRequestHandler(self, sock, packet, isSockSend):
-		print "[DEBUG SLAVE] ProxyGatewayHandler"
-		encapsulatedPacket = packet["payload"]["data"]
-		payload = self.GetNodeInfoHandler(sock, encapsulatedPacket, False)
-		data = {
-			'command': packet["command"],
-			'direction': 'response',
-			'payload': payload
-		}
-		destination = packet["payload"]["header"]["source"]
-		source 		= packet["payload"]["header"]["destination"]
-		msg = self.Commands.ProxyMessageResponse(destination, source, data)
-		print msg
-		sock.send(msg)
-
-	def GetNodeInfoHandler(self, sock, packet, isSockSend):
+	# GET_NODE_INFO
+	def GetNodeInfoRequestHandler(self, sock, packet):
 		print "[DEBUG SLAVE] GetNodeInfoHandler"
-		response = self.PrepareGetNodeInfoResponse()
-		if (False == isSockSend):
-			return response
-		else:
-			# Raise event
-			pass
+		if self.OnGetNodeInfoRequestCallback is not None:
+			self.OnGetNodeInfoRequestCallback(sock, packet)
+
+	def GetNodeStatusRequestHandler(self, sock, packet):
+		pass
+		
+	def GetNodeInfoResponseHandler(self, sock, packet):
+		pass
+	
+	def GetNodeStatusResponseHandler(self, sock, packet):
+		pass
+	# ############
 
 	def SendGatewayPing(self):
-		#payload = self.Commands.ProxyMessage({
-		#										''
-		#									})
-		#self.MasterSocket.send(payload)
-		pass
+		payload = self.Commands.SendPingRequest("GATEWAY", self.UUID)
+		self.MasterSocket.send(payload)
 
 	def CleanMasterList(self):
 		for node in self.MasterNodesList:
@@ -162,9 +130,17 @@ class SlaveNode(MkSAbstractNode.AbstractNode):
 		self.MasterSocket.send(payload)
 		self.ChangeState("WAIT_FOR_PORT")
 
-	def SendSensorInfoResponse(self, sock, sensors):
-		payload = self.Commands.GetSensorInfoResponse(self.UUID, sensors)
-		sock.send(payload)
+	def SendSensorInfoResponse(self, sock, packet, sensors):
+		direction = packet["direction"]
+		if ("proxy" in direction):
+			print " P R O X Y "
+			msg = self.Commands.ProxyResponse(packet, sensors)
+			sock.send(msg)
+		else:
+			print " R E G U L A R"
+
+		#payload = self.Commands.GetSensorInfoResponse(self.UUID, sensors)
+		#sock.send(payload)
 
 	def StateWaitForPort(self):
 		print "StateWaitForPort"
@@ -183,8 +159,7 @@ class SlaveNode(MkSAbstractNode.AbstractNode):
 			self.ChangeState("WORKING")
 
 	def StateWorking(self):
-		if 0 == self.Ticker % 10:
-			print "Sending PING"
+		if 0 == self.Ticker % 30:
 			self.SendGatewayPing()
 
 	def StateExit(self):
@@ -200,10 +175,16 @@ class SlaveNode(MkSAbstractNode.AbstractNode):
 		# TODO - IF command type is not in list call unknown callback in user code.
 		if "response" == direction:
 			if command in self.ResponseHandlers:
-				self.ResponseHandlers[command](sock, jsonData, True)
+				self.ResponseHandlers[command](sock, jsonData)
 		elif "request" == direction:
 			if command in self.RequestHandlers:
-				self.RequestHandlers[command](sock, jsonData, True)
+				self.RequestHandlers[command](sock, jsonData)
+		elif "proxy_request" == direction:
+			if command in self.RequestHandlers:
+				self.RequestHandlers[command](sock, jsonData)
+		elif "proxy_response" == direction:
+			if command in self.ResponseHandlers:
+				self.ResponseHandlers[command](sock, jsonData)
 
 	# Only used for socket listening.
 	def NodeConnectHandler(self, conn, addr):
@@ -232,19 +213,19 @@ class SlaveNode(MkSAbstractNode.AbstractNode):
 
 	# RESPONSE Handlers >
 
-	def GetLocalNodeResponseHandler(self, sock, packet, isSockSend):
+	def GetLocalNodeResponseHandler(self, sock, packet):
 		pass
 
-	def GetMasterInfoResponseHandler(self, sock, packet, isSockSend):
+	def GetMasterInfoResponseHandler(self, sock, packet):
 		pass
 
-	def GetSensorInfoResponseHandler(self, sock, packet, isSockSend):
+	def GetSensorInfoResponseHandler(self, sock, packet):
 		pass
 
-	def SetSensorInfoResponseHandler(self, sock, packet, isSockSend):
+	def SetSensorInfoResponseHandler(self, sock, packet):
 		pass
 
-	def GetPortResponseHandler(self, sock, packet, isSockSend):
+	def GetPortResponseHandler(self, sock, packet):
 		self.SlaveListenerPort = packet["port"]
 		self.ChangeState("START_LISTENER")
 		# Raise event
@@ -252,24 +233,24 @@ class SlaveNode(MkSAbstractNode.AbstractNode):
 	# RESPONSE Handlers <
 	# REQUEST Handlers <
 
-	def GetSensorInfoRequestHandler(self, sock, packet, isSockSend):
+	def GetSensorInfoRequestHandler(self, sock, packet):
 		if self.OnGetSensorInfoRequestCallback is not None:
 			self.OnGetSensorInfoRequestCallback(packet, sock)
 
-	def SetSensorInfoRequestHandler(self, sock, packet, isSockSend):
+	def SetSensorInfoRequestHandler(self, sock, packet):
 		if self.OnSetSensorInfoRequestCallback is not None:
 			self.OnSetSensorInfoRequestCallback(packet, sock)
 
 	# REQUEST Handlers <	
 
-	def UndefindHandler(self, sock, packet, isSockSend):
+	def UndefindHandler(self, sock, packet):
 		if None is not self.LocalServerDataArrivedCallback:
 			self.LocalServerDataArrivedCallback(packet, sock)
 
 	def GetMasters(self):
 		return self.MasterNodesList
 
-	def ExitHandler(self, sock, packet, isSockSend):
+	def ExitHandler(self, sock, packet):
 		if self.OnExitCallback is not None:
 			self.OnExitCallback()
 			packet = self.Commands.ExitResponse("OK")

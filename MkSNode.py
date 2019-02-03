@@ -58,6 +58,7 @@ class Node():
 			'INIT_NETWORK':					self.StateInitNetwork,
 			'ACCESS': 						self.StateGetAccess,
 			'ACCESS_WAIT':					self.StateAccessWait,
+			'LOCAL_SERVICE':				self.StateLocalService,
 			'WORK': 						self.StateWork
 		}
 		# Callbacks
@@ -86,6 +87,7 @@ class Node():
 		self.LocalServiceNode.OnNewNodeCallback 				= self.OnNewNodeHandler
 		self.LocalServiceNode.OnSlaveNodeDisconnectedCallback 	= self.OnSlaveNodeDisconnectedHandler
 		self.LocalServiceNode.OnSlaveResponseCallback 			= self.OnSlaveResponseHandler
+		self.LocalServiceNode.OnGetNodeInfoRequestCallback 		= self.OnGetNodeInfoRequestHandler
 
 		parser = argparse.ArgumentParser(description='Execution module called Node')
 		parser.add_argument('--path', action='store',
@@ -107,13 +109,16 @@ class Node():
 		message = self.Network.BuildMessage("MASTER", "GATEWAY", self.UUID, "node_disconnected", payload)
 		self.Network.SendWebSocket(message)
 
-	def OnSlaveResponseHandler(self, packet):
+	def OnSlaveResponseHandler(self, dest, src, command, payload):
 		print "[DEBUG MASTER] OnSlaveResponseHandler"
-		source 	= packet["header"]["source"]
-		command = packet["data"]["command"]
-		payload = packet["data"]["payload"]
-		message = self.Network.BuildMessage("DIRECT", "WEBFACE", source, command, payload)
+		message = self.Network.BuildMessage("DIRECT", dest, src, command, payload)
 		self.Network.SendWebSocket(message)
+
+	def OnGetNodeInfoRequestHandler(self, sock, packet):
+		# Update response packet and encapsulate
+		msg = self.LocalServiceNode.Commands.ProxyResponse(packet, self.NodeInfo)
+		# Send to requestor
+		sock.send(msg)
 
 	def OnExitHandler(self):
 		self.Exit()
@@ -132,6 +137,7 @@ class Node():
 		
 		try:
 			dataSystem 				= json.loads(jsonSystemStr)
+			self.NodeInfo 			= dataSystem["node"]
 			# Node connection to WS information
 			self.Key 				= dataSystem["key"]
 			self.ApiUrl 			= dataSystem["apiurl"]
@@ -220,19 +226,8 @@ class Node():
 	def StateGetAccess (self):
 		if True == self.IsNodeWSServiceEnabled:
 			print "[DEBUG::Node] StateGetAccess"
-			# Let the state machine know that this state was entered.
-			#self.NetworkAccessTickLock.acquire()
-			#try:
-			#	self.AccessTick = 1
-			#finally:
-			#	self.NetworkAccessTickLock.release()
 			self.Network.AccessGateway(self.Key, "[]")
 			self.State = "ACCESS_WAIT"
-			#if self.Network.Connect(self.UserName, self.Password, payloadStr) == True:
-			#	print "Register Device ..."
-			#	data, error = self.Network.RegisterDevice(self.DeviceInfo)
-			#	if error == False:
-			#		return
 		else:
 			self.State = "WORK"
 	
@@ -244,22 +239,13 @@ class Node():
 		else:
 			self.AccessTick += 1
 
+	def StateLocalService (self):
+		pass
+
 	def StateWork (self):
 		if False == self.SystemLoaded:
 			self.SystemLoaded = True # Update node that system done loading.
 			self.OnNodeSystemLoaded()
-
-		# TODO - If not connected switch state and try to connect WS.
-		# If state is accessing network and it ia only the first time.
-		#if self.State == "ACCESS" and self.AccessTick > 0:
-		#	self.NetworkAccessTickLock.acquire()
-		#	try:
-		#		self.AccessTick = self.AccessTick + 1
-		#	finally:
-		#		self.NetworkAccessTickLock.release()
-		#	if self.AccessTick < 10:
-		#		print "Waiting for web service ... " + str(self.AccessTick)
-		#		continue
 	
 	def WebSocketConnectedCallback (self):
 		self.State = "WORK"
@@ -290,7 +276,8 @@ class Node():
 		destination = self.Network.GetDestinationFromJson(json)
 		command 	= self.Network.GetCommandFromJson(json)
 
-		print "\n[DEBUG::Node Network(In)] " + str(json) + "\n"
+		# print "\n[DEBUG::Node Network(In)] " + str(json) + "\n"
+		print "\n[DEBUG::Node Network(In)] " + str(command) + "\n"
 
 		# Is this packet for me?
 		if destination in self.UUID:
@@ -307,7 +294,6 @@ class Node():
 				print "Error: Not support " + request + " request type."
 		else:
 			# Find who has this destination adderes.
-			print "[DEBUG] External request"
 			self.LocalServiceNode.HandleExternalRequest(json)
 
 

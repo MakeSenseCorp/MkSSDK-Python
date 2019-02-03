@@ -55,9 +55,13 @@ class AbstractNode():
 		# Initialization methods
 		self.MyLocalIP 							= MkSUtils.GetLocalIP()
 		# Handlers
-		self.ServerNodeHandlers					= {
-			'get_node_info': 					self.GetNodeInfoHandler,
-			'get_node_status': 					self.GetNodeStatusHandler
+		self.ServerNodeRequestHandlers			= {
+			'get_node_info': 					self.GetNodeInfoRequestHandler,
+			'get_node_status': 					self.GetNodeStatusRequestHandler
+		}
+		self.ServerNodeResponseHandlers			= {
+			'get_node_info': 					self.GetNodeInfoResponseHandler,
+			'get_node_status': 					self.GetNodeStatusResponseHandler
 		}
 
 	# This method must be implemented by Master node
@@ -69,11 +73,17 @@ class AbstractNode():
 
 	def SendGatewayPing(self):
 		pass
+
+	def GetNodeInfoRequestHandler(self, sock, packet):
+		pass
+
+	def GetNodeStatusRequestHandler(self, sock, packet):
+		pass
 		
-	def GetNodeInfoHandler(self, sock, data):
+	def GetNodeInfoResponseHandler(self, sock, packet):
 		pass
 	
-	def GetNodeStatusHandler(self, sock, data):
+	def GetNodeStatusResponseHandler(self, sock, packet):
 		pass
 
 	def SetSates (self, states):
@@ -158,12 +168,29 @@ class AbstractNode():
 
 	def DataSocketInputHandler(self, sock, data):
 		#try:
+		print "DEBUG #1", data
 		jsonData 	= json.loads(data)
+		print "DEBUG #1.1", jsonData
 		command 	= jsonData['command']
+		direction 	= jsonData['direction']
+		print "DEBUG #2"
 
 		if command in ["get_node_info", "get_node_status"]:
-			self.ServerNodeHandlers[command](sock, data)
+			print "SPECIAL COMMANDS", command
+			if "response" == direction:
+				if command in self.ServerNodeResponseHandlers:
+					self.ServerNodeResponseHandlers[command](sock, jsonData)
+			elif "request" == direction:
+				if command in self.ServerNodeRequestHandlers:
+					self.ServerNodeRequestHandlers[command](sock, jsonData)
+			elif "proxy_request" == direction:
+				if command in self.ServerNodeRequestHandlers:
+					self.ServerNodeRequestHandlers[command](sock, jsonData)
+			elif "proxy_response" == direction:
+				if command in self.ServerNodeResponseHandlers:
+					self.ServerNodeResponseHandlers[command](sock, jsonData)
 		else:
+			print "Call HandlerRouter"
 			# Call for handler.
 			self.HandlerRouter(sock, data)
 		#except:
@@ -252,7 +279,7 @@ class AbstractNode():
 							self.OnAceptNewConnectionCallback(conn)
 					else:
 						try:
-							data = sock.recv(1024)
+							data = sock.recv(2048)
 						except:
 							print "[Node Server] Recieve ERROR"
 						else:
