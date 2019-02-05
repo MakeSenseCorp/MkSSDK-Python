@@ -77,6 +77,11 @@ class SlaveNode(MkSAbstractNode.AbstractNode):
 		pass
 	# ############
 
+	def SendSensorInfoChange(self, sensors):
+		json = self.Commands.GenerateJsonProxyRequest(self.UUID, "WEBFACE", "get_sensor_info", {})
+		msg  = self.Commands.ProxyResponse(json, sensors)
+		self.MasterSocket.send(msg)
+
 	def SendGatewayPing(self):
 		payload = self.Commands.SendPingRequest("GATEWAY", self.UUID)
 		self.MasterSocket.send(payload)
