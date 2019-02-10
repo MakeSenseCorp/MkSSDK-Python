@@ -10,20 +10,24 @@ import sys
 
 class Network ():
 	def __init__(self, uri, wsuri):
-		self.Name 		  = "Communication to Node.JS"
-		self.ServerUri 	  = uri
-		self.WSServerUri  = wsuri
-		self.UserName 	  = ""
-		self.Password 	  = ""
-		self.UserDevKey   = ""
-		self.WSConnection = None
-		self.DeviceUUID   = ""
-		self.Type 		  = 0
+		self.Name 		  	= "Communication to Node.JS"
+		self.ServerUri 	  	= uri
+		self.WSServerUri  	= wsuri
+		self.UserName 	  	= ""
+		self.Password 	  	= ""
+		self.UserDevKey   	= ""
+		self.WSConnection 	= None
+		self.DeviceUUID   	= ""
+		self.Type 		  	= 0
+		self.State 			= "DISCONN"
 
 		self.OnConnectionCallback 		= None
 		self.OnDataArrivedCallback 		= None
 		self.OnErrorCallback 			= None
 		self.OnConnectionClosedCallback = None
+
+	def GetNetworkState(self):
+		return self.State
 
 	def GetRequest (self, url):
 		try:
@@ -97,9 +101,11 @@ class Network ():
 	    print error
 
 	def WSConnection_OnClose_Handler (self, ws):
-	    self.OnConnectionClosedCallback()
+		self.State = "DISCONN"
+		self.OnConnectionClosedCallback()
 		
 	def WSConnection_OnOpen_Handler (self, ws):
+		self.State = "CONN"
 		self.OnConnectionCallback()
 
 	def WSWorker (self):

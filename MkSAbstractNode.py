@@ -64,6 +64,12 @@ class AbstractNode():
 			'get_node_status': 					self.GetNodeStatusResponseHandler
 		}
 
+	def GatewayConnectedEvent(self):
+		pass
+
+	def GatewayDisConnectedEvent(self):
+		pass
+
 	# This method must be implemented by Master node
 	def HandleExternalRequest(self, data):
 		pass

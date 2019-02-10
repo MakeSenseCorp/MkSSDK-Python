@@ -80,7 +80,8 @@ class Node():
 			'get_node_info': 				self.GetNodeInfoHandler,
 			'get_node_status': 				self.GetNodeStatusHandler,
 			'register_subscriber':			self.RegisterSubscriberHandler,
-			'unregister_subscriber':		self.UnregisterSubscriberHandler 
+			'unregister_subscriber':		self.UnregisterSubscriberHandler,
+			'get_file':						self.GetFileHandler
 		}
 
 		self.LocalServiceNode.OnExitCallback 					= self.OnExitHandler
@@ -97,22 +98,45 @@ class Node():
 		if args.pwd is not None:
 			os.chdir(args.pwd)
 
+	def GetFile(self, filename, ui_type):
+		print "DEBUG #1"
+		objFile = MkSFile.File()
+		print "DEBUG #2"
+		return objFile.LoadStateFromFile("static/js/node/" + fileName)
+
+
+	def GetFileHandler(self, message_type, source, data):
+		if self.Network.GetNetworkState() is "CONN":
+			uiType = data["payload"]["ui_type"]
+			fileName = data["payload"]["file_name"]
+
+			content = self.GetFile(fileName, uiType)
+			print "DEBUG #3", content
+			payload = { 'file_content': content }
+			message = self.Network.BuildMessage("DIRECT", source, self.UUID, "get_file", payload)
+			print "DEBUG #4", message
+			self.Network.SendWebSocket(message)
+			print "DEBUG #5"
+
 	def OnNewNodeHandler(self, node):
-		payload = { 'node': node }
-		# Send node connected event to gateway
-		message = self.Network.BuildMessage("MASTER", "GATEWAY", self.UUID, "node_connected", payload)
-		self.Network.SendWebSocket(message)
+		if self.Network.GetNetworkState() is "CONN":
+			payload = { 'node': node }
+			# Send node connected event to gateway
+			message = self.Network.BuildMessage("MASTER", "GATEWAY", self.UUID, "node_connected", payload)
+			self.Network.SendWebSocket(message)
 
 	def OnSlaveNodeDisconnectedHandler(self, node):
-		payload = { 'node': node }
-		# Send node disconnected event to gateway
-		message = self.Network.BuildMessage("MASTER", "GATEWAY", self.UUID, "node_disconnected", payload)
-		self.Network.SendWebSocket(message)
+		if self.Network.GetNetworkState() is "CONN":
+			payload = { 'node': node }
+			# Send node disconnected event to gateway
+			message = self.Network.BuildMessage("MASTER", "GATEWAY", self.UUID, "node_disconnected", payload)
+			self.Network.SendWebSocket(message)
 
 	def OnSlaveResponseHandler(self, dest, src, command, payload):
 		print "[DEBUG MASTER] OnSlaveResponseHandler"
-		message = self.Network.BuildMessage("DIRECT", dest, src, command, payload)
-		self.Network.SendWebSocket(message)
+		if self.Network.GetNetworkState() is "CONN":
+			message = self.Network.BuildMessage("DIRECT", dest, src, command, payload)
+			self.Network.SendWebSocket(message)
 
 	def OnGetNodeInfoRequestHandler(self, sock, packet):
 		# Update response packet and encapsulate
@@ -249,6 +273,7 @@ class Node():
 	
 	def WebSocketConnectedCallback (self):
 		self.State = "WORK"
+		self.LocalServiceNode.GatewayConnectedEvent()
 		self.OnWSConnected()
 
 	def GetNodeInfoHandler(self, message_type, source, data):
@@ -286,7 +311,7 @@ class Node():
 			elif messageType == "DIRECT" or messageType == "PRIVATE" or messageType == "BROADCAST" or messageType == "WEBFACE":
 				data = self.Network.GetDataFromJson(json)
 				# If commands located in the list below, do not forward this message and handle it in this context.
-				if command in ["get_node_info", "get_node_status"]:
+				if command in ["get_node_info", "get_node_status", "get_file"]:
 					self.Handlers[command](messageType, source, data)
 				else:
 					self.OnWSDataArrived(messageType, source, data)
@@ -309,6 +334,7 @@ class Node():
 		return ret
 
 	def WebSocketConnectionClosedCallback (self):
+		self.LocalServiceNode.GatewayDisConnectedEvent()
 		self.OnWSConnectionClosed()
 		self.NetworkAccessTickLock.acquire()
 		try:

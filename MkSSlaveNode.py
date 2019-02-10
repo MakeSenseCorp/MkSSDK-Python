@@ -7,6 +7,7 @@ import thread
 import threading
 import socket
 
+from mksdk import MkSFile
 from mksdk import MkSAbstractNode
 from mksdk import MkSLocalNodesCommands
 
@@ -28,6 +29,7 @@ class SlaveNode(MkSAbstractNode.AbstractNode):
 			'EXIT':							self.StateExit
 		}
 		# Handlers
+		# Response - Handler when rresponse returned to slave (requestor)
 		self.ResponseHandlers	= {
 			'get_local_nodes': 						self.GetLocalNodeResponseHandler,
 			'get_master_info': 						self.GetMasterInfoResponseHandler,
@@ -36,9 +38,11 @@ class SlaveNode(MkSAbstractNode.AbstractNode):
 			'get_port':								self.GetPortResponseHandler,
 			'undefined':							self.UndefindHandler
 		}
+		# Request - Response handler to sent request.
 		self.RequestHandlers	= {
 			'get_sensor_info': 						self.GetSensorInfoRequestHandler,
 			'set_sensor_info': 						self.SetSensorInfoRequestHandler,
+			'get_file':								self.GetFileHandler,
 			'exit':									self.ExitHandler,
 			'undefined':							self.UndefindHandler
 		}
@@ -60,6 +64,18 @@ class SlaveNode(MkSAbstractNode.AbstractNode):
 		self.Ticker 								= 0
 
 		self.ChangeState("IDLE")
+
+	def GetFileHandler(self, sock, packet):
+		print "GetFileHandler DEBUG #1"
+		objFile = MkSFile.File()
+		print "GetFileHandler DEBUG #2", packet
+		uiType = packet["payload"]["data"]["ui_type"]
+		fileName = packet["payload"]["data"]["file_name"]
+		print "GetFileHandler DEBUG #3", fileName
+		content = objFile.LoadStateFromFile("/home/yevgeniy/workspace/makesense/mksnodes/1981/ui/" + fileName)
+		msg  = self.Commands.ProxyResponse(packet, content)
+		print "GetFileHandler DEBUG #4", msg
+		self.MasterSocket.send(msg)
 
 	# GET_NODE_INFO
 	def GetNodeInfoRequestHandler(self, sock, packet):

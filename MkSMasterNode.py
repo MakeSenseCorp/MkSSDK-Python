@@ -84,6 +84,19 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 
 		thread.start_new_thread(self.PipeStdoutListener, ())
 
+	def GatewayConnectedEvent(self):
+		print "[DEBUG MASTER]: GatewayConnectedEvent"
+		for slave in self.LocalSlaveList:
+			if self.OnNewNodeCallback is not None:
+				self.OnNewNodeCallback({ 'ip':		str(slave.IP), 
+										 'port':	slave.Port, 
+										 'uuid':	slave.UUID, 
+										 'type':	slave.Type 
+										})
+
+	def GatewayDisConnectedEvent(self):
+		print "[DEBUG MASTER]: Gateway disconnected"
+
 	def GetNodeInfoResponseHandler(self, sock, packet):
 		print "[DEBUG MASTER] GetNodeInfoResponseHandler"
 		source 		= packet["payload"]["header"]["source"]
