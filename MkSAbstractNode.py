@@ -286,6 +286,13 @@ class AbstractNode():
 					else:
 						try:
 							data = sock.recv(2048)
+							dataLen = len(data)
+							print dataLen
+							while dataLen == 2048:
+								print "-------"
+								chunk = sock.recv(2048)
+								data += chunk
+								dataLen = len(chunk)
 						except:
 							print "[Node Server] Recieve ERROR"
 						else:

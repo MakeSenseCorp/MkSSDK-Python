@@ -70,10 +70,24 @@ class SlaveNode(MkSAbstractNode.AbstractNode):
 		objFile = MkSFile.File()
 		print "GetFileHandler DEBUG #2", packet
 		uiType = packet["payload"]["data"]["ui_type"]
+		fileType = packet["payload"]["data"]["file_type"]
 		fileName = packet["payload"]["data"]["file_name"]
-		print "GetFileHandler DEBUG #3", fileName
-		content = objFile.LoadStateFromFile("/home/yevgeniy/workspace/makesense/mksnodes/1981/ui/" + fileName)
-		msg  = self.Commands.ProxyResponse(packet, content)
+		folder = ""
+		if uiType in "config":
+			folder = "config"
+		elif uiType in "app":
+			folder = "app"
+		elif uiType in "thumbnail":
+			folder = "thumbnail"
+		print "GetFileHandler DEBUG #3", fileType
+		content = objFile.LoadStateFromFile("/home/yevgeniy/workspace/makesense/mksnodes/1981/ui/" + folder + "/ui." + fileType)
+		payload = {
+			'file_type': fileType,
+			'ui_type': uiType,
+			'content': content.encode('hex')
+		}
+		print payload
+		msg  = self.Commands.ProxyResponse(packet, json.dumps(payload))
 		print "GetFileHandler DEBUG #4", msg
 		self.MasterSocket.send(msg)
 
