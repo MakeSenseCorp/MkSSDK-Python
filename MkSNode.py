@@ -277,11 +277,19 @@ class Node():
 		self.OnWSConnected()
 
 	def GetNodeInfoHandler(self, message_type, source, data):
-		if True == self.SystemLoaded:
+		print "GetNodeInfoHandler", self.NodeInfo
+
+		if self.Network.GetNetworkState() is "CONN":
+			payload = self.NodeInfo
+			# Send node connected event to gateway
+			message = self.Network.BuildMessage(message_type, source, self.UUID, "get_node_info", payload)
+			self.Network.SendWebSocket(message)
+
+		#if True == self.SystemLoaded:
 			# print self.UserDefined
-			res_payload = "\"state\":\"response\",\"status\":\"ok\",\"ts\":" + str(time.time()) + ",\"name\":\"" + self.Name + "\",\"description\":\"" + self.Description + "\", \"user\":" + json.dumps(self.UserDefined)
-			print res_payload
-			self.SendMessage(message_type, source, "get_node_info", res_payload)
+		#	res_payload = "\"state\":\"response\",\"status\":\"ok\",\"ts\":" + str(time.time()) + ",\"name\":\"" + self.Name + "\",\"description\":\"" + self.Description + "\", \"user\":" + json.dumps(self.UserDefined)
+		#	print res_payload
+		#	self.SendMessage(message_type, source, "get_node_info", res_payload)
 
 	def GetNodeStatusHandler(self, message_type, source, data):
 		if True == self.SystemLoaded:
