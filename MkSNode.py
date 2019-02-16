@@ -99,11 +99,8 @@ class Node():
 			os.chdir(args.pwd)
 
 	def GetFile(self, filename, ui_type):
-		print "DEBUG #1"
 		objFile = MkSFile.File()
-		print "DEBUG #2"
 		return objFile.LoadStateFromFile("static/js/node/" + fileName)
-
 
 	def GetFileHandler(self, message_type, source, data):
 		if self.Network.GetNetworkState() is "CONN":
@@ -111,12 +108,9 @@ class Node():
 			fileName = data["payload"]["file_name"]
 
 			content = self.GetFile(fileName, uiType)
-			print "DEBUG #3", content
 			payload = { 'file_content': content }
 			message = self.Network.BuildMessage("DIRECT", source, self.UUID, "get_file", payload)
-			print "DEBUG #4", message
 			self.Network.SendWebSocket(message)
-			print "DEBUG #5"
 
 	def OnNewNodeHandler(self, node):
 		if self.Network.GetNetworkState() is "CONN":
@@ -132,6 +126,7 @@ class Node():
 			message = self.Network.BuildMessage("MASTER", "GATEWAY", self.UUID, "node_disconnected", payload)
 			self.Network.SendWebSocket(message)
 
+	# Sending response to "get_node_info" request (mostly for proxy request)
 	def OnSlaveResponseHandler(self, dest, src, command, payload):
 		print "[DEBUG MASTER] OnSlaveResponseHandler"
 		if self.Network.GetNetworkState() is "CONN":

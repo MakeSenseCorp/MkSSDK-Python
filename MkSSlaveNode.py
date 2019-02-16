@@ -29,7 +29,7 @@ class SlaveNode(MkSAbstractNode.AbstractNode):
 			'EXIT':							self.StateExit
 		}
 		# Handlers
-		# Response - Handler when rresponse returned to slave (requestor)
+		# Response - Handler when rresponse returned to slave (slave is a requestor)
 		self.ResponseHandlers	= {
 			'get_local_nodes': 						self.GetLocalNodeResponseHandler,
 			'get_master_info': 						self.GetMasterInfoResponseHandler,
@@ -66,41 +66,40 @@ class SlaveNode(MkSAbstractNode.AbstractNode):
 		self.ChangeState("IDLE")
 
 	def GetFileHandler(self, sock, packet):
-		print "GetFileHandler DEBUG #1"
-		objFile = MkSFile.File()
-		print "GetFileHandler DEBUG #2", packet
-		uiType = packet["payload"]["data"]["ui_type"]
-		fileType = packet["payload"]["data"]["file_type"]
-		fileName = packet["payload"]["data"]["file_name"]
-		folder = ""
-		if uiType in "config":
-			folder = "config"
-		elif uiType in "app":
-			folder = "app"
-		elif uiType in "thumbnail":
-			folder = "thumbnail"
-		print "GetFileHandler DEBUG #3", fileType
-		content = objFile.LoadStateFromFile("/home/yevgeniy/workspace/makesense/mksnodes/1981/ui/" + folder + "/ui." + fileType)
+		print "[SlaveNode] GetFileHandler"
+
+		objFile 	= MkSFile.File()
+		uiType 		= packet["payload"]["data"]["ui_type"]
+		fileType 	= packet["payload"]["data"]["file_type"]
+		fileName 	= packet["payload"]["data"]["file_name"]
+		
+		folder = {
+			'config': 		'config',
+			'app': 			'app',
+			'thumbnail': 	'thumbnail'
+		}
+		
+		content = objFile.LoadStateFromFile("/home/yevgeniy/workspace/makesense/mksnodes/1981/ui/" + folder[uiType] + "/ui." + fileType)
 		payload = {
 			'file_type': fileType,
 			'ui_type': uiType,
 			'content': content.encode('hex')
 		}
-		print payload
-		msg  = self.Commands.ProxyResponse(packet, json.dumps(payload))
-		print "GetFileHandler DEBUG #4", msg
+		
+		msg = self.Commands.ProxyResponse(packet, payload)
 		self.MasterSocket.send(msg)
 
 	# GET_NODE_INFO
 	def GetNodeInfoRequestHandler(self, sock, packet):
-		print "[DEBUG SLAVE] GetNodeInfoHandler"
+		print "[SlaveNode] GetNodeInfoHandler"
 		if self.OnGetNodeInfoRequestCallback is not None:
 			self.OnGetNodeInfoRequestCallback(sock, packet)
 
+	# TODO - Implement this method.
 	def GetNodeStatusRequestHandler(self, sock, packet):
 		pass
-		
-	def GetNodeInfoResponseHandler(self, sock, packet):
+
+	def GetNodeStatusRequestHandler(self, sock, packet):
 		pass
 	
 	def GetNodeStatusResponseHandler(self, sock, packet):
@@ -113,6 +112,7 @@ class SlaveNode(MkSAbstractNode.AbstractNode):
 		self.MasterSocket.send(msg)
 
 	def SendGatewayPing(self):
+		print "[SlaveNode] SendGatewayPing"
 		payload = self.Commands.SendPingRequest("GATEWAY", self.UUID)
 		self.MasterSocket.send(payload)
 
@@ -199,31 +199,28 @@ class SlaveNode(MkSAbstractNode.AbstractNode):
 
 	def StateExit(self):
 		print "StateExit"
-		pass
+
+	def HandlerRouter_Request(self, sock, json_data):
+		command = json_data['command']
+		# TODO - IF command type is not in list call unknown callback in user code.
+		if command in self.RequestHandlers:
+			self.RequestHandlers[command](sock, json_data)
+
+	def HandlerRouter_Response(self, sock, json_data):
+		command = json_data['command']
+		# TODO - IF command type is not in list call unknown callback in user code.
+		if command in self.ResponseHandlers:
+			self.ResponseHandlers[command](sock, json_data)
 
 	# TODO - Master and Slave have same HandleRouter, consider moving to abstruct class
 	def HandlerRouter(self, sock, data):
 		jsonData 	= json.loads(data)
-		command 	= jsonData['command']
 		direction 	= jsonData['direction']
 
-		# TODO - IF command type is not in list call unknown callback in user code.
-		if "response" == direction:
-			if command in self.ResponseHandlers:
-				self.ResponseHandlers[command](sock, jsonData)
-		elif "request" == direction:
-			if command in self.RequestHandlers:
-				self.RequestHandlers[command](sock, jsonData)
-		elif "proxy_request" == direction:
-			if command in self.RequestHandlers:
-				self.RequestHandlers[command](sock, jsonData)
-		elif "proxy_response" == direction:
-			if command in self.ResponseHandlers:
-				self.ResponseHandlers[command](sock, jsonData)
-
-	# Only used for socket listening.
-	def NodeConnectHandler(self, conn, addr):
-		pass
+		if direction in ["response", "proxy_response"]:
+			self.HandlerRouter_Response(sock, jsonData)
+		elif direction in ["request", "proxy_request"]:
+			self.HandlerRouter_Request(sock, jsonData)
 
 	def NodeDisconnectHandler(self, sock):
 		print "NodeDisconnectHandler"

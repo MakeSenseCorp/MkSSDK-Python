@@ -25,8 +25,12 @@ class AbstractNode():
 		self.UUID 								= ""
 		self.Type 								= 0
 		# Callbacks
+		# ---------
+		# Let know that local server thread is started. Does not say that network is working (server or client).
 		self.OnLocalServerStartedCallback 			= None
-		self.LocalServerDataArrivedCallback			= None
+		# TODO - What is this callback for?
+		self.LocalServerDataArrivedCallback			= None 
+		# Let know about nwe connection arrived.
 		self.OnAceptNewConnectionCallback			= None
 		self.OnMasterFoundCallback					= None
 		self.OnMasterSearchCallback					= None
@@ -64,31 +68,39 @@ class AbstractNode():
 			'get_node_status': 					self.GetNodeStatusResponseHandler
 		}
 
+	# Overload
 	def GatewayConnectedEvent(self):
 		pass
 
+	# Overload
 	def GatewayDisConnectedEvent(self):
 		pass
 
-	# This method must be implemented by Master node
+	# Overload - This method must be implemented by Master node 
 	def HandleExternalRequest(self, data):
 		pass
 
+	# Overload
 	def NodeWorker(self):
 		pass
 
+	# Overload
 	def SendGatewayPing(self):
 		pass
 
+	# Overload
 	def GetNodeInfoRequestHandler(self, sock, packet):
 		pass
 
+	# Overload
 	def GetNodeStatusRequestHandler(self, sock, packet):
 		pass
-		
+	
+	# Overload	
 	def GetNodeInfoResponseHandler(self, sock, packet):
 		pass
 	
+	# Overload
 	def GetNodeStatusResponseHandler(self, sock, packet):
 		pass
 
@@ -98,9 +110,11 @@ class AbstractNode():
 	def ChangeState(self, state):
 		self.CurrentState = state
 
+	# Overload
 	def Start(self):
 		pass
 
+	# Overload
 	def Stop(self):
 		pass
 
@@ -117,7 +131,7 @@ class AbstractNode():
 		# Append to list of all connections.
 		node = LocalNode(ip, port, "", "", sock)
 		self.Connections.append(node)
-		self.OpenSocketsCounter = self.OpenSocketsCounter + 1
+		self.OpenSocketsCounter += self.OpenSocketsCounter
 		return node
 
 	def RemoveConnection(self, sock):
@@ -127,7 +141,7 @@ class AbstractNode():
 			self.RecievingSockets.remove(conn.Socket)
 			conn.Socket.close()
 			self.Connections.remove(conn)
-			self.OpenSocketsCounter = self.OpenSocketsCounter - 1
+			self.OpenSocketsCounter -= self.OpenSocketsCounter
 
 	def GetConnection(self, sock):
 		for conn in self.Connections:
@@ -172,35 +186,36 @@ class AbstractNode():
 			print "[Server Node] Bind socket ERROR on TryStartListener", str(self.ServerAdderss[1])
 			return False
 
-	def DataSocketInputHandler(self, sock, data):
-		#try:
-		print "DEBUG #1", data
-		jsonData 	= json.loads(data)
-		print "DEBUG #1.1", jsonData
-		command 	= jsonData['command']
-		direction 	= jsonData['direction']
-		print "DEBUG #2"
+	def DataSocketInputHandler_Response(self, sock, json_data):
+		print "[AbstractNode] DataSocketInputHandler_Response"
+		command = json_data['command']
+		if command in self.ServerNodeResponseHandlers:
+			self.ServerNodeResponseHandlers[command](sock, json_data)
 
-		if command in ["get_node_info", "get_node_status"]:
-			print "SPECIAL COMMANDS", command
-			if "response" == direction:
-				if command in self.ServerNodeResponseHandlers:
-					self.ServerNodeResponseHandlers[command](sock, jsonData)
-			elif "request" == direction:
-				if command in self.ServerNodeRequestHandlers:
-					self.ServerNodeRequestHandlers[command](sock, jsonData)
-			elif "proxy_request" == direction:
-				if command in self.ServerNodeRequestHandlers:
-					self.ServerNodeRequestHandlers[command](sock, jsonData)
-			elif "proxy_response" == direction:
-				if command in self.ServerNodeResponseHandlers:
-					self.ServerNodeResponseHandlers[command](sock, jsonData)
-		else:
-			print "Call HandlerRouter"
-			# Call for handler.
-			self.HandlerRouter(sock, data)
-		#except:
-		#	print "[Node Server] HandleMKSNodeRequest ERROR", sys.exc_info()[0]
+	def DataSocketInputHandler_Resquest(self, sock, json_data):
+		print "[AbstractNode] DataSocketInputHandler_Resquest"
+		command = json_data['command']
+		if command in self.ServerNodeRequestHandlers:
+			self.ServerNodeRequestHandlers[command](sock, json_data)
+
+	def DataSocketInputHandler(self, sock, data):
+		try:
+			jsonData 	= json.loads(data)
+			command 	= jsonData['command']
+			direction 	= jsonData['direction']
+
+			if command in ["get_node_info", "get_node_status"]:
+				print "[AbstractNode] ['get_node_info', 'get_node_status']"
+				if direction in ["response", "proxy_response"]:
+					self.DataSocketInputHandler_Response(sock, jsonData)
+				elif direction in ["request", "proxy_request"]:
+					self.DataSocketInputHandler_Resquest(sock, jsonData)
+			else:
+				print "[AbstractNode] HandlerRouter"
+				# Call for handler.
+				self.HandlerRouter(sock, data)
+		except:
+			print "[AbstractNode] DataSocketInputHandler ERROR", sys.exc_info()[0]
 
 	# Overload
 	def HandlerRouter(self, sock, data):
@@ -275,7 +290,6 @@ class AbstractNode():
 				for sock in readable:
 					if sock is self.ServerSocket and True == self.IsListenerEnabled:
 						conn, addr = sock.accept()
-						#print "[Node Server] Accept", addr
 						conn.setblocking(0)
 						self.AppendConnection(conn, addr[0], addr[1])
 						self.NodeConnectHandler(conn, addr)
@@ -295,8 +309,9 @@ class AbstractNode():
 							print "[Node Server] Recieve ERROR"
 						else:
 							if data:
-								# print "[Node Socket] DATA"
+								# Each makesense packet should start from magic number "MKS"
 								if "MKS" in data[:3]:
+									# One packet can hold multiple MKS messages.
 									multiData = data.split("MKS: ")
 									for data in multiData[1:]:
 										req = (data.split('\n'))[1]
@@ -380,5 +395,6 @@ class AbstractNode():
 	def SetNodeType(self, node_type):
 		self.Type = node_type
 
+	# Overload
 	def ExitRoutine(self):
 		pass

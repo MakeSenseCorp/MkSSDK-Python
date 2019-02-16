@@ -80,7 +80,6 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 
 		self.ChangeState("IDLE")
 		self.LoadNodesOnMasterStart()
-		self.OnAceptNewConnectionCallback   = self.OnAceptNewConnectionHandler
 
 		thread.start_new_thread(self.PipeStdoutListener, ())
 
@@ -97,22 +96,27 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 	def GatewayDisConnectedEvent(self):
 		print "[DEBUG MASTER]: Gateway disconnected"
 
+	# TODO - Implement this method.
+	def GetNodeStatusRequestHandler(self, sock, packet):
+		pass
+
+	# Sending response to "get_node_info" request (mostly for proxy request)
 	def GetNodeInfoResponseHandler(self, sock, packet):
 		print "[DEBUG MASTER] GetNodeInfoResponseHandler"
 		source 		= packet["payload"]["header"]["source"]
 		destination = packet["payload"]["header"]["destination"]
 		command 	= packet["command"]
 		payload 	= packet["payload"]["data"]
+
+		# TODO - If this is a proxy response then trigger OnSlaveResponseCallback.
+		# 		 Otherwise this is a response to master request. (MUST HANDLE IT LOCALY)
+
 		if self.OnSlaveResponseCallback is not None:
 			self.OnSlaveResponseCallback(destination, source, command, payload)
-
-	def GetNodeInfoRequestHandler(self, sock, packet):
-		pass
 
 	def GetNodeStatusRequestHandler(self, sock, packet):
 		pass
 		
-	
 	def GetNodeStatusResponseHandler(self, sock, packet):
 		pass
 	
@@ -122,7 +126,8 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 		source 		= packet["header"]["source"]
 		data 		= packet["data"]["payload"]
 		command 	= packet["data"]["header"]["command"]
-		node 		= self.GetSlaveNode(destination)
+
+		node = self.GetSlaveNode(destination)
 		if node is not None:
 			msg = self.Commands.ProxyRequest(destination, source, command, data)
 			node.Socket.send(msg)
@@ -250,39 +255,41 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 		payload = self.Commands.GetMasterInfoResponse(self.UUID, self.MasterHostName, nodes)
 		sock.send(payload)
 
+	def HandlerRouter_Request(self, sock, json_data):
+		print "[MasterNode] HandlerRouter_Request"
+		command = json_data['command']
+		# TODO - IF command type is not in list call unknown callback in user code.
+		if command in self.RequestHandlers:
+			self.RequestHandlers[command](sock, json_data)
+
+	def HandlerRouter_Response(self, sock, json_data):
+		print "[MasterNode] HandlerRouter_Response"
+		command = json_data['command']
+		# TODO - IF command type is not in list call unknown callback in user code.
+		if command in self.ResponseHandlers:
+			self.ResponseHandlers[command](sock, json_data)
+
+	def HandlerRouter_Proxy(self, sock, json_data):
+		print "[MasterNode] HandlerRouter_ProxyResponse"
+		command 	= json_data['command']
+		source 		= json_data["payload"]["header"]["source"]
+		destination = json_data["payload"]["header"]["destination"]
+		payload 	= json_data["payload"]["data"]
+
+		if self.OnSlaveResponseCallback is not None:
+			self.OnSlaveResponseCallback(destination, source, command, payload)
+
+	# Description - Handling input date from local server.
 	def HandlerRouter(self, sock, data):
 		jsonData 	= json.loads(data)
-		command 	= jsonData['command']
 		direction 	= jsonData['direction']
 
-		# TODO - IF command type is not in list call unknown callback in user code.
 		if "response" == direction:
-			if command in self.ResponseHandlers:
-				self.ResponseHandlers[command](sock, jsonData)
+			self.HandlerRouter_Response(sock, jsonData)
 		elif "request" == direction:
-			if command in self.RequestHandlers:
-				self.RequestHandlers[command](sock, jsonData)
-		elif "proxy_request" == direction:
-			if command in self.RequestHandlers:
-				self.RequestHandlers[command](sock, jsonData)
-			else:
-				source 		= jsonData["payload"]["header"]["source"]
-				destination = jsonData["payload"]["header"]["destination"]
-				payload 	= jsonData["payload"]["data"]
-				if self.OnSlaveResponseCallback is not None:
-					self.OnSlaveResponseCallback(destination, source, command, payload)
-		elif "proxy_response" == direction:
-			print "DEBUG #1"
-			if command in self.ResponseHandlers:
-				self.ResponseHandlers[command](sock, jsonData)
-			else:
-				print "DEBUG #2"
-				source 		= jsonData["payload"]["header"]["source"]
-				destination = jsonData["payload"]["header"]["destination"]
-				payload 	= jsonData["payload"]["data"]
-				print "DEBUG #3"
-				if self.OnSlaveResponseCallback is not None:
-					self.OnSlaveResponseCallback(destination, source, command, payload)
+			self.HandlerRouter_Request(sock, jsonData)
+		elif direction in ["proxy_request", "proxy_response"]:
+			self.HandlerRouter_Proxy(sock, jsonData)
 
 	def NodeDisconnectHandler(self, sock):
 		print "NodeDisconnectHandler"
@@ -316,9 +323,6 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 
 				self.LocalSlaveList.remove(slave)
 				continue
-
-	def OnAceptNewConnectionHandler(self, conn):
-		pass
 
 	def GetSlaveNode(self, uuid):
 		for item in self.LocalSlaveList:

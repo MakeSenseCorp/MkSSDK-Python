@@ -145,10 +145,6 @@ class ApplicationNode(MkSAbstractNode.AbstractNode):
 			# Search network.
 			self.SearchForMasters()
 
-	# Only used for socket listening.
-	def NodeConnectHandler(self, conn, addr):
-		pass
-
 	def HandlerRouter(self, sock, data):
 		jsonData 	= json.loads(data)
 		command 	= jsonData['command']
