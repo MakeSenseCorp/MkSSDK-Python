@@ -15,6 +15,39 @@ from mksdk import MkSAbstractNode
 from mksdk import MkSLocalNodesCommands
 from mksdk import MkSShellExecutor
 
+class MachineInformation():
+	def __init__(self):
+		self.Terminal	= MkSShellExecutor.ShellExecutor()
+		self.Json 		= {
+			"cpu": {
+				"arch": "N/A"
+			},
+			"hdd": {
+				"capacity_ratio": "N/A"
+			},
+			"ram": {
+				"capacity_ratio": "N/A"
+			},
+			"sensors": {
+				"temp": "N/A",
+				"freq": "N/A"
+			},
+			"network": {
+				"ip": "N/A"
+			}
+		}
+
+		thread.start_new_thread(self.Worker, ())
+
+	def Worker(self):
+		while True:
+			if MkSGlobals.OS_TYPE in ["linux", "linux2"]:
+				self.Json["sensors"]["temp"] = str(self.Terminal.ExecuteCommand("cat /sys/devices/virtual/thermal/thermal_zone0/temp"))
+			time.sleep(5)
+
+	def GetInfo(self):
+		return self.Json
+
 class LocalPipe():
 	def __init__(self, uuid, pipe):
 		self.Uuid 	= uuid
@@ -53,6 +86,7 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 		self.File 							= MkSFile.File()
 		self.Commands 						= MkSLocalNodesCommands.LocalNodeCommands()
 		self.Terminal 						= MkSShellExecutor.ShellExecutor()
+		self.MachineInfo 					= MachineInformation()
 		self.PortsForClients				= [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32]
 		self.MasterHostName					= socket.gethostname()
 		self.MasterVersion					= "1.0.1"
@@ -82,6 +116,157 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 		self.LoadNodesOnMasterStart()
 
 		thread.start_new_thread(self.PipeStdoutListener, ())
+
+		# UI RestAPI
+		self.UI.AddEndpoint("/get/node_list/<key>", 				"get_node_list", 				self.GetNodeListHandler)
+		self.UI.AddEndpoint("/get/node_list_by_type/<key>", 		"get_node_list_by_type", 		self.GetNodeListByTypeHandler, 			method=['POST'])
+		self.UI.AddEndpoint("/set/node_action/<key>", 				"set_node_action", 				self.SetNodeActionHandler, 				method=['POST'])
+		self.UI.AddEndpoint("/get/node_shell_cmd/<key>", 			"get_node_shell_cmd", 			self.GetNodeShellCommandHandler, 		method=['POST'])
+		self.UI.AddEndpoint("/get/node_config_info/<key>", 			"get_node_config_info", 		self.GetNodeConfigInfoHandler)
+		self.UI.AddEndpoint("/get/app_list/<key>", 					"get_app_list", 				self.GetApplicationListHandler)
+		self.UI.AddEndpoint("/get/app_html/<key>", 					"get_app_html",					self.GetApplicationHTMLHandler, 		method=['POST'])
+		self.UI.AddEndpoint("/get/app_js/<key>", 					"get_app_js", 					self.GetApplicationJavaScriptHandler, 	method=['POST'])
+		self.UI.AddEndpoint("/generic/node_get_request/<key>", 		"generic_node_get_request", 	self.GenericNodeGETRequestHandler, 		method=['POST'])
+
+	"""
+	Local Face RESP API methods
+	"""
+	def GetNodeListHandler(self, key):
+		if "ykiveish" in key:
+			response = "{\"response\":\"OK\",\"payload\":{\"list\":["
+			for idx, item in enumerate(self.GetInstalledNodes()):
+				response += "{\"uuid\":\"" + str(item.UUID) + "\",\"type\":\"" + str(item.Type) + "\",\"ip\":\"" + str(item.IP) + "\",\"port\":" + str(item.Port) + ",\"widget_port\":" + str(item.Port - 10000) + ",\"status\":\"" + str(item.Status) + "\"},"
+			response = response[:-1] + "]}}"
+			return jsonify(response)
+		else:
+			return ""
+
+	def GetNodeListByTypeHandler(self, key):
+		fields = [k for k in request.form]
+		values = [request.form[k] for k in request.form]
+
+		req   = request.form["request"]
+		data  = json.loads(request.form["json"])
+
+		if "ykiveish" in key:
+			response = "{\"response\":\"OK\",\"payload\":{\"list\":["
+			for idx, item in enumerate(self.GetInstalledNodes()):
+				if item.Type in data["types"]:
+					response += "{\"uuid\":\"" + str(item.UUID) + "\",\"type\":\"" + str(item.Type) + "\",\"ip\":\"" + str(item.IP) + "\",\"port\":" + str(item.Port) + ",\"widget_port\":" + str(item.Port - 10000) + ",\"status\":\"" + str(item.Status) + "\"},"
+			response = response[:-1] + "]}}"
+			return jsonify(response)
+		else:
+			return ""
+
+	def SetNodeActionHandler(self, key):
+		fields = [k for k in request.form]
+		values = [request.form[k] for k in request.form]
+
+		req   = request.form["request"]
+		data  = json.loads(request.form["json"])
+
+		action = data["action"]
+		uuid = data["uuid"]
+		if action in "Stop":
+			self.ExitRemoteNode(uuid)
+		elif action in "Start":
+			self.StartRemoteNode(uuid)
+		elif action in "shell":
+			shell = self.GetShellScreen(uuid)
+			return "{\"response\":\"OK\",\"shell\":" + str(json.dumps(shell)) + "}"
+
+		# Send response
+		return "{\"response\":\"OK\"}"
+
+	def GetNodeShellCommandHandler(self, key):
+		fields = [k for k in request.form]
+		values = [request.form[k] for k in request.form]
+
+		req   = request.form["request"]
+		data  = json.loads(request.form["json"])
+
+		shell = self.Terminal.ExecuteCommand(data["cmd"])
+		rows = shell.split("\n")
+
+		for idx, item in enumerate(rows):
+			rows[idx] = "\"" + item + "\""
+		
+		return "{\"response\":\"OK\",\"shell\":" + str(json.dumps(rows)) + "}"
+
+	def GetNodeConfigInfoHandler(self, key):
+		return str(json.dumps(self.MachineInfo.GetInfo()))
+
+	def GetApplicationListHandler(self, key):
+		jsonCxt = self.InstalledApps
+		if (jsonCxt is not "" and jsonCxt is not None):
+			apps 	= jsonCxt["installed"]
+
+			for item in apps:
+				if MkSGlobals.OS_TYPE in ["linux", "linux2"]:
+					image = self.File.LoadContent(item["path"] + "/app.png")
+				elif MkSGlobals.OS_TYPE == "win32":
+					image = self.File.LoadContent(item["path"] + "\\app.png")
+				item["image"] = image.encode('base64')
+
+			print str(json.dumps(apps))
+			return "{\"response\":\"OK\",\"apps\":" + str(json.dumps(apps)) + "}"
+		return "{\"response\":\"FAILED\"}"
+
+	def GetApplicationHTMLHandler(self, key):
+		fields = [k for k in request.form]
+		values = [request.form[k] for k in request.form]
+
+		req   = request.form["request"]
+		data  = json.loads(request.form["json"])
+
+		jsonCxt = self.InstalledApps
+		apps 	= jsonCxt["installed"]
+		html = ""
+		for item in apps:
+			if str(item["id"]) == str(data["id"]):
+				html = self.File.LoadContent(item["path"] + "/app.html")
+				return html
+
+		return html
+
+	def GetApplicationJavaScriptHandler(self, key):
+		fields = [k for k in request.form]
+		values = [request.form[k] for k in request.form]
+
+		req   = request.form["request"]
+		data  = json.loads(request.form["json"])
+
+		jsonCxt = self.InstalledApps
+		apps 	= jsonCxt["installed"]
+		js = ""
+		for item in apps:
+			if str(item["id"]) == str(data["id"]):
+				js = self.File.LoadContent(item["path"] + "/app.js")
+				js = js.replace("[IPANDPORT]", str(self.MyLocalIP) + ":8080")
+				return js
+
+		return js
+
+	def GenericNodeGETRequestHandler(self, key):
+		fields = [k for k in request.form]
+		values = [request.form[k] for k in request.form]
+
+		req   = request.form["request"]
+		data  = json.loads(request.form["json"])
+
+		requestUrl = data["url"]
+		try:
+			req = urllib2.urlopen(requestUrl, timeout=1)
+			if req != None:
+				data = req.read()
+				return data
+			else:
+				return ""
+		except:
+			return ""
+	"""
+	Local Face RESP API methods
+	"""
 
 	def GatewayConnectedEvent(self):
 		print "[DEBUG MASTER]: GatewayConnectedEvent"

@@ -6,7 +6,40 @@ import thread
 import threading
 import socket, select
 
+from flask import Flask, render_template, jsonify, Response, request
+import logging
+
 from mksdk import MkSUtils
+
+class EndpointAction(object):
+	def __init__(self, page, args):
+		self.Page = page + ".html"
+		self.DataToJS = args
+
+	def __call__(self, *args):
+		return render_template(self.Page, data=self.DataToJS)
+
+class WebInterface():
+	def __init__(self, name, port):
+		self.App = Flask(name)
+		self.Port = port
+
+		#self.Log = logging.getLogger('werkzeug')
+		#self.Log.disabled = True
+		#self.App.logger.disabled = True
+
+	def Worker(self):
+		print ("[AbstractNode]# Start FLASK HTTP server")
+		self.App.run(host='0.0.0.0', port=self.Port)
+
+	def Run(self):
+		thread.start_new_thread(self.Worker, ())
+
+	def AddEndpoint(self, endpoint=None, endpoint_name=None, handler=None, args=None, method=['GET']):
+		if handler is None:
+			self.App.add_url_rule(endpoint, endpoint_name, EndpointAction(endpoint_name, args))
+		else:
+			self.App.add_url_rule(endpoint, endpoint_name, handler, methods=method)
 
 class LocalNode():
 	def __init__(self, ip, port, uuid, node_type, sock):
@@ -42,31 +75,49 @@ class AbstractNode():
 		self.OnSlaveNodeDisconnectedCallback		= None
 		self.OnSlaveResponseCallback				= None
 		# Network
-		self.ServerSocket 						= None
-		self.ServerAdderss						= None
-		self.RecievingSockets					= []
-		self.SendingSockets						= []
-		self.Connections 						= []
-		self.OpenSocketsCounter					= 0
+		self.ServerSocket 							= None
+		self.ServerAdderss							= None
+		self.RecievingSockets						= []
+		self.SendingSockets							= []
+		self.Connections 							= []
+		self.OpenSocketsCounter						= 0
 		# Flags
-		self.LocalSocketServerRun				= False
-		self.IsListenerEnabled 					= False
+		self.LocalSocketServerRun					= False
+		self.IsListenerEnabled 						= False
 		# State machine
-		self.States 							= None
-		self.CurrentState						= ''
+		self.States 								= None
+		self.CurrentState							= ''
 		# Locks and Events
-		self.ExitLocalServerEvent				= threading.Event()
+		self.ExitLocalServerEvent					= threading.Event()
 		# Initialization methods
-		self.MyLocalIP 							= MkSUtils.GetLocalIP()
+		self.MyLocalIP 								= MkSUtils.GetLocalIP()
 		# Handlers
-		self.ServerNodeRequestHandlers			= {
-			'get_node_info': 					self.GetNodeInfoRequestHandler,
-			'get_node_status': 					self.GetNodeStatusRequestHandler
+		self.ServerNodeRequestHandlers				= {
+			'get_node_info': 						self.GetNodeInfoRequestHandler,
+			'get_node_status': 						self.GetNodeStatusRequestHandler
 		}
-		self.ServerNodeResponseHandlers			= {
-			'get_node_info': 					self.GetNodeInfoResponseHandler,
-			'get_node_status': 					self.GetNodeStatusResponseHandler
+		self.ServerNodeResponseHandlers				= {
+			'get_node_info': 						self.GetNodeInfoResponseHandler,
+			'get_node_status': 						self.GetNodeStatusResponseHandler
 		}
+		# LocalFace UI
+		self.UI 									= WebInterface("Context", 8080)
+		# Data for the pages.
+		jsonUIData = {
+			'ip': str(self.MyLocalIP),
+			'port': str(8080)
+		}
+		data = json.dumps(jsonUIData)
+		# UI Pages
+		self.UI.AddEndpoint("/", 			"index", 		None, 		data)
+		self.UI.AddEndpoint("/nodes", 		"nodes", 		None, 		data)
+		self.UI.AddEndpoint("/config", 		"config", 		None, 		data)
+		self.UI.AddEndpoint("/app", 		"app", 			None, 		data)
+		self.UI.AddEndpoint("/mobile", 		"mobile", 		None, 		data)
+		self.UI.AddEndpoint("/mobile/app", 	"mobile/app", 	None, 		data)
+		# UI RestAPI
+		self.UI.AddEndpoint("/test/<key>", 						"test", 						self.TestWithKeyHandler)
+		self.UI.AddEndpoint("/get/socket_list/<key>", 			"get_socket_list", 				self.GetConnectedSocketsListHandler)
 
 	# Overload
 	def GatewayConnectedEvent(self):
@@ -104,11 +155,31 @@ class AbstractNode():
 	def GetNodeStatusResponseHandler(self, sock, packet):
 		pass
 
+	# Overload
+	def ExitRoutine(self):
+		pass
+
 	def SetSates (self, states):
 		self.States = states
 
 	def ChangeState(self, state):
 		self.CurrentState = state
+
+	# Overload
+	def HandlerRouter(self, sock, data):
+		pass
+
+	# Overload
+	def NodeConnectHandler(self, conn, addr):
+		pass
+
+	# Overload
+	def NodeDisconnectHandler(self, sock):
+		pass
+
+	# Overload
+	def NodeMasterAvailable(self, sock):
+		pass
 
 	# Overload
 	def Start(self):
@@ -118,6 +189,25 @@ class AbstractNode():
 	def Stop(self):
 		pass
 
+	def AppendFaceRestTable(self, page, args):
+		self.UI.AddEndpoint(page, args)
+
+	def TestWithKeyHandler(self, key):
+		if "ykiveish" in key:
+			return "{\"response\":\"OK\"}"
+		else:
+			return ""
+
+	def GetConnectedSocketsListHandler(self, key):
+		if "ykiveish" in key:
+			response = "{\"response\":\"OK\",\"payload\":{\"list\":["
+			for idx, item in enumerate(self.Connections):
+				response += "{\"local_type\":\"" + str(item.LocalType) + "\",\"uuid\":\"" + str(item.UUID) + "\",\"ip\":\"" + str(item.IP) + "\",\"port\":" + str(item.Port) + ",\"type\":\"" + str(item.Type) + "\"},"
+			response = response[:-1] + "]}}"
+			return jsonify(response)
+		else:
+			return ""
+
 	def TickState(self):
 		self.Ticker += 1;
 		# State machine
@@ -125,22 +215,25 @@ class AbstractNode():
 		method()
 
 	def AppendConnection(self, sock, ip, port):
-		# print "[Node] Append connection, port", port
 		# Append to recieving data sockets.
 		self.RecievingSockets.append(sock)
 		# Append to list of all connections.
 		node = LocalNode(ip, port, "", "", sock)
 		self.Connections.append(node)
+		# Increment socket counter.
 		self.OpenSocketsCounter += self.OpenSocketsCounter
 		return node
 
 	def RemoveConnection(self, sock):
 		conn = self.GetConnection(sock)
 		if None is not conn:
-			# print "[Node] Remove connection, port", conn.Port
+			# Remove socket from list.
 			self.RecievingSockets.remove(conn.Socket)
+			# Close connection.
 			conn.Socket.close()
+			# Remove LocalNode from the list.
 			self.Connections.remove(conn)
+			# Deduce socket counter.
 			self.OpenSocketsCounter -= self.OpenSocketsCounter
 
 	def GetConnection(self, sock):
@@ -163,7 +256,7 @@ class AbstractNode():
 
 	def TryStartListener(self):
 		try:
-			print "[Node Server] Start listener..."
+			print "[AbstractNode] Start listener..."
 			self.ServerSocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 			self.ServerSocket.setblocking(0)
 
@@ -177,6 +270,10 @@ class AbstractNode():
 			self.ServerSocket.listen(32)
 			self.LocalSocketServerRun = True
 
+			# Run UI thread
+			self.UI.Run()
+
+			# 
 			if self.OnLocalServerListenerStartedCallback is not None:
 				self.OnLocalServerListenerStartedCallback(self.ServerSocket, self.MyLocalIP, self.ServerAdderss[1])
 
@@ -217,22 +314,6 @@ class AbstractNode():
 		except:
 			print "[AbstractNode] DataSocketInputHandler ERROR", sys.exc_info()[0]
 
-	# Overload
-	def HandlerRouter(self, sock, data):
-		pass
-
-	# Overload
-	def NodeConnectHandler(self, conn, addr):
-		pass
-
-	# Overload
-	def NodeDisconnectHandler(self, sock):
-		pass
-
-	# Overload
-	def NodeMasterAvailable(self, sock):
-		pass
-
 	def ConnectNodeSocket(self, ip_addr_port):
 		sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 		sock.settimeout(5)
@@ -241,7 +322,7 @@ class AbstractNode():
 			sock.connect(ip_addr_port)
 			return sock, True
 		except:
-			print "Could not connect server", ip_addr_port
+			print "[AbstractNode] Could not connect server", ip_addr_port
 			return None, False
 
 	def DisconnectNodeSocket(self, sock):
@@ -306,7 +387,7 @@ class AbstractNode():
 								data += chunk
 								dataLen = len(chunk)
 						except:
-							print "[Node Server] Recieve ERROR"
+							print "[AbstractNode] Recieve ERROR"
 						else:
 							if data:
 								# Each makesense packet should start from magic number "MKS"
@@ -317,7 +398,7 @@ class AbstractNode():
 										req = (data.split('\n'))[1]
 										self.DataSocketInputHandler(sock, req)
 								else:
-									print "[Node Server] Data Invalid"
+									print "[AbstractNode] Data Invalid"
 							else:
 								self.NodeDisconnectHandler(sock)
 								# Raise event for user
@@ -326,9 +407,9 @@ class AbstractNode():
 								self.RemoveConnection(sock)
 
 				for sock in exceptional:
-					print "[DEBUG] Socket Exceptional"
+					print "[AbstractNode] Socket Exceptional"
 			except:
-				print "[Node Server] Connection Close [ERROR]", sys.exc_info()[0]
+				print "[AbstractNode] Connection Close [ERROR]", sys.exc_info()[0]
 
 		# Clean all resorses before exit.
 		self.CleanAllSockets()
@@ -360,7 +441,6 @@ class AbstractNode():
 		ips = MkSUtils.FindLocalMasterNodes()
 		for ip in ips:
 			if self.GetNode(ip, 16999) is None:
-				# print "[Node] Found new master", ip
 				# Master not in list, can make connection
 				sock, status = self.ConnectNodeSocket((ip, 16999))
 				if True == status:
@@ -394,7 +474,3 @@ class AbstractNode():
 
 	def SetNodeType(self, node_type):
 		self.Type = node_type
-
-	# Overload
-	def ExitRoutine(self):
-		pass
