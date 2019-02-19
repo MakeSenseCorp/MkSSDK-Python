@@ -8,6 +8,11 @@ import threading
 import socket
 import subprocess
 from subprocess import call
+import urllib2
+import urllib
+
+from flask import Flask, render_template, jsonify, Response, request
+import logging
 
 import MkSGlobals
 from mksdk import MkSFile
@@ -117,17 +122,6 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 
 		thread.start_new_thread(self.PipeStdoutListener, ())
 
-		# UI RestAPI
-		self.UI.AddEndpoint("/get/node_list/<key>", 				"get_node_list", 				self.GetNodeListHandler)
-		self.UI.AddEndpoint("/get/node_list_by_type/<key>", 		"get_node_list_by_type", 		self.GetNodeListByTypeHandler, 			method=['POST'])
-		self.UI.AddEndpoint("/set/node_action/<key>", 				"set_node_action", 				self.SetNodeActionHandler, 				method=['POST'])
-		self.UI.AddEndpoint("/get/node_shell_cmd/<key>", 			"get_node_shell_cmd", 			self.GetNodeShellCommandHandler, 		method=['POST'])
-		self.UI.AddEndpoint("/get/node_config_info/<key>", 			"get_node_config_info", 		self.GetNodeConfigInfoHandler)
-		self.UI.AddEndpoint("/get/app_list/<key>", 					"get_app_list", 				self.GetApplicationListHandler)
-		self.UI.AddEndpoint("/get/app_html/<key>", 					"get_app_html",					self.GetApplicationHTMLHandler, 		method=['POST'])
-		self.UI.AddEndpoint("/get/app_js/<key>", 					"get_app_js", 					self.GetApplicationJavaScriptHandler, 	method=['POST'])
-		self.UI.AddEndpoint("/generic/node_get_request/<key>", 		"generic_node_get_request", 	self.GenericNodeGETRequestHandler, 		method=['POST'])
-
 	"""
 	Local Face RESP API methods
 	"""
@@ -142,6 +136,7 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 			return ""
 
 	def GetNodeListByTypeHandler(self, key):
+		print "[MasterNode]# GetNodeListByTypeHandler"
 		fields = [k for k in request.form]
 		values = [request.form[k] for k in request.form]
 
@@ -150,7 +145,7 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 
 		if "ykiveish" in key:
 			response = "{\"response\":\"OK\",\"payload\":{\"list\":["
-			for idx, item in enumerate(self.GetInstalledNodes()):
+			for idx, item in enumerate(self.InstalledNodes):
 				if item.Type in data["types"]:
 					response += "{\"uuid\":\"" + str(item.UUID) + "\",\"type\":\"" + str(item.Type) + "\",\"ip\":\"" + str(item.IP) + "\",\"port\":" + str(item.Port) + ",\"widget_port\":" + str(item.Port - 10000) + ",\"status\":\"" + str(item.Status) + "\"},"
 			response = response[:-1] + "]}}"
@@ -224,7 +219,10 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 		html = ""
 		for item in apps:
 			if str(item["id"]) == str(data["id"]):
-				html = self.File.LoadContent(item["path"] + "/app.html")
+				if MkSGlobals.OS_TYPE in ["linux", "linux2"]:
+					html = self.File.LoadContent(item["path"] + "/app.html")
+				elif MkSGlobals.OS_TYPE == "win32":
+					html = self.File.LoadContent(item["path"] + "\\app.html")
 				return html
 
 		return html
@@ -241,13 +239,18 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 		js = ""
 		for item in apps:
 			if str(item["id"]) == str(data["id"]):
-				js = self.File.LoadContent(item["path"] + "/app.js")
+				if MkSGlobals.OS_TYPE in ["linux", "linux2"]:
+					js = self.File.LoadContent(item["path"] + "/app.js")
+				elif MkSGlobals.OS_TYPE == "win32":
+					js = self.File.LoadContent(item["path"] + "\\app.js")
 				js = js.replace("[IPANDPORT]", str(self.MyLocalIP) + ":8080")
 				return js
 
 		return js
 
+	# Avoid CORS
 	def GenericNodeGETRequestHandler(self, key):
+		print "[MasterNode]# GenericNodeGETRequestHandler"
 		fields = [k for k in request.form]
 		values = [request.form[k] for k in request.form]
 
@@ -348,6 +351,18 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 		if (jsonInstalledAppsStr is not "" and jsonInstalledAppsStr is not None):
 			# Load installed applications
 			self.InstalledApps = json.loads(jsonInstalledAppsStr)
+
+		self.InitiateLocalServer(8080)
+		# UI RestAPI
+		self.UI.AddEndpoint("/get/node_list/<key>", 				"get_node_list", 				self.GetNodeListHandler)
+		self.UI.AddEndpoint("/get/node_list_by_type/<key>", 		"get_node_list_by_type", 		self.GetNodeListByTypeHandler, 			method=['POST'])
+		self.UI.AddEndpoint("/set/node_action/<key>", 				"set_node_action", 				self.SetNodeActionHandler, 				method=['POST'])
+		self.UI.AddEndpoint("/get/node_shell_cmd/<key>", 			"get_node_shell_cmd", 			self.GetNodeShellCommandHandler, 		method=['POST'])
+		self.UI.AddEndpoint("/get/node_config_info/<key>", 			"get_node_config_info", 		self.GetNodeConfigInfoHandler)
+		self.UI.AddEndpoint("/get/app_list/<key>", 					"get_app_list", 				self.GetApplicationListHandler)
+		self.UI.AddEndpoint("/get/app_html/<key>", 					"get_app_html",					self.GetApplicationHTMLHandler, 		method=['POST'])
+		self.UI.AddEndpoint("/get/app_js/<key>", 					"get_app_js", 					self.GetApplicationJavaScriptHandler, 	method=['POST'])
+		self.UI.AddEndpoint("/generic/node_get_request/<key>", 		"generic_node_get_request", 	self.GenericNodeGETRequestHandler, 		method=['POST'])
 
 	def StateIdle (self):
 		self.ServerAdderss = ('', 16999)
@@ -530,6 +545,7 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 					return
 
 	def GetShellScreen(self, uuid):
+		# print "[MasterNode]# GetShellScreen"
 		for item in self.Pipes:
 			if item.Uuid == uuid:
 				return item.ReadBuffer()

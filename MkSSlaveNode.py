@@ -7,6 +7,9 @@ import thread
 import threading
 import socket
 
+from flask import Flask, render_template, jsonify, Response, request
+import logging
+
 from mksdk import MkSFile
 from mksdk import MkSAbstractNode
 from mksdk import MkSLocalNodesCommands
@@ -106,6 +109,23 @@ class SlaveNode(MkSAbstractNode.AbstractNode):
 		pass
 	# ############
 
+	"""
+	Local Face RESP API methods
+	"""
+	def GetNodeWidgetHandler(self, key):
+		print "[SlaveNode]# GetNodeWidgetHandler", self.Pwd + "static/js/node/widget.js"
+		objFile = MkSFile.File()
+		js = objFile.LoadStateFromFile("static/js/node/widget.js")
+		return js
+
+	def GetNodeConfigHandler(self, key):
+		print "[SlaveNode]# GetNodeConfigHandler", self.Pwd + "static/js/node/widget_config.js"
+		objFile = MkSFile.File()
+		js = objFile.LoadStateFromFile("static/js/node/widget_config.js")
+		return js
+	"""
+	Local Face RESP API methods
+	"""
 	def SendSensorInfoChange(self, sensors):
 		json = self.Commands.GenerateJsonProxyRequest(self.UUID, "WEBFACE", "get_sensor_info", {})
 		msg  = self.Commands.ProxyResponse(json, sensors)
@@ -129,6 +149,15 @@ class SlaveNode(MkSAbstractNode.AbstractNode):
 			self.CleanMasterList()
 		# Find all master nodes on the network.
 		return self.FindMasters()
+
+	def PreUILoaderHandler(self):
+		print "[SlaveNode] PreUILoaderHandler"
+		port = 8000 + (self.ServerAdderss[1] - 10000)
+		self.InitiateLocalServer(port)
+		# UI RestAPI
+		self.UI.AddEndpoint("/get/node_widget/<key>",		"get_node_widget",	self.GetNodeWidgetHandler)
+		self.UI.AddEndpoint("/get/node_config/<key>",		"get_node_config",	self.GetNodeConfigHandler)
+
 
 	def ConnectMaster(self):
 		sock, status = self.ConnectNodeSocket((self.MyLocalIP, 16999))

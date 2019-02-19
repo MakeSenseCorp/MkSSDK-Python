@@ -87,6 +87,7 @@ class AbstractNode():
 		# State machine
 		self.States 								= None
 		self.CurrentState							= ''
+		self.Pwd									= os.getcwd()
 		# Locks and Events
 		self.ExitLocalServerEvent					= threading.Event()
 		# Initialization methods
@@ -101,23 +102,7 @@ class AbstractNode():
 			'get_node_status': 						self.GetNodeStatusResponseHandler
 		}
 		# LocalFace UI
-		self.UI 									= WebInterface("Context", 8080)
-		# Data for the pages.
-		jsonUIData = {
-			'ip': str(self.MyLocalIP),
-			'port': str(8080)
-		}
-		data = json.dumps(jsonUIData)
-		# UI Pages
-		self.UI.AddEndpoint("/", 			"index", 		None, 		data)
-		self.UI.AddEndpoint("/nodes", 		"nodes", 		None, 		data)
-		self.UI.AddEndpoint("/config", 		"config", 		None, 		data)
-		self.UI.AddEndpoint("/app", 		"app", 			None, 		data)
-		self.UI.AddEndpoint("/mobile", 		"mobile", 		None, 		data)
-		self.UI.AddEndpoint("/mobile/app", 	"mobile/app", 	None, 		data)
-		# UI RestAPI
-		self.UI.AddEndpoint("/test/<key>", 						"test", 						self.TestWithKeyHandler)
-		self.UI.AddEndpoint("/get/socket_list/<key>", 			"get_socket_list", 				self.GetConnectedSocketsListHandler)
+		self.UI 									= None
 
 	# Overload
 	def GatewayConnectedEvent(self):
@@ -182,6 +167,10 @@ class AbstractNode():
 		pass
 
 	# Overload
+	def PreUILoaderHandler(self):
+		pass
+
+	# Overload
 	def Start(self):
 		pass
 
@@ -189,8 +178,28 @@ class AbstractNode():
 	def Stop(self):
 		pass
 
-	def AppendFaceRestTable(self, page, args):
-		self.UI.AddEndpoint(page, args)
+	def InitiateLocalServer(self, port):
+		self.UI 	= WebInterface("Context", port)
+		# Data for the pages.
+		jsonUIData 	= {
+			'ip': str(self.MyLocalIP),
+			'port': str(port)
+		}
+		data = json.dumps(jsonUIData)
+		# UI Pages
+		self.UI.AddEndpoint("/", 			"index", 		None, 		data)
+		self.UI.AddEndpoint("/nodes", 		"nodes", 		None, 		data)
+		self.UI.AddEndpoint("/config", 		"config", 		None, 		data)
+		self.UI.AddEndpoint("/app", 		"app", 			None, 		data)
+		self.UI.AddEndpoint("/mobile", 		"mobile", 		None, 		data)
+		self.UI.AddEndpoint("/mobile/app", 	"mobile/app", 	None, 		data)
+		# UI RestAPI
+		self.UI.AddEndpoint("/test/<key>", 						"test", 						self.TestWithKeyHandler)
+		self.UI.AddEndpoint("/get/socket_list/<key>", 			"get_socket_list", 				self.GetConnectedSocketsListHandler)
+
+	def AppendFaceRestTable(self, endpoint=None, endpoint_name=None, handler=None, args=None, method=['GET']):
+		print "[AbstractNode]# AppendFaceRestTable"
+		self.UI.AddEndpoint(endpoint, endpoint_name, handler, args, method)
 
 	def TestWithKeyHandler(self, key):
 		if "ykiveish" in key:
@@ -270,12 +279,19 @@ class AbstractNode():
 			self.ServerSocket.listen(32)
 			self.LocalSocketServerRun = True
 
-			# Run UI thread
-			self.UI.Run()
+			# Run preloader for UI interface
+			if self.UI is None:
+				self.PreUILoaderHandler()
 
-			# 
+			# Let know registered method about local server start.
 			if self.OnLocalServerListenerStartedCallback is not None:
 				self.OnLocalServerListenerStartedCallback(self.ServerSocket, self.MyLocalIP, self.ServerAdderss[1])
+
+			# Run UI thread
+			if self.UI is None:
+				print "[AbstractNode]# Local server is NULL (WARNNING)"
+			else:
+				self.UI.Run()
 
 			return True
 		except:
