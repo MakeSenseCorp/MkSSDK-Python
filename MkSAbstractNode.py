@@ -28,12 +28,12 @@ class WebInterface():
 		#self.Log.disabled = True
 		#self.App.logger.disabled = True
 
-	def Worker(self):
-		print ("[AbstractNode]# Start FLASK HTTP server")
+	def WebInterfaceWorker_Thread(self):
+		print ("[AbstractNode]# WebInterfaceWorker_Thread")
 		self.App.run(host='0.0.0.0', port=self.Port)
 
 	def Run(self):
-		thread.start_new_thread(self.Worker, ())
+		thread.start_new_thread(self.WebInterfaceWorker_Thread, ())
 
 	def AddEndpoint(self, endpoint=None, endpoint_name=None, handler=None, args=None, method=['GET']):
 		if handler is None:

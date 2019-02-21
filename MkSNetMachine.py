@@ -108,7 +108,7 @@ class Network ():
 		self.State = "CONN"
 		self.OnConnectionCallback()
 
-	def WSWorker (self):
+	def NodeWebfaceSocket_Thread (self):
 		self.WSConnection.run_forever()
 
 	def Disconnect(self):
@@ -126,29 +126,9 @@ class Network ():
 		self.WSConnection.on_open 		= self.WSConnection_OnOpen_Handler
 		self.WSConnection.header		= {'uuid':self.DeviceUUID, 'node_type':str(self.Type), 'payload':str(payload), 'key':key}
 		print self.WSConnection.header
-		thread.start_new_thread(self.WSWorker, ())
+		thread.start_new_thread(self.NodeWebfaceSocket_Thread, ())
 
 		return True
-
-	def Connect (self, username, password, payload):
-		self.UserName = username
-		self.Password = password
-
-		# TODO 	- Add retry counter.
-		#		- Handle socket error [No handlers could be found for logger "websocket"]
-		ret = self.Authenticate(username, password)
-		if ret == True:
-			websocket.enableTrace(False)
-			self.WSConnection 				= websocket.WebSocketApp(self.WSServerUri)
-			self.WSConnection.on_message 	= self.WSConnection_OnMessage_Handler
-			self.WSConnection.on_error 		= self.WSConnection_OnError_Handler
-			self.WSConnection.on_close 		= self.WSConnection_OnClose_Handler
-			self.WSConnection.on_open 		= self.WSConnection_OnOpen_Handler
-			self.WSConnection.header		= {'uuid':self.DeviceUUID, 'node_type':self.Type, 'payload':str(payload), 'key':self.UserDevKey}
-			thread.start_new_thread(self.WSWorker, ())
-			return True
-
-		return False
 
 	def SetDeviceUUID (self, uuid):
 		self.DeviceUUID = uuid;

@@ -42,9 +42,9 @@ class MachineInformation():
 			}
 		}
 
-		thread.start_new_thread(self.Worker, ())
+		thread.start_new_thread(self.MachineInformationWorker_Thread, ())
 
-	def Worker(self):
+	def MachineInformationWorker_Thread(self):
 		while True:
 			if MkSGlobals.OS_TYPE in ["linux", "linux2"]:
 				self.Json["sensors"]["temp"] = str(self.Terminal.ExecuteCommand("cat /sys/devices/virtual/thermal/thermal_zone0/temp"))
@@ -120,7 +120,7 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 		self.ChangeState("IDLE")
 		self.LoadNodesOnMasterStart()
 
-		thread.start_new_thread(self.PipeStdoutListener, ())
+		thread.start_new_thread(self.PipeStdoutListener_Thread, ())
 
 	"""
 	Local Face RESP API methods
@@ -550,7 +550,7 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 			if item.Uuid == uuid:
 				return item.ReadBuffer()
 
-	def PipeStdoutListener(self):
+	def PipeStdoutListener_Thread(self):
 		self.PipeStdoutRun = True
 		while True == self.PipeStdoutRun:
 			for item in self.Pipes:

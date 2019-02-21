@@ -70,7 +70,6 @@ class Node():
 		self.OnDeviceConnected 				= None
 		# Locks and Events
 		self.NetworkAccessTickLock 			= threading.Lock()
-		self.ConnectorLock			 		= threading.Lock()
 		self.ExitEvent 						= threading.Event()
 		self.ExitLocalServerEvent			= threading.Event()
 		# Debug
@@ -367,39 +366,6 @@ class Node():
 
 	def SaveBasicSensorValueToFile (self, uuid, value):
 		self.AppendToFile(uuid + ".json", "{\"ts\":" + str(time.time()) + ",\"v\":" + str(value) + "},")
-	
-	def LoadBasicSensorValuesFromFileByRowNumber (self, uuid, rows_number):
-		buf_size = 8192
-		data_set = "["
-		data_set_index = 0
-		with open(uuid + ".json") as fh:
-			segment = None
-			offset = 0
-			fh.seek(0, os.SEEK_END)
-			file_size = remaining_size = fh.tell()
-			while remaining_size > 0:
-				offset = min(file_size, offset + buf_size)
-				fh.seek(file_size - offset)
-				buffer = fh.read(min(remaining_size, buf_size))
-				remaining_size -= buf_size
-				lines = buffer.split('\n')
-				if segment is not None:
-					if buffer[-1] is not '\n':
-						lines[-1] += segment
-					else:
-						print "1" + segment
-				segment = lines[0]
-				for index in range(len(lines) - 1, 0, -1):
-					if len(lines[index]):
-						data_set_index += 1
-						data_set += lines[index]
-						if data_set_index == rows_number:
-							data_set = data_set[:-1] + "]"
-							return data_set
-			if segment is not None:
-				data_set += segment
-		data_set = data_set[:-1] + "]"
-		return data_set
 
 	def GetDeviceConfig (self):
 		jsonConfigStr = self.File.LoadStateFromFile("config.json")
@@ -409,41 +375,6 @@ class Node():
 		except:
 			print "Error: [GetDeviceConfig] Wrong config.json format"
 			return ""
-	
-	def GetSensorHWValue (self, id):
-		"""Get HW device sensor value"""
-		self.ConnectorLock.acquire()
-		error, device_id, value = self.Connector.GetSensor(id)
-		if error == True:
-			error, device_id, value = self.Connector.GetSensor(id)
-			if error == True:
-				self.ConnectorLock.release()
-				return True, 0, 0
-		self.ConnectorLock.release()
-		return False, device_id, value
-
-	def SetSensorHWValue (self, id, value):
-		"""Set HW device with sensor value"""
-		self.ConnectorLock.acquire()
-		data = self.Connector.SetSensor(id, value)
-		self.ConnectorLock.release()
-		return data
-
-	def NodeWorker (self, callback):
-		self.WorkingCallback = callback
-		self.State = "CONNECT_DEVICE"
-		
-		# We need to know if this worker is running for waiting mechanizm
-		self.IsNodeMainEnabled = True
-		while self.IsRunnig:
-			time.sleep(0.5)
-			self.Method = self.States[self.State]
-			self.Method()
-		
-		print "[DEBUG::Node] Exit NodeWork"
-		if True == self.IsHardwareBased:
-			self.Connector.Disconnect()
-		self.ExitEvent.set()
 
 	def SetWebServiceStatus(self, is_enabled):
 		self.IsNodeWSServiceEnabled = is_enabled
@@ -461,12 +392,13 @@ class Node():
 		self.WorkingCallback = callback
 		self.ExitEvent.clear()
 		self.ExitLocalServerEvent.clear()
+		self.State = "CONNECT_DEVICE"
+
+		# We need to know if this worker is running for waiting mechanizm
+		self.IsNodeMainEnabled = True
 
 		# Read sytem configuration
 		self.LoadSystemConfig()
-
-		# Start Node worker thread
-		thread.start_new_thread(self.NodeWorker, (callback, ))
 
 		if True == self.IsNodeLocalServerEnabled:
 			self.LocalServiceNode.SetNodeUUID(self.UUID)
@@ -475,8 +407,16 @@ class Node():
 
 		# Waiting here till SIGNAL from OS will come.
 		while self.IsRunnig:
+			self.Method = self.States[self.State]
+			self.Method()
+
 			self.WorkingCallback()
 			time.sleep(0.5)
+
+		print "[DEBUG::Node] Exit NodeWork"
+		if True == self.IsHardwareBased:
+			self.Connector.Disconnect()
+		self.ExitEvent.set()
 		
 		if True == self.IsNodeMainEnabled:
 			self.ExitEvent.wait()
