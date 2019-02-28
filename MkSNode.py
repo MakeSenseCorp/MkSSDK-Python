@@ -108,28 +108,28 @@ class Node():
 
 			content = self.GetFile(fileName, uiType)
 			payload = { 'file_content': content }
-			message = self.Network.BuildMessage("DIRECT", source, self.UUID, "get_file", payload)
+			message = self.Network.BuildMessage("DIRECT", source, self.UUID, "get_file", payload, {})
 			self.Network.SendWebSocket(message)
 
 	def OnNewNodeHandler(self, node):
 		if self.Network.GetNetworkState() is "CONN":
 			payload = { 'node': node }
 			# Send node connected event to gateway
-			message = self.Network.BuildMessage("MASTER", "GATEWAY", self.UUID, "node_connected", payload)
+			message = self.Network.BuildMessage("MASTER", "GATEWAY", self.UUID, "node_connected", payload, {})
 			self.Network.SendWebSocket(message)
 
 	def OnSlaveNodeDisconnectedHandler(self, node):
 		if self.Network.GetNetworkState() is "CONN":
 			payload = { 'node': node }
 			# Send node disconnected event to gateway
-			message = self.Network.BuildMessage("MASTER", "GATEWAY", self.UUID, "node_disconnected", payload)
+			message = self.Network.BuildMessage("MASTER", "GATEWAY", self.UUID, "node_disconnected", payload, {})
 			self.Network.SendWebSocket(message)
 
 	# Sending response to "get_node_info" request (mostly for proxy request)
-	def OnSlaveResponseHandler(self, dest, src, command, payload):
+	def OnSlaveResponseHandler(self, dest, src, command, payload, piggy):
 		print "[DEBUG MASTER] OnSlaveResponseHandler"
 		if self.Network.GetNetworkState() is "CONN":
-			message = self.Network.BuildMessage("DIRECT", dest, src, command, payload)
+			message = self.Network.BuildMessage("DIRECT", dest, src, command, payload, piggy)
 			self.Network.SendWebSocket(message)
 
 	def OnGetNodeInfoRequestHandler(self, sock, packet):
@@ -270,13 +270,12 @@ class Node():
 		self.LocalServiceNode.GatewayConnectedEvent()
 		self.OnWSConnected()
 
-	def GetNodeInfoHandler(self, message_type, source, data):
-		print "GetNodeInfoHandler", self.NodeInfo
+	def GetNodeInfoHandler(self, json):
+		print "GetNodeInfoHandler"
 
 		if self.Network.GetNetworkState() is "CONN":
 			payload = self.NodeInfo
-			# Send node connected event to gateway
-			message = self.Network.BuildMessage(message_type, source, self.UUID, "get_node_info", payload)
+			message = self.Network.BuildResponse(json, payload)
 			self.Network.SendWebSocket(message)
 
 		#if True == self.SystemLoaded:
@@ -314,7 +313,7 @@ class Node():
 				data = self.Network.GetDataFromJson(json)
 				# If commands located in the list below, do not forward this message and handle it in this context.
 				if command in ["get_node_info", "get_node_status", "get_file"]:
-					self.Handlers[command](messageType, source, data)
+					self.Handlers[command](json)
 				else:
 					self.OnWSDataArrived(messageType, source, data)
 			else:
@@ -328,7 +327,7 @@ class Node():
 		return subscriber_uuid in self.RegisteredNodes
 	
 	def SendMessage (self, message_type, destination, command, payload):
-		message = self.Network.BuildMessage(message_type, destination, command, payload)
+		message = self.Network.BuildMessage(message_type, destination, command, payload, {})
 		print "[DEBUG::Node Network(Out)] " + message
 		ret = self.Network.SendMessage(message)
 		if False == ret:

@@ -142,13 +142,26 @@ class Network ():
 	def SetWsUrl (self, url):
 		self.WSServerUri = url;
 
-	def SendWebSocket(self, payload):
-		self.WSConnection.send(payload)
+	def SendWebSocket(self, packet):
+		if packet is not "" and packet is not None:
+			self.WSConnection.send(packet)
+		else:
+			print "[Node]# Sending packet to Gateway FAILED"
 
 	def SendKeepAlive(self):
 		self.WSConnection.send("{\"packet_type\":\"keepalive\"}")
 
-	def BuildMessage (self, messageType, destination, source, command, payload):
+	def BuildResponse (self, packet, payload):
+		dest 	= packet['header']['destination']
+		src 	= packet['header']['source']
+
+		packet['header']['destination']	= src
+		packet['header']['source']		= dest
+		packet['data']['payload']		= payload
+
+		return json.dumps(packet)
+
+	def BuildMessage (self, messageType, destination, source, command, payload, piggy):
 		message = {
 			'header': {
 				'message_type': str(messageType),
@@ -167,7 +180,8 @@ class Network ():
 			},
 			'additional': {
 
-			}
+			},
+			'piggybag': piggy
 		}
 
 		return json.dumps(message)

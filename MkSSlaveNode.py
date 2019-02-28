@@ -76,13 +76,15 @@ class SlaveNode(MkSAbstractNode.AbstractNode):
 		fileType 	= packet["payload"]["data"]["file_type"]
 		fileName 	= packet["payload"]["data"]["file_name"]
 		
+		print packet
+
 		folder = {
 			'config': 		'config',
 			'app': 			'app',
 			'thumbnail': 	'thumbnail'
 		}
 		
-		content = objFile.LoadStateFromFile("/home/yevgeniy/workspace/makesense/mksnodes/1981/ui/" + folder[uiType] + "/ui." + fileType)
+		content = objFile.LoadStateFromFile("/home/yevgeniy/workspace/makesense/mksnodes/" + str(self.Type) + "/ui/" + folder[uiType] + "/ui." + fileType)
 		payload = {
 			'file_type': fileType,
 			'ui_type': uiType,
@@ -134,7 +136,7 @@ class SlaveNode(MkSAbstractNode.AbstractNode):
 	def SendGatewayPing(self):
 		print "[SlaveNode] SendGatewayPing"
 		payload = self.Commands.SendPingRequest("GATEWAY", self.UUID)
-		self.MasterSocket.send(payload)
+		# self.MasterSocket.send(payload)
 
 	def CleanMasterList(self):
 		for node in self.MasterNodesList:
@@ -157,7 +159,6 @@ class SlaveNode(MkSAbstractNode.AbstractNode):
 		# UI RestAPI
 		self.UI.AddEndpoint("/get/node_widget/<key>",		"get_node_widget",	self.GetNodeWidgetHandler)
 		self.UI.AddEndpoint("/get/node_config/<key>",		"get_node_config",	self.GetNodeConfigHandler)
-
 
 	def ConnectMaster(self):
 		sock, status = self.ConnectNodeSocket((self.MyLocalIP, 16999))

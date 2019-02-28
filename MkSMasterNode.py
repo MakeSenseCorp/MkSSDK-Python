@@ -295,12 +295,13 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 		destination = packet["payload"]["header"]["destination"]
 		command 	= packet["command"]
 		payload 	= packet["payload"]["data"]
+		piggy  		= packet["piggybag"]
 
 		# TODO - If this is a proxy response then trigger OnSlaveResponseCallback.
 		# 		 Otherwise this is a response to master request. (MUST HANDLE IT LOCALY)
 
 		if self.OnSlaveResponseCallback is not None:
-			self.OnSlaveResponseCallback(destination, source, command, payload)
+			self.OnSlaveResponseCallback(destination, source, command, payload, piggy)
 
 	def GetNodeStatusRequestHandler(self, sock, packet):
 		pass
@@ -314,10 +315,11 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 		source 		= packet["header"]["source"]
 		data 		= packet["data"]["payload"]
 		command 	= packet["data"]["header"]["command"]
+		piggy  		= packet["piggybag"]
 
 		node = self.GetSlaveNode(destination)
 		if node is not None:
-			msg = self.Commands.ProxyRequest(destination, source, command, data)
+			msg = self.Commands.ProxyRequest(destination, source, command, data, piggy)
 			node.Socket.send(msg)
 		else:
 			# Need to look at other masters list.
@@ -475,9 +477,10 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 		source 		= json_data["payload"]["header"]["source"]
 		destination = json_data["payload"]["header"]["destination"]
 		payload 	= json_data["payload"]["data"]
+		piggy 		= json_data["piggybag"]
 
 		if self.OnSlaveResponseCallback is not None:
-			self.OnSlaveResponseCallback(destination, source, command, payload)
+			self.OnSlaveResponseCallback(destination, source, command, payload, piggy)
 
 	# Description - Handling input date from local server.
 	def HandlerRouter(self, sock, data):

@@ -122,10 +122,11 @@ class LocalNodeCommands:
 		packet += self.GetFooter()
 		return packet
 
-	def GenerateJsonProxyRequest(self, destination, source, command, data):
+	def GenerateJsonProxyRequest(self, destination, source, command, data, piggy):
 		return {	
 			'command': command,
 			'direction': 'proxy_request',
+			'piggybag': piggy,
 			'payload': {
 				'header': {
 					'destination': str(destination),
@@ -135,9 +136,9 @@ class LocalNodeCommands:
 			}
 		}
 
-	def ProxyRequest(self, destination, source, command, data):
+	def ProxyRequest(self, destination, source, command, data, piggy):
 		packet = self.GetHeader()
-		packet += json.dumps(self.GenerateJsonProxyRequest(destination, source, command, data))
+		packet += json.dumps(self.GenerateJsonProxyRequest(destination, source, command, data, piggy))
 		packet += self.GetFooter()
 		return packet
 

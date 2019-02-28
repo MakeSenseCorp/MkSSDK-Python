@@ -281,6 +281,7 @@ class AbstractNode():
 
 			# Run preloader for UI interface
 			if self.UI is None:
+				print "[AbstractNode]# Executin Webface Preloader"
 				self.PreUILoaderHandler()
 
 			# Let know registered method about local server start.
@@ -291,6 +292,7 @@ class AbstractNode():
 			if self.UI is None:
 				print "[AbstractNode]# Local server is NULL (WARNNING)"
 			else:
+				print "[AbstractNode]# Running Local Webface"
 				self.UI.Run()
 
 			return True
