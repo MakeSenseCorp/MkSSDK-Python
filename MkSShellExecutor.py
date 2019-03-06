@@ -32,13 +32,9 @@ class ShellExecutor():
 		pass
 
 	def ExecuteCommand(self, command):
-		#print "ExecuteCommand ENTER"
 		#self.Pipe.stdin.write(command)
-		#print "D_1"
 		#self.Pipe.stdin.flush()
-		#print "D_2"
 		#data = self.Pipe.stdout.read()
-		#print "ExecuteCommand EXIT"
 		#return data
 		proc = subprocess.Popen(command, shell=True, stdout=subprocess.PIPE)
 		return proc.stdout.read()

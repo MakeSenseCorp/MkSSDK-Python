@@ -50,7 +50,7 @@ class Network ():
 		return data
 
 	def Authenticate (self, username, password):
-		print "[DEBUG::Network] Authenticate"
+		print ("[DEBUG::Network] Authenticate")
 		data = self.GetRequest(self.ServerUri + "fastlogin/" + self.UserName + "/" + self.Password)
 
 		if ('failed' in data):
@@ -146,7 +146,7 @@ class Network ():
 		if packet is not "" and packet is not None:
 			self.WSConnection.send(packet)
 		else:
-			print "[Node]# Sending packet to Gateway FAILED"
+			print ("[Node]# Sending packet to Gateway FAILED")
 
 	def SendKeepAlive(self):
 		self.WSConnection.send("{\"packet_type\":\"keepalive\"}")

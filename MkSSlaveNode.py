@@ -69,7 +69,7 @@ class SlaveNode(MkSAbstractNode.AbstractNode):
 		self.ChangeState("IDLE")
 
 	def GetFileHandler(self, sock, packet):
-		print "[SlaveNode] GetFileHandler"
+		print ("[SlaveNode] GetFileHandler")
 
 		objFile 	= MkSFile.File()
 		uiType 		= packet["payload"]["data"]["ui_type"]
@@ -96,7 +96,7 @@ class SlaveNode(MkSAbstractNode.AbstractNode):
 
 	# GET_NODE_INFO
 	def GetNodeInfoRequestHandler(self, sock, packet):
-		print "[SlaveNode] GetNodeInfoHandler"
+		print ("[SlaveNode] GetNodeInfoHandler")
 		if self.OnGetNodeInfoRequestCallback is not None:
 			self.OnGetNodeInfoRequestCallback(sock, packet)
 
@@ -115,13 +115,13 @@ class SlaveNode(MkSAbstractNode.AbstractNode):
 	Local Face RESP API methods
 	"""
 	def GetNodeWidgetHandler(self, key):
-		print "[SlaveNode]# GetNodeWidgetHandler", self.Pwd + "static/js/node/widget.js"
+		print ("[SlaveNode]# GetNodeWidgetHandler", self.Pwd + "static/js/node/widget.js")
 		objFile = MkSFile.File()
 		js = objFile.LoadStateFromFile("static/js/node/widget.js")
 		return js
 
 	def GetNodeConfigHandler(self, key):
-		print "[SlaveNode]# GetNodeConfigHandler", self.Pwd + "static/js/node/widget_config.js"
+		print ("[SlaveNode]# GetNodeConfigHandler", self.Pwd + "static/js/node/widget_config.js")
 		objFile = MkSFile.File()
 		js = objFile.LoadStateFromFile("static/js/node/widget_config.js")
 		return js
@@ -134,7 +134,7 @@ class SlaveNode(MkSAbstractNode.AbstractNode):
 		self.MasterSocket.send(msg)
 
 	def SendGatewayPing(self):
-		print "[SlaveNode] SendGatewayPing"
+		print ("[SlaveNode] SendGatewayPing")
 		payload = self.Commands.SendPingRequest("GATEWAY", self.UUID)
 		# self.MasterSocket.send(payload)
 
@@ -153,7 +153,7 @@ class SlaveNode(MkSAbstractNode.AbstractNode):
 		return self.FindMasters()
 
 	def PreUILoaderHandler(self):
-		print "[SlaveNode] PreUILoaderHandler"
+		print ("[SlaveNode] PreUILoaderHandler")
 		port = 8000 + (self.ServerAdderss[1] - 10000)
 		self.InitiateLocalServer(port)
 		# UI RestAPI
@@ -177,11 +177,11 @@ class SlaveNode(MkSAbstractNode.AbstractNode):
 
 	def StateIdle(self):
 		# Init state logic must be here.
-		print "StateIdle"
+		print ("StateIdle")
 		self.ConnectMaster()
 
 	def StateConnectMaster(self):
-		print "StateConnectMaster"
+		print ("StateConnectMaster")
 		if 0 == self.Ticker % 20:
 			if self.MasterConnectionTries > 3:
 				self.ChangeState("EXIT")
@@ -190,7 +190,7 @@ class SlaveNode(MkSAbstractNode.AbstractNode):
 			self.MasterConnectionTries += 1
 
 	def StateGetPort(self):
-		print "StateGetPort"
+		print ("StateGetPort")
 		payload = self.Commands.GetPortRequest(self.UUID, self.Type)
 		self.MasterSocket.send(payload)
 		self.ChangeState("WAIT_FOR_PORT")
@@ -198,17 +198,17 @@ class SlaveNode(MkSAbstractNode.AbstractNode):
 	def SendSensorInfoResponse(self, sock, packet, sensors):
 		direction = packet["direction"]
 		if ("proxy" in direction):
-			print " P R O X Y "
+			print (" P R O X Y ")
 			msg = self.Commands.ProxyResponse(packet, sensors)
 			sock.send(msg)
 		else:
-			print " R E G U L A R"
+			print (" R E G U L A R")
 
 		#payload = self.Commands.GetSensorInfoResponse(self.UUID, sensors)
 		#sock.send(payload)
 
 	def StateWaitForPort(self):
-		print "StateWaitForPort"
+		print ("StateWaitForPort")
 		if 0 == self.Ticker % 20:
 			if 0 == self.SlaveListenerPort:
 				self.ChangeState("GET_PORT")
@@ -216,7 +216,7 @@ class SlaveNode(MkSAbstractNode.AbstractNode):
 				self.ChangeState("START_LISTENER")
 
 	def StateStartListener(self):
-		print "StateStartListener"
+		print ("StateStartListener")
 		self.ServerAdderss = ('', self.SlaveListenerPort)
 		status = self.TryStartListener()
 		if True == status:
@@ -228,7 +228,7 @@ class SlaveNode(MkSAbstractNode.AbstractNode):
 			self.SendGatewayPing()
 
 	def StateExit(self):
-		print "StateExit"
+		print ("StateExit")
 
 	def HandlerRouter_Request(self, sock, json_data):
 		command = json_data['command']
@@ -253,7 +253,7 @@ class SlaveNode(MkSAbstractNode.AbstractNode):
 			self.HandlerRouter_Request(sock, jsonData)
 
 	def NodeDisconnectHandler(self, sock):
-		print "NodeDisconnectHandler"
+		print ("NodeDisconnectHandler")
 		# Check if disconneced connection is a master.
 		for node in self.MasterNodesList:
 			if sock == node.Socket:
@@ -264,7 +264,7 @@ class SlaveNode(MkSAbstractNode.AbstractNode):
 					self.OnMasterDisconnectedCallback()
 
 	def NodeMasterAvailable(self, sock):
-		print "NodeMasterAvailable"
+		print ("NodeMasterAvailable")
 		# Append new master to the list
 		conn = self.GetConnection(sock)
 		# TODO - Check if we don't have this connection already

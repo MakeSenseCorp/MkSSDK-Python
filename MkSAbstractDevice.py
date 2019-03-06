@@ -23,7 +23,7 @@ class AbstractDevice():
 			self.UUID = dataSystem["node"]["uuid"]
 			self.DeviceInfoJson = dataSystem["device"]
 		except:
-			print "Error: [LoadSystemConfig] Wrong system.json format"
+			print ("Error: [LoadSystemConfig] Wrong system.json format")
 			self.Exit()
 
 	def RegisterOnDataReadyCallback(self, on_data_ready_callback):

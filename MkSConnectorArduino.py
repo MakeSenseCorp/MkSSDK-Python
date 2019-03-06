@@ -25,28 +25,28 @@ class Connector (MkSAbstractConnector.AbstractConnector):
 					magic_one, magic_two, op_code, content_length = struct.unpack("BBHB", rxPacket[0:5])
 					if (magic_one == 0xde and magic_two == 0xad):
 						deviceType = rxPacket[5:-1]
-						print str(deviceType) + " <?> " + str(device_type)
+						print (str(deviceType) + " <?> " + str(device_type))
 						if str(deviceType) == str(device_type):
-							print "Device Type: " + deviceType
+							print ("Device Type: " + deviceType)
 							deviceFound = True
 							self.IsConnected = True
 							return True
 					else:
 						self.Adaptor.DisconnectDevice()
-						print "Not a MakeSense complient device... "
+						print ("Not a MakeSense complient device... ")
 				else:
 					self.Adaptor.DisconnectDevice()
-					print "Not a MakeSense complient device... "
+					print ("Not a MakeSense complient device... ")
 			idx = idx + 1
 			self.Adaptor.DisconnectDevice()
 		self.IsConnected = False
 		return False
 	
 	def Disconnect(self):
-		print "[DEBUG::Connector] Disconnect"
+		print ("[DEBUG::Connector] Disconnect")
 		self.IsConnected = False
 		self.Adaptor.DisconnectDevice()
-		print "Connector ... [DISCONNECTED]"
+		print ("Connector ... [DISCONNECTED]")
 
 	def IsValidDevice(self):
 		return self.IsConnected

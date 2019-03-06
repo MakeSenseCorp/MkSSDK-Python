@@ -198,7 +198,7 @@ class AbstractNode():
 		self.UI.AddEndpoint("/get/socket_list/<key>", 			"get_socket_list", 				self.GetConnectedSocketsListHandler)
 
 	def AppendFaceRestTable(self, endpoint=None, endpoint_name=None, handler=None, args=None, method=['GET']):
-		print "[AbstractNode]# AppendFaceRestTable"
+		print ("[AbstractNode]# AppendFaceRestTable")
 		self.UI.AddEndpoint(endpoint, endpoint_name, handler, args, method)
 
 	def TestWithKeyHandler(self, key):
@@ -239,7 +239,8 @@ class AbstractNode():
 			# Remove socket from list.
 			self.RecievingSockets.remove(conn.Socket)
 			# Close connection.
-			conn.Socket.close()
+			if conn.Socket is not None:
+				conn.Socket.close()
 			# Remove LocalNode from the list.
 			self.Connections.remove(conn)
 			# Deduce socket counter.
@@ -265,7 +266,7 @@ class AbstractNode():
 
 	def TryStartListener(self):
 		try:
-			print "[AbstractNode] Start listener..."
+			print ("[AbstractNode] Start listener...")
 			self.ServerSocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 			self.ServerSocket.setblocking(0)
 
@@ -281,7 +282,7 @@ class AbstractNode():
 
 			# Run preloader for UI interface
 			if self.UI is None:
-				print "[AbstractNode]# Executin Webface Preloader"
+				print ("[AbstractNode]# Executin Webface Preloader")
 				self.PreUILoaderHandler()
 
 			# Let know registered method about local server start.
@@ -290,25 +291,25 @@ class AbstractNode():
 
 			# Run UI thread
 			if self.UI is None:
-				print "[AbstractNode]# Local server is NULL (WARNNING)"
+				print ("[AbstractNode]# Local server is NULL (WARNNING)")
 			else:
-				print "[AbstractNode]# Running Local Webface"
+				print ("[AbstractNode]# Running Local Webface")
 				self.UI.Run()
 
 			return True
 		except:
 			self.RemoveConnection(self.ServerSocket)
-			print "[Server Node] Bind socket ERROR on TryStartListener", str(self.ServerAdderss[1])
+			print ("[Server Node] Bind socket ERROR on TryStartListener", str(self.ServerAdderss[1]))
 			return False
 
 	def DataSocketInputHandler_Response(self, sock, json_data):
-		print "[AbstractNode] DataSocketInputHandler_Response"
+		print ("[AbstractNode] DataSocketInputHandler_Response")
 		command = json_data['command']
 		if command in self.ServerNodeResponseHandlers:
 			self.ServerNodeResponseHandlers[command](sock, json_data)
 
 	def DataSocketInputHandler_Resquest(self, sock, json_data):
-		print "[AbstractNode] DataSocketInputHandler_Resquest"
+		print ("[AbstractNode] DataSocketInputHandler_Resquest")
 		command = json_data['command']
 		if command in self.ServerNodeRequestHandlers:
 			self.ServerNodeRequestHandlers[command](sock, json_data)
@@ -320,27 +321,26 @@ class AbstractNode():
 			direction 	= jsonData['direction']
 
 			if command in ["get_node_info", "get_node_status"]:
-				print "[AbstractNode] ['get_node_info', 'get_node_status']"
+				print ("[AbstractNode] ['get_node_info', 'get_node_status']")
 				if direction in ["response", "proxy_response"]:
 					self.DataSocketInputHandler_Response(sock, jsonData)
 				elif direction in ["request", "proxy_request"]:
 					self.DataSocketInputHandler_Resquest(sock, jsonData)
 			else:
-				print "[AbstractNode] HandlerRouter"
+				print ("[AbstractNode] HandlerRouter")
 				# Call for handler.
 				self.HandlerRouter(sock, data)
 		except:
-			print "[AbstractNode] DataSocketInputHandler ERROR", sys.exc_info()[0]
+			print ("[AbstractNode] DataSocketInputHandler ERROR", sys.exc_info()[0])
 
 	def ConnectNodeSocket(self, ip_addr_port):
 		sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 		sock.settimeout(5)
 		try:
-			# print "[Node] Connecting to", ip_addr_port
 			sock.connect(ip_addr_port)
 			return sock, True
 		except:
-			print "[AbstractNode] Could not connect server", ip_addr_port
+			print ("[AbstractNode] Could not connect server", ip_addr_port)
 			return None, False
 
 	def DisconnectNodeSocket(self, sock):
@@ -374,7 +374,6 @@ class AbstractNode():
 		else:
 			self.LocalSocketServerRun = True
 
-		# print "[Node Server] Local network is started..."
 		# Raise event for user
 		if self.OnLocalServerStartedCallback is not None:
 			self.OnLocalServerStartedCallback()
@@ -398,14 +397,17 @@ class AbstractNode():
 							self.OnAceptNewConnectionCallback(conn)
 					else:
 						try:
-							data = sock.recv(2048)
-							dataLen = len(data)
-							while dataLen == 2048:
-								chunk = sock.recv(2048)
-								data += chunk
-								dataLen = len(chunk)
-						except:
-							print "[AbstractNode] Recieve ERROR"
+							if sock is not None:
+								data = sock.recv(2048)
+								dataLen = len(data)
+								while dataLen == 2048:
+									chunk = sock.recv(2048)
+									data += chunk
+									dataLen = len(chunk)
+						except Exception as e:
+							print ("[AbstractNode] Recieve ERROR", e)
+							self.NodeDisconnectHandler(sock)
+							self.RemoveConnection(sock)
 						else:
 							if data:
 								# Each makesense packet should start from magic number "MKS"
@@ -416,7 +418,7 @@ class AbstractNode():
 										req = (data.split('\n'))[1]
 										self.DataSocketInputHandler(sock, req)
 								else:
-									print "[AbstractNode] Data Invalid"
+									print ("[AbstractNode] Data Invalid")
 							else:
 								self.NodeDisconnectHandler(sock)
 								# Raise event for user
@@ -425,16 +427,12 @@ class AbstractNode():
 								self.RemoveConnection(sock)
 
 				for sock in exceptional:
-					print "[AbstractNode] Socket Exceptional"
-			except:
-				print "[AbstractNode] Connection Close [ERROR]", sys.exc_info()[0]
+					print ("[AbstractNode] Socket Exceptional")
+			except Exception as e:
+				print ("[AbstractNode] Connection Close [ERROR]", e)
 
 		# Clean all resorses before exit.
 		self.CleanAllSockets()
-
-		#print "[Node] Open sockets count...", self.OpenSocketsCounter
-		#print "[Node] Connections dictonary items count...", len(self.Connections)
-		#print "[DEBUG::Node] Exit local socket server"
 		self.ExitLocalServerEvent.set()
 
 	def ConnectNode(self, ip, port):
@@ -469,7 +467,7 @@ class AbstractNode():
 						self.OnMasterFoundCallback([sock, ip])
 					self.NodeMasterAvailable(sock)
 				else:
-					print "[Node Server] Could not connect"
+					print ("[Node Server] Could not connect")
 			else:
 				if self.OnMasterFoundCallback is not None:
 					self.OnMasterFoundCallback([None, ip])
@@ -480,7 +478,7 @@ class AbstractNode():
 			self.RemoveConnection(conn.Socket)
 		
 		if len(self.Connections) > 0:
-			print "Still live socket exist"
+			print ("Still live socket exist")
 			for conn in self.Connections:
 				self.RemoveConnection(conn.Socket)
 

@@ -141,7 +141,7 @@ class ApplicationNode(MkSAbstractNode.AbstractNode):
 		while True == self.MasterNodeLocatorRunning:
 			# Rest for several seconds.
 			time.sleep(self.SEARCH_MASTER_INTERVAL)
-			print "[Node] MasterNodeLocator WORKING"
+			print ("[Node] MasterNodeLocator WORKING")
 			# Search network.
 			self.SearchForMasters()
 

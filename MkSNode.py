@@ -127,7 +127,7 @@ class Node():
 
 	# Sending response to "get_node_info" request (mostly for proxy request)
 	def OnSlaveResponseHandler(self, dest, src, command, payload, piggy):
-		print "[DEBUG MASTER] OnSlaveResponseHandler"
+		print ("[DEBUG MASTER] OnSlaveResponseHandler")
 		if self.Network.GetNetworkState() is "CONN":
 			message = self.Network.BuildMessage("DIRECT", dest, src, command, payload, piggy)
 			self.Network.SendWebSocket(message)
@@ -142,7 +142,7 @@ class Node():
 		self.Exit()
 
 	def DeviceDisconnectedCallback(self, data):
-		print "[DEBUG::Node] DeviceDisconnectedCallback"
+		print ("[DEBUG::Node] DeviceDisconnectedCallback")
 		if True == self.IsHardwareBased:
 			self.Connector.Disconnect()
 		self.Network.Disconnect()
@@ -176,14 +176,14 @@ class Node():
 			else:
 				self.UUID = dataSystem["node"]["uuid"]
 		except:
-			print "Error: [LoadSystemConfig] Wrong system.json format"
+			print ("Error: [LoadSystemConfig] Wrong system.json format")
 			self.Exit()
 		
 		self.DeviceInfo = MkSDevice.Device(self.UUID, self.Type, self.OSType, self.OSVersion, self.BrandName)
 	
 	# If this method called, this Node is HW enabled. 
 	def SetConnector(self, connector):
-		print "[Node] SetDevice"
+		print ("[Node] SetDevice")
 		self.Connector = connector
 		self.IsHardwareBased = True
 
@@ -191,21 +191,21 @@ class Node():
 		return self.Connector
 		
 	def SetNetwork(self):
-		print "SetNetwork"
+		print ("SetNetwork")
 	
 	def StateIdle (self):
-		print "StateIdle"
+		print ("StateIdle")
 	
 	def StateConnectDevice (self):
-		print "StateConnectDevice"
+		print ("StateConnectDevice")
 		if True == self.IsHardwareBased:
 			if None == self.Connector:
-				print "Error: [Run] Device did not specified"
+				print ("Error: [Run] Device did not specified")
 				self.Exit()
 				return
 			
 			if False == self.Connector.Connect(self.Type):
-				print "Error: [Run] Could not connect device"
+				print ("Error: [Run] Could not connect device")
 				self.Exit()
 				return
 			
@@ -214,13 +214,13 @@ class Node():
 			deviceUUID = self.Connector.GetUUID()
 			if len(deviceUUID) > 30:
 				self.UUID = str(deviceUUID)
-				print "Serial Device UUID:",self.UUID
+				print ("Serial Device UUID:",self.UUID)
 				if None != self.OnDeviceConnected:
 					self.OnDeviceConnected()
 				if True == self.IsNodeWSServiceEnabled: 
 					self.Network.SetDeviceUUID(self.UUID)
 			else:
-				print "[Node] (ERROR) UUID is NOT correct."
+				print ("[Node] (ERROR) UUID is NOT correct.")
 				self.Exit()
 				return
 
@@ -243,14 +243,14 @@ class Node():
 
 	def StateGetAccess (self):
 		if True == self.IsNodeWSServiceEnabled:
-			print "[DEBUG::Node] StateGetAccess"
+			print ("[DEBUG::Node] StateGetAccess")
 			self.Network.AccessGateway(self.Key, "[]")
 			self.State = "ACCESS_WAIT"
 		else:
 			self.State = "WORK"
 	
 	def StateAccessWait (self):
-		print "ACCESS_WAIT"
+		print ("ACCESS_WAIT")
 		if self.AccessTick > 10:
 			self.State 		= "ACCESS"
 			self.AccessTick = 0
@@ -271,7 +271,7 @@ class Node():
 		self.OnWSConnected()
 
 	def GetNodeInfoHandler(self, json):
-		print "GetNodeInfoHandler"
+		print ("GetNodeInfoHandler")
 
 		if self.Network.GetNetworkState() is "CONN":
 			payload = self.NodeInfo
@@ -290,10 +290,10 @@ class Node():
 			self.SendMessage(message_type, source, "get_node_status", res_payload)
 	
 	def RegisterSubscriberHandler(self, message_type, source, data):
-		print "RegisterSubscriberHandler"
+		print ("RegisterSubscriberHandler")
 	
 	def UnregisterSubscriberHandler(self, message_type, source, data):
-		print "UnregisterSubscriberHandler"
+		print ("UnregisterSubscriberHandler")
 	
 	def WebSocketDataArrivedCallback (self, json):
 		self.State 	= "WORK"
@@ -302,8 +302,7 @@ class Node():
 		destination = self.Network.GetDestinationFromJson(json)
 		command 	= self.Network.GetCommandFromJson(json)
 
-		# print "\n[DEBUG::Node Network(In)] " + str(json) + "\n"
-		print "\n[DEBUG::Node Network(In)] " + str(command) + "\n"
+		print ("\n[DEBUG::Node Network(In)] " + str(command) + "\n")
 
 		# Is this packet for me?
 		if destination in self.UUID:
@@ -317,7 +316,7 @@ class Node():
 				else:
 					self.OnWSDataArrived(messageType, source, data)
 			else:
-				print "Error: Not support " + request + " request type."
+				print ("Error: Not support " + request + " request type.")
 		else:
 			# Find who has this destination adderes.
 			self.LocalServiceNode.HandleExternalRequest(json)
@@ -328,7 +327,7 @@ class Node():
 	
 	def SendMessage (self, message_type, destination, command, payload):
 		message = self.Network.BuildMessage(message_type, destination, command, payload, {})
-		print "[DEBUG::Node Network(Out)] " + message
+		print ("[DEBUG::Node Network(Out)] " + message)
 		ret = self.Network.SendMessage(message)
 		if False == ret:
 			self.State = "ACCESS"
@@ -345,7 +344,7 @@ class Node():
 		self.State = "ACCESS_WAIT"
 
 	def WebSocketErrorCallback (self):
-		print "WebSocketErrorCallback"
+		print ("WebSocketErrorCallback")
 		# TODO - Send callback "OnWSError"
 		self.NetworkAccessTickLock.acquire()
 		try:
@@ -372,7 +371,7 @@ class Node():
 			dataConfig = json.loads(jsonConfigStr)
 			return dataConfig
 		except:
-			print "Error: [GetDeviceConfig] Wrong config.json format"
+			print ("Error: [GetDeviceConfig] Wrong config.json format")
 			return ""
 
 	def SetWebServiceStatus(self, is_enabled):
@@ -412,7 +411,7 @@ class Node():
 			self.WorkingCallback()
 			time.sleep(0.5)
 
-		print "[DEBUG::Node] Exit NodeWork"
+		print ("[DEBUG::Node] Exit NodeWork")
 		if True == self.IsHardwareBased:
 			self.Connector.Disconnect()
 		self.ExitEvent.set()
@@ -424,12 +423,12 @@ class Node():
 			self.ExitLocalServerEvent.wait()
 	
 	def Stop (self):
-		print "[DEBUG::Node] Stop"
+		print ("[DEBUG::Node] Stop")
 		self.IsRunnig 								= False
 		self.LocalServiceNode.LocalSocketServerRun 	= False
 	
 	def Pause (self):
-		print "Pause"
+		print ("Pause")
 	
 	def Exit (self):
 		self.Stop()

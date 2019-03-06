@@ -136,7 +136,7 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 			return ""
 
 	def GetNodeListByTypeHandler(self, key):
-		print "[MasterNode]# GetNodeListByTypeHandler"
+		print ("[MasterNode]# GetNodeListByTypeHandler")
 		fields = [k for k in request.form]
 		values = [request.form[k] for k in request.form]
 
@@ -250,7 +250,7 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 
 	# Avoid CORS
 	def GenericNodeGETRequestHandler(self, key):
-		print "[MasterNode]# GenericNodeGETRequestHandler"
+		print ("[MasterNode]# GenericNodeGETRequestHandler")
 		fields = [k for k in request.form]
 		values = [request.form[k] for k in request.form]
 
@@ -272,7 +272,7 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 	"""
 
 	def GatewayConnectedEvent(self):
-		print "[DEBUG MASTER]: GatewayConnectedEvent"
+		print ("[DEBUG MASTER]: GatewayConnectedEvent")
 		for slave in self.LocalSlaveList:
 			if self.OnNewNodeCallback is not None:
 				self.OnNewNodeCallback({ 'ip':		str(slave.IP), 
@@ -282,7 +282,7 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 										})
 
 	def GatewayDisConnectedEvent(self):
-		print "[DEBUG MASTER]: Gateway disconnected"
+		print ("[DEBUG MASTER]: Gateway disconnected")
 
 	# TODO - Implement this method.
 	def GetNodeStatusRequestHandler(self, sock, packet):
@@ -290,7 +290,7 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 
 	# Sending response to "get_node_info" request (mostly for proxy request)
 	def GetNodeInfoResponseHandler(self, sock, packet):
-		print "[DEBUG MASTER] GetNodeInfoResponseHandler"
+		print ("[DEBUG MASTER] GetNodeInfoResponseHandler")
 		source 		= packet["payload"]["header"]["source"]
 		destination = packet["payload"]["header"]["destination"]
 		command 	= packet["command"]
@@ -381,7 +381,7 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 	def GetPortRequestHandler(self, sock, packet):
 		nodeType 	= packet['type']
 		uuid 		= packet['uuid']
-		print "[MASTER]: GetPortRequestHandler"
+		print ("[MASTER]: GetPortRequestHandler")
 		# Do we have available port.
 		if self.PortsForClients:
 			node = self.GetConnection(sock)
@@ -458,21 +458,21 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 		sock.send(payload)
 
 	def HandlerRouter_Request(self, sock, json_data):
-		print "[MasterNode] HandlerRouter_Request"
+		print ("[MasterNode] HandlerRouter_Request")
 		command = json_data['command']
 		# TODO - IF command type is not in list call unknown callback in user code.
 		if command in self.RequestHandlers:
 			self.RequestHandlers[command](sock, json_data)
 
 	def HandlerRouter_Response(self, sock, json_data):
-		print "[MasterNode] HandlerRouter_Response"
+		print ("[MasterNode] HandlerRouter_Response")
 		command = json_data['command']
 		# TODO - IF command type is not in list call unknown callback in user code.
 		if command in self.ResponseHandlers:
 			self.ResponseHandlers[command](sock, json_data)
 
 	def HandlerRouter_Proxy(self, sock, json_data):
-		print "[MasterNode] HandlerRouter_ProxyResponse"
+		print ("[MasterNode] HandlerRouter_ProxyResponse")
 		command 	= json_data['command']
 		source 		= json_data["payload"]["header"]["source"]
 		destination = json_data["payload"]["header"]["destination"]
@@ -495,7 +495,7 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 			self.HandlerRouter_Proxy(sock, jsonData)
 
 	def NodeDisconnectHandler(self, sock):
-		print "NodeDisconnectHandler"
+		print ("NodeDisconnectHandler")
 		for slave in self.LocalSlaveList:
 			if slave.Socket == sock:
 				self.PortsForClients.append(slave.Port - 10000)
@@ -510,7 +510,7 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 				payload = self.Commands.MasterAppendNodeResponse(slave.IP, slave.Port, slave.UUID, slave.Type)
 				# Send to all nodes
 				for client in self.Connections:
-					if client.Socket == self.ServerSocket:
+					if client.Socket == self.ServerSocket or client.Socket == sock:
 						pass
 					else:
 						if client.Socket is not None:
@@ -548,7 +548,6 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 					return
 
 	def GetShellScreen(self, uuid):
-		# print "[MasterNode]# GetShellScreen"
 		for item in self.Pipes:
 			if item.Uuid == uuid:
 				return item.ReadBuffer()
