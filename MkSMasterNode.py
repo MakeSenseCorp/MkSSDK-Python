@@ -295,6 +295,7 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 		destination = packet["payload"]["header"]["destination"]
 		command 	= packet["command"]
 		payload 	= packet["payload"]["data"]
+		# This data traveling from App request and back to App
 		piggy  		= packet["piggybag"]
 
 		# TODO - If this is a proxy response then trigger OnSlaveResponseCallback.

@@ -97,10 +97,12 @@ class Node():
 		if args.pwd is not None:
 			os.chdir(args.pwd)
 
+	# TODO - Not needed, remove
 	def GetFile(self, filename, ui_type):
 		objFile = MkSFile.File()
 		return objFile.LoadStateFromFile("static/js/node/" + fileName)
 
+	# TODO - Not needed, remove
 	def GetFileHandler(self, message_type, source, data):
 		if self.Network.GetNetworkState() is "CONN":
 			uiType = data["payload"]["ui_type"]

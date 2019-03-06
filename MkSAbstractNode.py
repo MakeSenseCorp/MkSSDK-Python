@@ -330,8 +330,9 @@ class AbstractNode():
 				print ("[AbstractNode] HandlerRouter")
 				# Call for handler.
 				self.HandlerRouter(sock, data)
-		except:
-			print ("[AbstractNode] DataSocketInputHandler ERROR", sys.exc_info()[0])
+		except Exception as e:
+			print (data)
+			print ("[AbstractNode] DataSocketInputHandler ERROR", e)
 
 	def ConnectNodeSocket(self, ip_addr_port):
 		sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
