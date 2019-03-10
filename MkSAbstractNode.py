@@ -2,7 +2,10 @@
 import os
 import sys
 import json
-import thread
+if sys.version_info[0] < 3:
+	import thread
+else:
+	import _thread
 import threading
 import socket, select
 

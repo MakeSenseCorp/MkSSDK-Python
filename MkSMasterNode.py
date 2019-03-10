@@ -3,7 +3,10 @@ import os
 import sys
 import json
 import time
-import thread
+if sys.version_info[0] < 3:
+	import thread
+else:
+	import _thread
 import threading
 import socket
 import subprocess

@@ -3,10 +3,13 @@ import os
 import urllib2
 import urllib
 import websocket
-import thread
+import sys
+if sys.version_info[0] < 3:
+	import thread
+else:
+	import _thread
 import time
 import json
-import sys
 
 class Network ():
 	def __init__(self, uri, wsuri):
@@ -98,7 +101,7 @@ class Network ():
 
 	def WSConnection_OnError_Handler (self, ws, error):
 	    self.OnErrorCallback()
-	    print error
+	    print (error)
 
 	def WSConnection_OnClose_Handler (self, ws):
 		self.State = "DISCONN"
@@ -125,7 +128,7 @@ class Network ():
 		self.WSConnection.on_close 		= self.WSConnection_OnClose_Handler
 		self.WSConnection.on_open 		= self.WSConnection_OnOpen_Handler
 		self.WSConnection.header		= {'uuid':self.DeviceUUID, 'node_type':str(self.Type), 'payload':str(payload), 'key':key}
-		print self.WSConnection.header
+		print (self.WSConnection.header)
 		thread.start_new_thread(self.NodeWebfaceSocket_Thread, ())
 
 		return True

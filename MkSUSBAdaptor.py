@@ -4,7 +4,10 @@ import time
 import sys
 import serial
 import struct
-import thread
+if sys.version_info[0] < 3:
+	import thread
+else:
+	import _thread
 
 class Adaptor ():
 	UsbPath = ""

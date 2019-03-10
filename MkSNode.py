@@ -1,13 +1,15 @@
 #!/usr/bin/python
 import os
 import sys
-import thread
+if sys.version_info[0] < 3:
+	import thread
+else:
+	import _thread
 import threading
 import time
 import json
 import signal
 import socket, select
-import Queue
 import argparse
 
 from mksdk import MkSFile
