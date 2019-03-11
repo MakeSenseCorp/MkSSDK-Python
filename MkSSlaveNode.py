@@ -13,6 +13,7 @@ import socket
 from flask import Flask, render_template, jsonify, Response, request
 import logging
 
+import MkSGlobals
 from mksdk import MkSFile
 from mksdk import MkSAbstractNode
 from mksdk import MkSLocalNodesCommands
@@ -78,16 +79,17 @@ class SlaveNode(MkSAbstractNode.AbstractNode):
 		uiType 		= packet["payload"]["data"]["ui_type"]
 		fileType 	= packet["payload"]["data"]["file_type"]
 		fileName 	= packet["payload"]["data"]["file_name"]
-		
-		print packet
 
 		folder = {
 			'config': 		'config',
 			'app': 			'app',
 			'thumbnail': 	'thumbnail'
 		}
+
+		path = os.path.join(".","ui",folder[uiType],"ui." + fileType)
+		print path
+		content = objFile.LoadStateFromFile(path)
 		
-		content = objFile.LoadStateFromFile("/home/yevgeniy/workspace/makesense/mksnodes/" + str(self.Type) + "/ui/" + folder[uiType] + "/ui." + fileType)
 		payload = {
 			'file_type': fileType,
 			'ui_type': uiType,
