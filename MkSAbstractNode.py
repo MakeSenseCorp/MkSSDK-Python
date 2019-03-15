@@ -300,9 +300,9 @@ class AbstractNode():
 				self.UI.Run()
 
 			return True
-		except:
+		except Exception as e:
 			self.RemoveConnection(self.ServerSocket)
-			print ("[Server Node] Bind socket ERROR on TryStartListener", str(self.ServerAdderss[1]))
+			print ("[Server Node] Failed to open listener, ", str(self.ServerAdderss[1]), e)
 			return False
 
 	def DataSocketInputHandler_Response(self, sock, json_data):
