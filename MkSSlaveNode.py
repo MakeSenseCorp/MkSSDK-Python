@@ -50,6 +50,7 @@ class SlaveNode(MkSAbstractNode.AbstractNode):
 			'get_sensor_info': 						self.GetSensorInfoRequestHandler,
 			'set_sensor_info': 						self.SetSensorInfoRequestHandler,
 			'get_file':								self.GetFileHandler,
+			'upload_file':							self.UploadFileHandler,
 			'exit':									self.ExitHandler,
 			'undefined':							self.UndefindHandler
 		}
@@ -63,6 +64,7 @@ class SlaveNode(MkSAbstractNode.AbstractNode):
 
 		self.OnGetSensorInfoRequestCallback			= None
 		self.OnSetSensorInfoRequestCallback 		= None
+		self.OnUploadFileRequestCallback 			= None
 		self.OnGetNodeInfoRequestCallback 			= None
 		# Flags
 		self.IsListenerEnabled 						= False
@@ -307,6 +309,10 @@ class SlaveNode(MkSAbstractNode.AbstractNode):
 	def SetSensorInfoRequestHandler(self, sock, packet):
 		if self.OnSetSensorInfoRequestCallback is not None:
 			self.OnSetSensorInfoRequestCallback(packet, sock)
+
+	def UploadFileHandler(self, sock, packet):
+		if self.OnUploadFileRequestCallback is not None:
+			self.OnUploadFileRequestCallback(packet, sock)
 
 	# REQUEST Handlers <	
 
