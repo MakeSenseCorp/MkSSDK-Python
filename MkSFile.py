@@ -11,6 +11,12 @@ class File ():
 		file.write(data)
 		file.close()
 
+	def SaveArrayToFile (self, filename, data):
+		file = open(filename, "wb")
+		array = bytearray(data)
+		file.write(array)
+		file.close()
+
 	def AppendToFile (self, filename, data):
 		file = open(filename, "a")
 		file.write(data)
