@@ -203,6 +203,15 @@ class SlaveNode(MkSAbstractNode.AbstractNode):
 		payload = self.Commands.GetPortRequest(self.UUID, self.Type)
 		self.MasterSocket.send(payload)
 		self.ChangeState("WAIT_FOR_PORT")
+	
+	def SendCustomCommandResponse(self, sock, packet, payload):
+		direction = packet["direction"]
+		if ("proxy" in direction):
+			print (" P R O X Y ")
+			msg = self.Commands.ProxyResponse(packet, payload)
+			sock.send(msg)
+		else:
+			print (" R E G U L A R")
 
 	def SendSensorInfoResponse(self, sock, packet, sensors):
 		direction = packet["direction"]
