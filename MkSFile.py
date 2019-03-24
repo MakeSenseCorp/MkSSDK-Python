@@ -32,3 +32,7 @@ class File ():
 	
 	def LoadStateFromFile (self, filename):
 		return self.LoadContent(filename)
+	
+	def ListFilesInFolder(self, path):
+		onlyfiles = [f for f in os.listdir(path) if os.path.isfile(os.path.join(path, f))]
+		return onlyfiles
