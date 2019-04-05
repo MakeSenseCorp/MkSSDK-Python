@@ -11,6 +11,12 @@ class File ():
 		file.write(data)
 		file.close()
 
+	def SaveArrayToFile (self, filename, data):
+		file = open(filename, "wb")
+		array = bytearray(data)
+		file.write(array)
+		file.close()
+
 	def AppendToFile (self, filename, data):
 		file = open(filename, "a")
 		file.write(data)
@@ -26,3 +32,7 @@ class File ():
 	
 	def LoadStateFromFile (self, filename):
 		return self.LoadContent(filename)
+	
+	def ListFilesInFolder(self, path):
+		onlyfiles = [f for f in os.listdir(path) if os.path.isfile(os.path.join(path, f))]
+		return onlyfiles

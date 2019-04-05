@@ -61,6 +61,7 @@ class ExternalProcess():
 		self.Pipe 							= None
 		self.PipeStdOutLength				= 0
 		self.Status							= False
+		self.UserData 						= None
 		# Callbacks
 		self.OnProcessDataPipeCallback 		= None
 		self.OnProcessErrorCallback 		= None
@@ -82,7 +83,7 @@ class ExternalProcess():
 					if len(error) > 0:
 						self.Pipe.ClearErrorBuffer()
 						if self.OnProcessErrorCallback is not None:
-							self.OnProcessErrorCallback(error)
+							self.OnProcessErrorCallback(error, self.UserData)
 				
 				# Read stdout.
 				self.Pipe.ReadToBuffer()
@@ -91,7 +92,7 @@ class ExternalProcess():
 					if self.PipeStdOutLength != len(data):
 						self.PipeStdOutLength = len(data)
 						if self.OnProcessDataPipeCallback is not None:
-							self.OnProcessDataPipeCallback(data)
+							self.OnProcessDataPipeCallback(data, self.UserData)
 			except Exception as e:
 				print ("[ExternalProcess]# (ERROR)", e)
 				if ErrorCounter > 3:
@@ -103,13 +104,15 @@ class ExternalProcess():
 
 		if self.OnProcessDoneCallback is not None:
 			self.Pipe.ReadToBuffer()
-			self.OnProcessDoneCallback(self.Pipe.GetBuffer())
+			self.OnProcessDoneCallback(self.Pipe.GetBuffer(), self.UserData)
 		
 		self.Status = False
 
-	def CallProcess(self, process):
+	def CallProcess(self, process, user_data):
 		self.ExitEvent 	= True
 		self.Status 	= True
+		self.UserData 	= user_data
+		print (process)
 		proc = subprocess.Popen(process, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 		print ("[ExternalProcess]# Process started", process)
 		self.Pipe = LocalPipe(proc)
