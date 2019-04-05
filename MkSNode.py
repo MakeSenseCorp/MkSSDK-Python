@@ -282,12 +282,6 @@ class Node():
 			message = self.Network.BuildResponse(json, payload)
 			self.Network.SendWebSocket(message)
 
-		#if True == self.SystemLoaded:
-			# print self.UserDefined
-		#	res_payload = "\"state\":\"response\",\"status\":\"ok\",\"ts\":" + str(time.time()) + ",\"name\":\"" + self.Name + "\",\"description\":\"" + self.Description + "\", \"user\":" + json.dumps(self.UserDefined)
-		#	print res_payload
-		#	self.SendMessage(message_type, source, "get_node_info", res_payload)
-
 	def GetNodeStatusHandler(self, message_type, source, data):
 		if True == self.SystemLoaded:
 			res_payload = "\"state\":\"response\",\"status\":\"ok\",\"ts\":" + str(time.time()) + ",\"registered\":\"" + str(self.IsNodeRegistered(source)) + "\""
@@ -302,7 +296,6 @@ class Node():
 	def WebSocketDataArrivedCallback (self, json):
 		self.State 	= "WORK"
 		messageType = self.Network.GetMessageTypeFromJson(json)
-		source 		= self.Network.GetSourceFromJson(json)
 		destination = self.Network.GetDestinationFromJson(json)
 		command 	= self.Network.GetCommandFromJson(json)
 
@@ -311,20 +304,23 @@ class Node():
 		# Is this packet for me?
 		if destination in self.UUID:
 			if messageType == "CUSTOM":
-				return;
+				return
 			elif messageType == "DIRECT" or messageType == "PRIVATE" or messageType == "BROADCAST" or messageType == "WEBFACE":
-				data = self.Network.GetDataFromJson(json)
 				# If commands located in the list below, do not forward this message and handle it in this context.
-				if command in ["get_node_info", "get_node_status", "get_file"]:
+				if command in ["get_node_info", "get_node_status"]:
 					self.Handlers[command](json)
 				else:
-					self.OnWSDataArrived(messageType, source, data)
+					print ("DEBUG #1")
+					self.LocalServiceNode.HandleInternalReqest(json)
+					print ("DEBUG #2")
+					if self.OnWSDataArrived is not None:
+						print ("DEBUG #3")
+						self.OnWSDataArrived(json)
 			else:
 				print ("Error: Not support " + request + " request type.")
 		else:
 			# Find who has this destination adderes.
 			self.LocalServiceNode.HandleExternalRequest(json)
-
 
 	def IsNodeRegistered(self, subscriber_uuid):
 		return subscriber_uuid in self.RegisteredNodes

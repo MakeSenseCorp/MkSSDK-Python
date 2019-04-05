@@ -221,7 +221,7 @@ class AbstractNode():
 			return ""
 
 	def TickState(self):
-		self.Ticker += 1;
+		self.Ticker += 1
 		# State machine
 		method = self.States[self.CurrentState]
 		method()
@@ -275,7 +275,7 @@ class AbstractNode():
 
 			self.ServerSocket.bind(self.ServerAdderss)
 			# [socket, ip_address, port]
-			node = self.AppendConnection(self.ServerSocket, self.ServerAdderss[0], self.ServerAdderss[1])
+			node = self.AppendConnection(self.ServerSocket, self.MyLocalIP, self.ServerAdderss[1])
 			node.LocalType 	= "LISTENER"
 			node.UUID 		= self.UUID
 			node.Type 		= self.Type
@@ -487,7 +487,7 @@ class AbstractNode():
 				self.RemoveConnection(conn.Socket)
 
 	def GetConnections(self):
-		return self.Connections;
+		return self.Connections
 
 	def SetNodeUUID(self, uuid):
 		self.UUID = uuid

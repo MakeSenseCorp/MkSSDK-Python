@@ -112,10 +112,15 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 		self.RequestHandlers				= {
 			'get_port': 					self.GetPortRequestHandler,
 			'get_local_nodes': 				self.GetLocalNodesRequestHandler,
-			'get_master_info':				self.GetMasterInfoRequestHandler
+			'get_master_info':				self.GetMasterInfoRequestHandler,
+			'get_file':						self.GetFileHandler,
+			'upload_file':					self.UploadFileHandler
 		}
 		self.ResponseHandlers 				= {
 		}
+		# Callbacks
+		self.OnCustomCommandRequestCallback		= None
+		self.OnCustomCommandResponseCallback	= None
 		# Flags
 		self.IsListenerEnabled 				= False
 		self.PipeStdoutRun					= False
@@ -124,6 +129,71 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 		self.LoadNodesOnMasterStart()
 
 		thread.start_new_thread(self.PipeStdoutListener_Thread, ())
+
+	def GetFileHandler(self, packet):
+		print ("[MasterNode] GetFileHandler")
+
+		'''
+		{
+			'header': {	
+				'source': 'WEBFACE',
+				'destination': 'ac6de837-9863-72a9-c789-a0aae7e9d020', 
+				'message_type': 'DIRECT'
+				}, 
+			'piggybag': {
+				'identifier': 9
+			}, 
+			'data': {
+				'header': {
+					'timestamp': 1554159118729, 
+					'command': 'get_file'
+				}, 
+				'payload': {
+					'file_type': 'js',
+					'file_name': '', 
+					'ui_type': 'config'
+				}
+			},
+			'user': {
+				'key': 'ac6de837-7863-72a9-c789-a0aae7e9d93e'
+			},
+			'additional': {				
+			}
+		}
+		'''
+
+		objFile 	= MkSFile.File()
+		uiType 		= packet["data"]["payload"]["ui_type"]
+		fileType 	= packet["data"]["payload"]["file_type"]
+		fileName 	= packet["data"]["payload"]["file_name"]
+
+		folder = {
+			'config': 		'config',
+			'app': 			'app',
+			'thumbnail': 	'thumbnail'
+		}
+
+		path = os.path.join(".","ui",folder[uiType],"ui." + fileType)
+		print path
+		content = objFile.LoadStateFromFile(path)
+		
+		resPayload = {
+			'file_type': fileType,
+			'ui_type': uiType,
+			'content': content.encode('hex')
+		}
+
+		command 	= packet['data']['header']['command']
+		source 		= packet["header"]["source"]
+		destination = packet["header"]["destination"]
+		payload 	= resPayload
+		piggy 		= packet["piggybag"]
+
+		if self.OnSlaveResponseCallback is not None:
+			self.OnSlaveResponseCallback(source, destination, command, payload, piggy)
+	
+	def UploadFileHandler(self, packet):
+		pass
 
 	"""
 	Local Face RESP API methods
@@ -313,6 +383,14 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 	def GetNodeStatusResponseHandler(self, sock, packet):
 		pass
 	
+	def HandleInternalReqest(self, packet):
+		print ("[MasterNode] HandleInternalReqest")
+		command = packet["data"]["header"]['command']
+		print ("[HandleInternalReqest]", command)
+		
+		if command in self.RequestHandlers:
+			self.RequestHandlers[command](packet)
+
 	# PROXY - Application -> Slave Node
 	def HandleExternalRequest(self, packet):
 		destination = packet["header"]["destination"]
@@ -358,17 +436,17 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 			# Load installed applications
 			self.InstalledApps = json.loads(jsonInstalledAppsStr)
 
-		self.InitiateLocalServer(8080)
+		#self.InitiateLocalServer(8080)
 		# UI RestAPI
-		self.UI.AddEndpoint("/get/node_list/<key>", 				"get_node_list", 				self.GetNodeListHandler)
-		self.UI.AddEndpoint("/get/node_list_by_type/<key>", 		"get_node_list_by_type", 		self.GetNodeListByTypeHandler, 			method=['POST'])
-		self.UI.AddEndpoint("/set/node_action/<key>", 				"set_node_action", 				self.SetNodeActionHandler, 				method=['POST'])
-		self.UI.AddEndpoint("/get/node_shell_cmd/<key>", 			"get_node_shell_cmd", 			self.GetNodeShellCommandHandler, 		method=['POST'])
-		self.UI.AddEndpoint("/get/node_config_info/<key>", 			"get_node_config_info", 		self.GetNodeConfigInfoHandler)
-		self.UI.AddEndpoint("/get/app_list/<key>", 					"get_app_list", 				self.GetApplicationListHandler)
-		self.UI.AddEndpoint("/get/app_html/<key>", 					"get_app_html",					self.GetApplicationHTMLHandler, 		method=['POST'])
-		self.UI.AddEndpoint("/get/app_js/<key>", 					"get_app_js", 					self.GetApplicationJavaScriptHandler, 	method=['POST'])
-		self.UI.AddEndpoint("/generic/node_get_request/<key>", 		"generic_node_get_request", 	self.GenericNodeGETRequestHandler, 		method=['POST'])
+		#self.UI.AddEndpoint("/get/node_list/<key>", 				"get_node_list", 				self.GetNodeListHandler)
+		#self.UI.AddEndpoint("/get/node_list_by_type/<key>", 		"get_node_list_by_type", 		self.GetNodeListByTypeHandler, 			method=['POST'])
+		#self.UI.AddEndpoint("/set/node_action/<key>", 				"set_node_action", 				self.SetNodeActionHandler, 				method=['POST'])
+		#self.UI.AddEndpoint("/get/node_shell_cmd/<key>", 			"get_node_shell_cmd", 			self.GetNodeShellCommandHandler, 		method=['POST'])
+		#self.UI.AddEndpoint("/get/node_config_info/<key>", 			"get_node_config_info", 		self.GetNodeConfigInfoHandler)
+		#self.UI.AddEndpoint("/get/app_list/<key>", 					"get_app_list", 				self.GetApplicationListHandler)
+		#self.UI.AddEndpoint("/get/app_html/<key>", 					"get_app_html",					self.GetApplicationHTMLHandler, 		method=['POST'])
+		#self.UI.AddEndpoint("/get/app_js/<key>", 					"get_app_js", 					self.GetApplicationJavaScriptHandler, 	method=['POST'])
+		#self.UI.AddEndpoint("/generic/node_get_request/<key>", 		"generic_node_get_request", 	self.GenericNodeGETRequestHandler, 		method=['POST'])
 
 	def StateIdle (self):
 		self.ServerAdderss = ('', 16999)
@@ -461,20 +539,27 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 		payload = self.Commands.GetMasterInfoResponse(self.UUID, self.MasterHostName, nodes)
 		sock.send(payload)
 
-	def HandlerRouter_Request(self, sock, json_data):
-		print ("[MasterNode] HandlerRouter_Request")
-		command = json_data['command']
+	# INBOUND
+	def HandlerRouter_Request(self, sock, packet):
+		command = packet['command']
 		# TODO - IF command type is not in list call unknown callback in user code.
 		if command in self.RequestHandlers:
-			self.RequestHandlers[command](sock, json_data)
+			self.RequestHandlers[command](sock, packet)
+		else:
+			if self.OnCustomCommandRequestCallback is not None:
+				self.OnCustomCommandRequestCallback(sock, packet)
 
-	def HandlerRouter_Response(self, sock, json_data):
-		print ("[MasterNode] HandlerRouter_Response")
-		command = json_data['command']
+	# OUTBOUND
+	def HandlerRouter_Response(self, sock, packet):
+		command = packet['command']
 		# TODO - IF command type is not in list call unknown callback in user code.
 		if command in self.ResponseHandlers:
-			self.ResponseHandlers[command](sock, json_data)
+			self.ResponseHandlers[command](sock, packet)
+		else:
+			if self.OnCustomCommandResponseCallback is not None:
+				self.OnCustomCommandResponseCallback(sock, packet)
 
+	# OUTBOUND PROXY
 	def HandlerRouter_Proxy(self, sock, json_data):
 		print ("[MasterNode] HandlerRouter_ProxyResponse")
 		command 	= json_data['command']
@@ -483,6 +568,7 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 		payload 	= json_data["payload"]["data"]
 		piggy 		= json_data["piggybag"]
 
+		# Send data response to requestor via MkSNode module.
 		if self.OnSlaveResponseCallback is not None:
 			self.OnSlaveResponseCallback(destination, source, command, payload, piggy)
 

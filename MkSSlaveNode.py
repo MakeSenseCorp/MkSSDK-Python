@@ -237,17 +237,25 @@ class SlaveNode(MkSAbstractNode.AbstractNode):
 	def StateExit(self):
 		print ("StateExit")
 
+	# INBOUND
 	def HandlerRouter_Request(self, sock, json_data):
 		command = json_data['command']
 		# TODO - IF command type is not in list call unknown callback in user code.
 		if command in self.RequestHandlers:
 			self.RequestHandlers[command](sock, json_data)
+		else:
+			if self.OnCustomCommandRequestCallback is not None:
+				self.OnCustomCommandRequestCallback(sock, json_data)
 
+	# OUTBOUND
 	def HandlerRouter_Response(self, sock, json_data):
 		command = json_data['command']
 		# TODO - IF command type is not in list call unknown callback in user code.
 		if command in self.ResponseHandlers:
 			self.ResponseHandlers[command](sock, json_data)
+		else:
+			if self.OnCustomCommandResponseCallback is not None:
+				self.OnCustomCommandResponseCallback(sock, json_data)
 
 	# TODO - Master and Slave have same HandleRouter, consider moving to abstruct class
 	def HandlerRouter(self, sock, data):
