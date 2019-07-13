@@ -319,6 +319,7 @@ class Node():
 			else:
 				print ("Error: Not support " + request + " request type.")
 		else:
+			print ("WebSocketDataArrivedCallback", "HandleExternalRequest")
 			# Find who has this destination adderes.
 			self.LocalServiceNode.HandleExternalRequest(json)
 

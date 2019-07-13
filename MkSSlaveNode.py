@@ -146,6 +146,11 @@ class SlaveNode(MkSAbstractNode.AbstractNode):
 		print ("[SlaveNode] SendGatewayPing")
 		payload = self.Commands.SendPingRequest("GATEWAY", self.UUID)
 		# self.MasterSocket.send(payload)
+	
+	def GetListOfNodeFromGateway(self):
+		print ("[SlaveNode] GetListOfNodeFromGateway")
+		payload = self.Commands.SendListOfNodesRequest("GATEWAY", self.UUID)
+		self.MasterSocket.send(payload)
 
 	def CleanMasterList(self):
 		for node in self.MasterNodesList:

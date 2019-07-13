@@ -109,6 +109,26 @@ class LocalNodeCommands:
 		packet += json.dumps({	
 								'command': 'ping',
 								'direction': 'proxy_request',
+								'piggybag': 0,
+								'payload': {
+									'header': {
+										'destination': str(destination),
+										'source': str(source)
+									},
+									'data': {
+
+									}
+								}
+							})
+		packet += self.GetFooter()
+		return packet
+	
+	def SendListOfNodesRequest(self, destination, source):
+		packet = self.GetHeader()
+		packet += json.dumps({	
+								'command': 'nodes_list',
+								'direction': 'proxy_request',
+								'piggybag': 0,
 								'payload': {
 									'header': {
 										'destination': str(destination),
