@@ -141,6 +141,25 @@ class LocalNodeCommands:
 							})
 		packet += self.GetFooter()
 		return packet
+	
+	def NodeInfoRequest(self, destination, source):
+		packet = self.GetHeader()
+		packet += json.dumps({	
+								'command': 'get_node_info',
+								'direction': 'proxy_request',
+								'piggybag': 0,
+								'payload': {
+									'header': {
+										'destination': str(destination),
+										'source': str(source)
+									},
+									'data': {
+
+									}
+								}
+							})
+		packet += self.GetFooter()
+		return packet
 
 	def GenerateJsonProxyRequest(self, destination, source, command, data, piggy):
 		return {	
@@ -155,6 +174,26 @@ class LocalNodeCommands:
 				'data': data
 			}
 		}
+	
+	def GenerateJsonProxyResponse(self, destination, source, command, data, piggy):
+		return {	
+			'command': command,
+			'direction': 'proxy_response',
+			'piggybag': piggy,
+			'payload': {
+				'header': {
+					'destination': str(destination),
+					'source': str(source)
+				},
+				'data': data
+			}
+		}
+
+	def GatewayToProxyResponse(self, destination, source, command, data, piggy):
+		packet = self.GetHeader()
+		packet += json.dumps(self.GenerateJsonProxyResponse(destination, source, command, data, piggy))
+		packet += self.GetFooter()
+		return packet
 
 	def ProxyRequest(self, destination, source, command, data, piggy):
 		packet = self.GetHeader()

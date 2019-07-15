@@ -160,16 +160,18 @@ class Network ():
 
 		packet['header']['destination']	= src
 		packet['header']['source']		= dest
+		packet['header']['direction']	= "response"
 		packet['data']['payload']		= payload
 
 		return json.dumps(packet)
 
-	def BuildMessage (self, messageType, destination, source, command, payload, piggy):
+	def BuildMessage (self, direction, messageType, destination, source, command, payload, piggy):
 		message = {
 			'header': {
 				'message_type': str(messageType),
 				'destination': str(destination),
-				'source': str(source)
+				'source': str(source),
+				'direction': str(direction)
 			},
 			'data': {
 				'header': { 

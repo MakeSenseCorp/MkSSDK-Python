@@ -36,16 +36,18 @@ class SlaveNode(MkSAbstractNode.AbstractNode):
 			'EXIT':							self.StateExit
 		}
 		# Handlers
-		# Response - Handler when rresponse returned to slave (slave is a requestor)
+		# Response - Handler when response returned to slave (slave is a requestor)
 		self.ResponseHandlers	= {
 			'get_local_nodes': 						self.GetLocalNodeResponseHandler,
 			'get_master_info': 						self.GetMasterInfoResponseHandler,
 			'get_sensor_info': 						self.GetSensorInfoResponseHandler,
 			'set_sensor_info': 						self.SetSensorInfoResponseHandler,
 			'get_port':								self.GetPortResponseHandler,
+			'nodes_list':							self.GetNodesListHandler,
+			'get_node_info':						self.GetNodeInfoHandler,
 			'undefined':							self.UndefindHandler
 		}
-		# Request - Response handler to sent request.
+		# Request - Response handler to sent request. (slave is responder)
 		self.RequestHandlers	= {
 			'get_sensor_info': 						self.GetSensorInfoRequestHandler,
 			'set_sensor_info': 						self.SetSensorInfoRequestHandler,
@@ -61,6 +63,8 @@ class SlaveNode(MkSAbstractNode.AbstractNode):
 		self.OnMasterAppendNodeResponseCallback		= None
 		self.OnMasterRemoveNodeResponseCallback 	= None
 		self.OnGetSensorInfoResponseCallback 		= None
+		self.OnGetNodesListCallback 				= None
+		self.OnGetNodeInfoCallback 					= None
 
 		self.OnGetSensorInfoRequestCallback			= None
 		self.OnSetSensorInfoRequestCallback 		= None
@@ -75,6 +79,14 @@ class SlaveNode(MkSAbstractNode.AbstractNode):
 		self.Ticker 								= 0
 
 		self.ChangeState("IDLE")
+
+	def GetNodesListHandler(self, sock, packet):
+		if self.OnGetNodesListCallback is not None:
+			self.OnGetNodesListCallback(packet["payload"]["data"])
+	
+	def GetNodeInfoHandler(self, sock, packet):
+		if self.OnGetNodeInfoCallback is not None:
+			self.OnGetNodeInfoCallback(packet)
 
 	def GetFileHandler(self, sock, packet):
 		print ("[SlaveNode] GetFileHandler")
@@ -91,7 +103,7 @@ class SlaveNode(MkSAbstractNode.AbstractNode):
 		}
 
 		path = os.path.join(".","ui",folder[uiType],"ui." + fileType)
-		print path
+		print (path)
 		content = objFile.LoadStateFromFile(path)
 		
 		payload = {
@@ -150,6 +162,11 @@ class SlaveNode(MkSAbstractNode.AbstractNode):
 	def GetListOfNodeFromGateway(self):
 		print ("[SlaveNode] GetListOfNodeFromGateway")
 		payload = self.Commands.SendListOfNodesRequest("GATEWAY", self.UUID)
+		self.MasterSocket.send(payload)
+	
+	def GetNodeInfo(self, uuid):
+		print ("[SlaveNode] GetNodeInfo")
+		payload = self.Commands.NodeInfoRequest(uuid, self.UUID)
 		self.MasterSocket.send(payload)
 
 	def CleanMasterList(self):
@@ -255,6 +272,7 @@ class SlaveNode(MkSAbstractNode.AbstractNode):
 
 	# INBOUND
 	def HandlerRouter_Request(self, sock, json_data):
+		print ("INBOUND", json_data)
 		command = json_data['command']
 		# TODO - IF command type is not in list call unknown callback in user code.
 		if command in self.RequestHandlers:
@@ -265,6 +283,7 @@ class SlaveNode(MkSAbstractNode.AbstractNode):
 
 	# OUTBOUND
 	def HandlerRouter_Response(self, sock, json_data):
+		print ("OUTBOUND", json_data)
 		command = json_data['command']
 		# TODO - IF command type is not in list call unknown callback in user code.
 		if command in self.ResponseHandlers:

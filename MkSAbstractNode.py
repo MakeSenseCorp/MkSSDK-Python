@@ -326,7 +326,10 @@ class AbstractNode():
 			if command in ["get_node_info", "get_node_status"]:
 				print ("[AbstractNode] ['get_node_info', 'get_node_status']")
 				if direction in ["response", "proxy_response"]:
-					self.DataSocketInputHandler_Response(sock, jsonData)
+					if (direction in "proxy_response"):
+						self.HandlerRouter(sock, data)
+					else:
+						self.DataSocketInputHandler_Response(sock, jsonData)
 				elif direction in ["request", "proxy_request"]:
 					self.DataSocketInputHandler_Resquest(sock, jsonData)
 			else:

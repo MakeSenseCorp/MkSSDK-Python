@@ -174,7 +174,7 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 		}
 
 		path = os.path.join(".","ui",folder[uiType],"ui." + fileType)
-		print path
+		print (path)
 		content = objFile.LoadStateFromFile(path)
 		
 		resPayload = {
@@ -276,7 +276,7 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 					image = self.File.LoadContent(item["path"] + "\\app.png")
 				item["image"] = image.encode('base64')
 
-			print str(json.dumps(apps))
+			print (str(json.dumps(apps)))
 			return "{\"response\":\"OK\",\"apps\":" + str(json.dumps(apps)) + "}"
 		return "{\"response\":\"FAILED\"}"
 
@@ -393,17 +393,30 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 
 	# PROXY - Application -> Slave Node
 	def HandleExternalRequest(self, packet):
+		print ("HandleExternalRequest", packet)
 		destination = packet["header"]["destination"]
 		source 		= packet["header"]["source"]
+		direction 	= packet["header"]["direction"]
 		data 		= packet["data"]["payload"]
 		command 	= packet["data"]["header"]["command"]
+		print ("DEBUG #1")
 		piggy  		= packet["piggybag"]
 
+		print ("DEBUG #2")
 		node = self.GetSlaveNode(destination)
 		if node is not None:
-			msg = self.Commands.ProxyRequest(destination, source, command, data, piggy)
-			node.Socket.send(msg)
+			print ("DEBUG #3")
+			if (direction in "response"):
+				print ("DEBUG #4.1")
+				# TODO - Incorrect translation between websocket prot to socket prot
+				msg = self.Commands.GatewayToProxyResponse(destination, source, command, data, piggy)
+				node.Socket.send(msg)
+			elif (direction in "request"):
+				msg = self.Commands.ProxyRequest(destination, source, command, data, piggy)
+				node.Socket.send(msg)
+				print ("DEBUG #4.2")
 		else:
+			print ("DEBUG #5")
 			# Need to look at other masters list.
 			pass
 
@@ -539,6 +552,18 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 		payload = self.Commands.GetMasterInfoResponse(self.UUID, self.MasterHostName, nodes)
 		sock.send(payload)
 
+	def GetNodeInfoRequestHandler(self, sock, packet):
+		direction = packet['direction']
+		if (direction in "proxy_request"):
+			# Send data response to requestor via MkSNode module.
+			if self.OnSlaveResponseCallback is not None:
+				command 	= packet['command']
+				source 		= packet["payload"]["header"]["source"]
+				destination = packet["payload"]["header"]["destination"]
+				payload 	= packet["payload"]["data"]
+				piggy 		= packet["piggybag"]
+				self.OnSlaveResponseCallback(destination, source, command, payload, piggy)
+	
 	# INBOUND
 	def HandlerRouter_Request(self, sock, packet):
 		command = packet['command']
