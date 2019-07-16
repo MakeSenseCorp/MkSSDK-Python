@@ -190,7 +190,7 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 		piggy 		= packet["piggybag"]
 
 		if self.OnSlaveResponseCallback is not None:
-			self.OnSlaveResponseCallback(source, destination, command, payload, piggy)
+			self.OnSlaveResponseCallback("response", source, destination, command, payload, piggy)
 	
 	def UploadFileHandler(self, packet):
 		pass
@@ -375,7 +375,7 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 		# 		 Otherwise this is a response to master request. (MUST HANDLE IT LOCALY)
 
 		if self.OnSlaveResponseCallback is not None:
-			self.OnSlaveResponseCallback(destination, source, command, payload, piggy)
+			self.OnSlaveResponseCallback("response", destination, source, command, payload, piggy)
 
 	def GetNodeStatusRequestHandler(self, sock, packet):
 		pass
@@ -393,7 +393,6 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 
 	# PROXY - Application -> Slave Node
 	def HandleExternalRequest(self, packet):
-		print ("HandleExternalRequest", packet)
 		destination = packet["header"]["destination"]
 		source 		= packet["header"]["source"]
 		direction 	= packet["header"]["direction"]
@@ -562,7 +561,7 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 				destination = packet["payload"]["header"]["destination"]
 				payload 	= packet["payload"]["data"]
 				piggy 		= packet["piggybag"]
-				self.OnSlaveResponseCallback(destination, source, command, payload, piggy)
+				self.OnSlaveResponseCallback("request", destination, source, command, payload, piggy)
 	
 	# INBOUND
 	def HandlerRouter_Request(self, sock, packet):
@@ -592,10 +591,16 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 		destination = json_data["payload"]["header"]["destination"]
 		payload 	= json_data["payload"]["data"]
 		piggy 		= json_data["piggybag"]
+		direction 	= json_data['direction']
 
 		# Send data response to requestor via MkSNode module.
 		if self.OnSlaveResponseCallback is not None:
-			self.OnSlaveResponseCallback(destination, source, command, payload, piggy)
+			if (direction in "proxy_request"):
+				self.OnSlaveResponseCallback("request", destination, source, command, payload, piggy)
+			elif (direction in "proxy_response"):
+				self.OnSlaveResponseCallback("response", destination, source, command, payload, piggy)
+			else:
+				print("[MasterNode] ERROR - HandlerRouter_Proxy")
 
 	# Description - Handling input date from local server.
 	def HandlerRouter(self, sock, data):

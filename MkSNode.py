@@ -130,10 +130,10 @@ class Node():
 			self.Network.SendWebSocket(message)
 
 	# Sending response to "get_node_info" request (mostly for proxy request)
-	def OnSlaveResponseHandler(self, dest, src, command, payload, piggy):
+	def OnSlaveResponseHandler(self, direction, dest, src, command, payload, piggy):
 		print ("[DEBUG MASTER] OnSlaveResponseHandler")
 		if self.Network.GetNetworkState() is "CONN":
-			message = self.Network.BuildMessage("request", "DIRECT", dest, src, command, payload, piggy)
+			message = self.Network.BuildMessage(direction, "DIRECT", dest, src, command, payload, piggy)
 			self.Network.SendWebSocket(message)
 
 	def OnGetNodeInfoRequestHandler(self, sock, packet):
