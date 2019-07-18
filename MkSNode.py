@@ -280,9 +280,6 @@ class Node():
 		if self.Network.GetNetworkState() is "CONN":
 			payload = self.NodeInfo
 			message = self.Network.BuildResponse(json, payload)
-			print("\n")
-			print(message)
-			print("\n")
 			self.Network.SendWebSocket(message)
 
 	def GetNodeStatusHandler(self, message_type, source, data):

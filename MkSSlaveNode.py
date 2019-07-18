@@ -156,7 +156,7 @@ class SlaveNode(MkSAbstractNode.AbstractNode):
 
 	def SendGatewayPing(self):
 		print ("[SlaveNode] SendGatewayPing")
-		payload = self.Commands.SendPingRequest("GATEWAY", self.UUID)
+		# payload = self.Commands.SendPingRequest("GATEWAY", self.UUID)
 		# self.MasterSocket.send(payload)
 	
 	def GetListOfNodeFromGateway(self):
@@ -167,6 +167,11 @@ class SlaveNode(MkSAbstractNode.AbstractNode):
 	def GetNodeInfo(self, uuid):
 		print ("[SlaveNode] GetNodeInfo")
 		payload = self.Commands.NodeInfoRequest(uuid, self.UUID)
+		self.MasterSocket.send(payload)
+	
+	def SendMessageToNodeViaGateway(self, uuid, message_type, data):
+		print ("[SlaveNode] SendMessageToNodeViaGateway")
+		payload = self.Commands.SendMessageToNodeViaGatewayRequest(message_type, uuid, self.UUID, data)
 		self.MasterSocket.send(payload)
 
 	def CleanMasterList(self):
@@ -272,7 +277,7 @@ class SlaveNode(MkSAbstractNode.AbstractNode):
 
 	# INBOUND
 	def HandlerRouter_Request(self, sock, json_data):
-		print ("INBOUND", json_data)
+		print ("INBOUND")
 		command = json_data['command']
 		# TODO - IF command type is not in list call unknown callback in user code.
 		if command in self.RequestHandlers:
@@ -283,7 +288,7 @@ class SlaveNode(MkSAbstractNode.AbstractNode):
 
 	# OUTBOUND
 	def HandlerRouter_Response(self, sock, json_data):
-		print ("OUTBOUND", json_data)
+		print ("OUTBOUND")
 		command = json_data['command']
 		# TODO - IF command type is not in list call unknown callback in user code.
 		if command in self.ResponseHandlers:

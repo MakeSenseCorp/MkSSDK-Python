@@ -160,6 +160,23 @@ class LocalNodeCommands:
 							})
 		packet += self.GetFooter()
 		return packet
+	
+	def SendMessageToNodeViaGatewayRequest(self, command, destination, source, data):
+		packet = self.GetHeader()
+		packet += json.dumps({	
+								'command': str(command),
+								'direction': 'proxy_request',
+								'piggybag': 0,
+								'payload': {
+									'header': {
+										'destination': str(destination),
+										'source': str(source)
+									},
+									'data': data
+								}
+							})
+		packet += self.GetFooter()
+		return packet
 
 	def GenerateJsonProxyRequest(self, destination, source, command, data, piggy):
 		return {	

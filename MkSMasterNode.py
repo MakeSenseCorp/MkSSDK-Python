@@ -384,9 +384,8 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 		pass
 	
 	def HandleInternalReqest(self, packet):
-		print ("[MasterNode] HandleInternalReqest")
 		command = packet["data"]["header"]['command']
-		print ("[HandleInternalReqest]", command)
+		print ("[MasterNode] HandleInternalReqest", command)
 		
 		if command in self.RequestHandlers:
 			self.RequestHandlers[command](packet)
@@ -398,24 +397,21 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 		direction 	= packet["header"]["direction"]
 		data 		= packet["data"]["payload"]
 		command 	= packet["data"]["header"]["command"]
-		print ("DEBUG #1")
 		piggy  		= packet["piggybag"]
 
-		print ("DEBUG #2")
 		node = self.GetSlaveNode(destination)
 		if node is not None:
-			print ("DEBUG #3")
 			if (direction in "response"):
-				print ("DEBUG #4.1")
 				# TODO - Incorrect translation between websocket prot to socket prot
 				msg = self.Commands.GatewayToProxyResponse(destination, source, command, data, piggy)
 				node.Socket.send(msg)
+				print ("[MasterNode] HandleInternalReqest RESPONSE")
 			elif (direction in "request"):
 				msg = self.Commands.ProxyRequest(destination, source, command, data, piggy)
 				node.Socket.send(msg)
-				print ("DEBUG #4.2")
+				print ("[MasterNode] HandleInternalReqest REQUEST")
 		else:
-			print ("DEBUG #5")
+			print ("[MasterNode] HandleInternalReqest NODE NOT FOUND")
 			# Need to look at other masters list.
 			pass
 
