@@ -45,6 +45,7 @@ class SlaveNode(MkSAbstractNode.AbstractNode):
 			'get_port':								self.GetPortResponseHandler,
 			'nodes_list':							self.GetNodesListHandler,
 			'get_node_info':						self.GetNodeInfoHandler,
+			'master_append_node':					self.MasterAppendNode,
 			'undefined':							self.UndefindHandler
 		}
 		# Request - Response handler to sent request. (slave is responder)
@@ -72,6 +73,7 @@ class SlaveNode(MkSAbstractNode.AbstractNode):
 		self.OnCustomCommandRequestCallback			= None
 		self.OnCustomCommandResponseCallback		= None
 		self.OnGetNodeInfoRequestCallback 			= None
+		self.OnMasterAppendNodeCallback 			= None
 		# Flags
 		self.IsListenerEnabled 						= False
 		# Counters
@@ -80,6 +82,13 @@ class SlaveNode(MkSAbstractNode.AbstractNode):
 
 		self.ChangeState("IDLE")
 
+	def MasterAppendNode(self, sock, packet):
+		if self.OnMasterAppendNodeCallback is not None:
+			self.OnMasterAppendNodeCallback(packet["node"]["uuid"], 
+											packet["node"]["type"], 
+											packet["node"]["ip"],
+											packet["node"]["port"])
+	
 	def GetNodesListHandler(self, sock, packet):
 		if self.OnGetNodesListCallback is not None:
 			self.OnGetNodesListCallback(packet["payload"]["data"])
@@ -288,8 +297,8 @@ class SlaveNode(MkSAbstractNode.AbstractNode):
 
 	# OUTBOUND
 	def HandlerRouter_Response(self, sock, json_data):
-		print ("OUTBOUND")
 		command = json_data['command']
+		print ("OUTBOUND", json_data)
 		# TODO - IF command type is not in list call unknown callback in user code.
 		if command in self.ResponseHandlers:
 			self.ResponseHandlers[command](sock, json_data)
