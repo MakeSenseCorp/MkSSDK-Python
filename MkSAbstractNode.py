@@ -10,6 +10,7 @@ import threading
 import socket, select
 
 from flask import Flask, render_template, jsonify, Response, request
+from flask_cors import CORS
 import logging
 
 from mksdk import MkSUtils
@@ -26,13 +27,14 @@ class WebInterface():
 	def __init__(self, name, port):
 		self.App = Flask(name)
 		self.Port = port
+		CORS(self.App)
 
 		#self.Log = logging.getLogger('werkzeug')
 		#self.Log.disabled = True
 		#self.App.logger.disabled = True
 
 	def WebInterfaceWorker_Thread(self):
-		print ("[AbstractNode]# WebInterfaceWorker_Thread")
+		print ("[AbstractNode]# WebInterfaceWorker_Thread", self.Port)
 		self.App.run(host='0.0.0.0', port=self.Port)
 
 	def Run(self):
@@ -106,6 +108,7 @@ class AbstractNode():
 		}
 		# LocalFace UI
 		self.UI 									= None
+		self.LocalWebPort							= ""
 
 	# Overload
 	def GatewayConnectedEvent(self):
@@ -182,7 +185,8 @@ class AbstractNode():
 		pass
 
 	def InitiateLocalServer(self, port):
-		self.UI 	= WebInterface("Context", port)
+		self.UI 			= WebInterface("Context", port)
+		self.LocalWebPort	= port
 		# Data for the pages.
 		jsonUIData 	= {
 			'ip': str(self.MyLocalIP),
