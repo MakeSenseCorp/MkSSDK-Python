@@ -623,7 +623,7 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 						item.Port 	= 0
 						item.Status = "Stopped"
 
-				payload = self.Commands.MasterAppendNodeResponse(slave.IP, slave.Port, slave.UUID, slave.Type)
+				payload = self.Commands.MasterRemoveNodeResponse(slave.IP, slave.Port, slave.UUID, slave.Type)
 				# Send to all nodes
 				for client in self.Connections:
 					if client.Socket == self.ServerSocket or client.Socket == sock:

@@ -46,6 +46,7 @@ class SlaveNode(MkSAbstractNode.AbstractNode):
 			'nodes_list':							self.GetNodesListHandler,
 			'get_node_info':						self.GetNodeInfoHandler,
 			'master_append_node':					self.MasterAppendNode,
+			'master_remove_node':					self.MasterRemoveNodeHandler,
 			'undefined':							self.UndefindHandler
 		}
 		# Request - Response handler to sent request. (slave is responder)
@@ -74,6 +75,7 @@ class SlaveNode(MkSAbstractNode.AbstractNode):
 		self.OnCustomCommandResponseCallback		= None
 		self.OnGetNodeInfoRequestCallback 			= None
 		self.OnMasterAppendNodeCallback 			= None
+		self.OnMasterRemoveNodeCallback 			= None
 		# Flags
 		self.IsListenerEnabled 						= False
 		# Counters
@@ -85,6 +87,13 @@ class SlaveNode(MkSAbstractNode.AbstractNode):
 	def MasterAppendNode(self, sock, packet):
 		if self.OnMasterAppendNodeCallback is not None:
 			self.OnMasterAppendNodeCallback(packet["node"]["uuid"], 
+											packet["node"]["type"], 
+											packet["node"]["ip"],
+											packet["node"]["port"])
+	
+	def MasterRemoveNodeHandler(self, sock, packet):
+		if self.OnMasterRemoveNodeCallback is not None:
+			self.OnMasterRemoveNodeCallback(packet["node"]["uuid"], 
 											packet["node"]["type"], 
 											packet["node"]["ip"],
 											packet["node"]["port"])
