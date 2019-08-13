@@ -10,7 +10,7 @@ import threading
 import socket, select
 
 from flask import Flask, render_template, jsonify, Response, request
-from flask_cors import CORS
+#from flask_cors import CORS
 import logging
 
 from mksdk import MkSUtils
@@ -27,7 +27,7 @@ class WebInterface():
 	def __init__(self, name, port):
 		self.App = Flask(name)
 		self.Port = port
-		CORS(self.App)
+		#CORS(self.App)
 
 		#self.Log = logging.getLogger('werkzeug')
 		#self.Log.disabled = True
@@ -443,6 +443,7 @@ class AbstractNode():
 
 		# Clean all resorses before exit.
 		self.CleanAllSockets()
+		print ("[AbstractNode] Exit execution thread")
 		self.ExitLocalServerEvent.set()
 
 	def ConnectNode(self, ip, port):

@@ -43,6 +43,7 @@ class Node():
 		self.Name 							= ""
 		self.Description					= ""
 		self.DeviceInfo 					= None
+		self.BoardType 						= ""
 		# Misc
 		self.State 							= 'IDLE'
 		self.IsRunnig 						= True
@@ -173,6 +174,8 @@ class Node():
 			self.BrandName 			= dataSystem["node"]["brandname"]
 			self.Name 				= dataSystem["node"]["name"]
 			self.Description 		= dataSystem["node"]["description"]
+			if (self.Type == 1):
+				self.BoardType 			= dataSystem["node"]["boardType"]
 			self.UserDefined		= dataSystem["user"]
 			# Device UUID MUST be read from HW device.
 			if "True" == dataSystem["node"]["isHW"]:

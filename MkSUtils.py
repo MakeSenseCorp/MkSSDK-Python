@@ -2,6 +2,40 @@ import socket
 import os
 import sys
 import subprocess
+import re
+
+class Utils():
+	def __init__(self):
+		pass
+	
+	def GetSystemIPs(self):
+		proc = subprocess.Popen("ip a", shell=True, stdout=subprocess.PIPE)
+		data = proc.stdout.read()
+		data = re.sub(' +', ' ', data)
+		cmdRows = data.split("\n")
+		
+		items 	= []
+		ip 		= ""
+		mac 	= ""
+		subnet 	= ""
+		
+		for row in cmdRows[:-1]:
+			cols = row.split(" ")
+			if (cols[0] != ""):
+				# Start of new interface
+				if (cols[0] != "1:"):
+					# Not first interface
+					items.append([ip, mac])
+					ip = ""
+					mac = ""
+			if ("link/ether" in cols[1]):
+				mac = cols[2]
+			if ("inet" == cols[1]):
+				net = cols[2].split('/')
+				ip = net[0]
+				subnet = net[1]
+		items.append([ip, mac])	
+		return items
 
 if os.name != "nt":
 	import fcntl

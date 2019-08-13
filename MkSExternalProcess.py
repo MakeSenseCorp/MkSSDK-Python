@@ -108,12 +108,11 @@ class ExternalProcess():
 		
 		self.Status = False
 
-	def CallProcess(self, process, user_data):
+	def CallProcess(self, process, working_dir, user_data):
 		self.ExitEvent 	= True
 		self.Status 	= True
 		self.UserData 	= user_data
-		print (process)
-		proc = subprocess.Popen(process, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+		proc = subprocess.Popen(process, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, cwd=working_dir)
 		print ("[ExternalProcess]# Process started", process)
 		self.Pipe = LocalPipe(proc)
 		thread.start_new_thread(self.Worker, ())
