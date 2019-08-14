@@ -471,6 +471,7 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 	def GetPortRequestHandler(self, sock, packet):
 		nodeType 	= packet['type']
 		uuid 		= packet['uuid']
+		name 		= packet['name']
 		print ("[MASTER]: GetPortRequestHandler")
 		# Do we have available port.
 		if self.PortsForClients:
@@ -487,6 +488,7 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 				node.Type = nodeType
 				node.Port = port
 				node.UUID = uuid
+				node.SetNodeName(name)
 
 				# Update installed node list (UI will be updated)
 				for item in self.InstalledNodes:
@@ -514,7 +516,8 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 					self.OnNewNodeCallback({ 'ip':		str(node.IP), 
 											 'port':	port, 
 											 'uuid':	node.UUID, 
-											 'type':	nodeType 
+											 'type':	nodeType,
+											 'name':	str(node.Name)
 											})
 			else:
 				# Already assigned port (resending)

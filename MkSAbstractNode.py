@@ -53,15 +53,21 @@ class LocalNode():
 		self.UUID 		= uuid
 		self.Socket 	= sock
 		self.Type 		= node_type
+		self.Name 		= ""
 		self.LocalType 	= "UNKNOWN"
 		self.Status 	= "Stopped"
 		self.Obj 		= None
+	
+	def SetNodeName(self, name):
+		self.Name = name
 
 class AbstractNode():
 	def __init__(self):
 		self.Ticker 							= 0
 		self.UUID 								= ""
 		self.Type 								= 0
+		# TODO - BUG FIX - Remove sel.Name and Mastr Node will print incorrect value in the table.
+		self.Name 								= "N/A"
 		# Callbacks
 		# ---------
 		# Let know that local server thread is started. Does not say that network is working (server or client).
@@ -501,3 +507,6 @@ class AbstractNode():
 
 	def SetNodeType(self, node_type):
 		self.Type = node_type
+	
+	def SetNodeName(self, name):
+		self.Name = name

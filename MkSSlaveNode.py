@@ -245,7 +245,7 @@ class SlaveNode(MkSAbstractNode.AbstractNode):
 
 	def StateGetPort(self):
 		print ("StateGetPort")
-		payload = self.Commands.GetPortRequest(self.UUID, self.Type)
+		payload = self.Commands.GetPortRequest(self.UUID, self.Type, self.Name)
 		self.MasterSocket.send(payload)
 		self.ChangeState("WAIT_FOR_PORT")
 	

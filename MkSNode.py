@@ -251,7 +251,10 @@ class Node():
 	def StateGetAccess (self):
 		if True == self.IsNodeWSServiceEnabled:
 			print ("[DEBUG::Node] StateGetAccess")
-			self.Network.AccessGateway(self.Key, "[]")
+			self.Network.AccessGateway(self.Key, json.dumps({
+				'node_name': str(self.Name),
+				'node_type': self.Type
+			}))
 			self.State = "ACCESS_WAIT"
 		else:
 			self.State = "WORK"
@@ -403,6 +406,7 @@ class Node():
 		if True == self.IsNodeLocalServerEnabled:
 			self.LocalServiceNode.SetNodeUUID(self.UUID)
 			self.LocalServiceNode.SetNodeType(self.Type)
+			self.LocalServiceNode.SetNodeName(self.Name)
 			thread.start_new_thread(self.LocalServiceNode.NodeLocalNetworkConectionListener, ())
 
 		# Waiting here till SIGNAL from OS will come.

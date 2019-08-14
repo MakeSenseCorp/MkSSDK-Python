@@ -27,9 +27,9 @@ class LocalNodeCommands:
 
 		return packet
 
-	def GetPortRequest(self, uuid, node_type):
+	def GetPortRequest(self, uuid, node_type, node_name):
 		packet = self.GetHeader()
-		packet += "{\"command\":\"get_port\",\"direction\":\"request\",\"uuid\":\"" + uuid + "\",\"type\":" + str(node_type) + "}"
+		packet += "{\"command\":\"get_port\",\"direction\":\"request\",\"uuid\":\"" + uuid + "\",\"type\":" + str(node_type) + ",\"name\":\"" + str(node_name) + "\"}"
 		packet += self.GetFooter()
 
 		return packet
