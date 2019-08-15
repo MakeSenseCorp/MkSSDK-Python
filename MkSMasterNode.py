@@ -177,6 +177,10 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 		print (path)
 		content = objFile.LoadStateFromFile(path)
 		
+		if ("html" in fileType):
+			content = content.replace("[NODE_UUID]", self.UUID)
+			content = content.replace("[GATEWAY_IP]", self.GatewayIP)
+		
 		resPayload = {
 			'file_type': fileType,
 			'ui_type': uiType,

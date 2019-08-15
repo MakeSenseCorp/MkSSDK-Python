@@ -68,6 +68,7 @@ class AbstractNode():
 		self.Type 								= 0
 		# TODO - BUG FIX - Remove sel.Name and Mastr Node will print incorrect value in the table.
 		self.Name 								= "N/A"
+		self.GatewayIP 							= ""
 		# Callbacks
 		# ---------
 		# Let know that local server thread is started. Does not say that network is working (server or client).
@@ -510,3 +511,6 @@ class AbstractNode():
 	
 	def SetNodeName(self, name):
 		self.Name = name
+	
+	def SetGatewayIPAddress(self, ip):
+		self.GatewayIP = ip

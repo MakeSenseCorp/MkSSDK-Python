@@ -29,6 +29,7 @@ class Node():
 		self.Network						= None
 		self.LocalServiceNode 				= local_service_node
 		# Node connection to WS information
+		self.GatewayIP 						= ""
 		self.ApiUrl 						= ""
 		self.WsUrl							= ""
 		self.UserName 						= ""
@@ -155,18 +156,22 @@ class Node():
 		self.Run(self.WorkingCallback)
 
 	def LoadSystemConfig(self):
+		MKS_PATH = os.environ['HOME'] + "/mks/"
 		# Information about the node located here.
-		jsonSystemStr = self.File.LoadStateFromFile("system.json")
+		jsonSystemStr 		= self.File.LoadStateFromFile("system.json")
+		machineConfigStr 	= self.File.LoadStateFromFile(MKS_PATH + "config.json")
 		
 		try:
 			dataSystem 				= json.loads(jsonSystemStr)
+			dataConfig 				= json.loads(machineConfigStr)
 			self.NodeInfo 			= dataSystem["node"]
 			# Node connection to WS information
-			self.Key 				= dataSystem["key"]
-			self.ApiUrl 			= dataSystem["apiurl"]
-			self.WsUrl				= dataSystem["wsurl"]
-			self.UserName 			= dataSystem["username"]
-			self.Password 			= dataSystem["password"]
+			self.GatewayIP			= dataConfig["network"]["gateway"]
+			self.Key 				= dataConfig["network"]["key"]
+			self.ApiUrl 			= dataConfig["network"]["apiurl"]
+			self.WsUrl				= dataConfig["network"]["wsurl"]
+			# self.UserName 			= dataSystem["username"]
+			# self.Password 			= dataSystem["password"]
 			# Device information
 			self.Type 				= dataSystem["node"]["type"]
 			self.OSType 			= dataSystem["node"]["ostype"]
@@ -175,7 +180,7 @@ class Node():
 			self.Name 				= dataSystem["node"]["name"]
 			self.Description 		= dataSystem["node"]["description"]
 			if (self.Type == 1):
-				self.BoardType 			= dataSystem["node"]["boardType"]
+				self.BoardType 		= dataSystem["node"]["boardType"]
 			self.UserDefined		= dataSystem["user"]
 			# Device UUID MUST be read from HW device.
 			if "True" == dataSystem["node"]["isHW"]:
@@ -407,6 +412,7 @@ class Node():
 			self.LocalServiceNode.SetNodeUUID(self.UUID)
 			self.LocalServiceNode.SetNodeType(self.Type)
 			self.LocalServiceNode.SetNodeName(self.Name)
+			self.LocalServiceNode.SetGatewayIPAddress(self.GatewayIP)
 			thread.start_new_thread(self.LocalServiceNode.NodeLocalNetworkConectionListener, ())
 
 		# Waiting here till SIGNAL from OS will come.
