@@ -12,6 +12,7 @@ import signal
 import socket, select
 import argparse
 
+import MkSGlobals
 from mksdk import MkSFile
 from mksdk import MkSNetMachine
 from mksdk import MkSDevice
@@ -30,6 +31,8 @@ class Node():
 		self.LocalServiceNode 				= local_service_node
 		# Node connection to WS information
 		self.GatewayIP 						= ""
+		self.ApiPort 						= "8080"
+		self.WsPort 						= "1981"
 		self.ApiUrl 						= ""
 		self.WsUrl							= ""
 		self.UserName 						= ""
@@ -58,7 +61,7 @@ class Node():
 		# Inner state
 		self.States = {
 			'IDLE': 						self.StateIdle,
-			'CONNECT_DEVICE':				self.StateConnectDevice,
+			'CONNECT_HARDWARE':				self.StateConnectHardware,
 			'INIT_NETWORK':					self.StateInitNetwork,
 			'ACCESS': 						self.StateGetAccess,
 			'ACCESS_WAIT':					self.StateAccessWait,
@@ -88,7 +91,7 @@ class Node():
 		}
 
 		self.LocalServiceNode.OnExitCallback 					= self.OnExitHandler
-		self.LocalServiceNode.OnNewNodeCallback 				= self.OnNewNodeHandler
+		self.LocalServiceNode.ServiceNewNodeCallback			= self.OnNewNodeHandler
 		self.LocalServiceNode.OnSlaveNodeDisconnectedCallback 	= self.OnSlaveNodeDisconnectedHandler
 		self.LocalServiceNode.OnSlaveResponseCallback 			= self.OnSlaveResponseHandler
 		self.LocalServiceNode.OnGetNodeInfoRequestCallback 		= self.OnGetNodeInfoRequestHandler
@@ -104,7 +107,7 @@ class Node():
 	# TODO - Not needed, remove
 	def GetFile(self, filename, ui_type):
 		objFile = MkSFile.File()
-		return objFile.LoadStateFromFile("static/js/node/" + fileName)
+		return objFile.Load("static/js/node/" + filename)
 
 	# TODO - Not needed, remove
 	def GetFileHandler(self, message_type, source, data):
@@ -156,22 +159,36 @@ class Node():
 		self.Run(self.WorkingCallback)
 
 	def LoadSystemConfig(self):
-		MKS_PATH = os.environ['HOME'] + "/mks/"
+		if MkSGlobals.OS_TYPE in ["linux", "linux2"]:
+			MKS_PATH = os.environ['HOME'] + "/mks/"
+		else:
+			MKS_PATH = "C:\\mks\\"
+
 		# Information about the node located here.
-		jsonSystemStr 		= self.File.LoadStateFromFile("system.json")
-		machineConfigStr 	= self.File.LoadStateFromFile(MKS_PATH + "config.json")
+		strSystemJson 		= self.File.Load("system.json")
+		strMachineJson 		= self.File.Load(MKS_PATH + "config.json")
+
+		if (strSystemJson is None or len(strSystemJson) == 0):
+			print("(MkSNode)# ERROR - Cannot find system.json file.")
+			self.Exit()
+			return False
+
+		if (strMachineJson is None or len(strMachineJson) == 0):
+			print("(MkSNode)# ERROR - Cannot find config.json file.")
+			self.Exit()
+			return False
 		
 		try:
-			dataSystem 				= json.loads(jsonSystemStr)
-			dataConfig 				= json.loads(machineConfigStr)
+			dataSystem 				= json.loads(strSystemJson)
+			dataConfig 				= json.loads(strMachineJson)
 			self.NodeInfo 			= dataSystem["node"]
 			# Node connection to WS information
-			self.GatewayIP			= dataConfig["network"]["gateway"]
 			self.Key 				= dataConfig["network"]["key"]
-			self.ApiUrl 			= dataConfig["network"]["apiurl"]
-			self.WsUrl				= dataConfig["network"]["wsurl"]
-			# self.UserName 			= dataSystem["username"]
-			# self.Password 			= dataSystem["password"]
+			self.GatewayIP			= dataConfig["network"]["gateway"]
+			self.ApiPort 			= dataConfig["network"]["apiport"]
+			self.WsPort 			= dataConfig["network"]["wsport"]
+			self.ApiUrl 			= "http://{gateway}:{api_port}".format(gateway=self.GatewayIP, api_port=self.ApiPort)
+			self.WsUrl				= "ws://{gateway}:{ws_port}".format(gateway=self.GatewayIP, ws_port=self.WsPort)
 			# Device information
 			self.Type 				= dataSystem["node"]["type"]
 			self.OSType 			= dataSystem["node"]["ostype"]
@@ -188,10 +205,13 @@ class Node():
 			else:
 				self.UUID = dataSystem["node"]["uuid"]
 		except:
-			print ("Error: [LoadSystemConfig] Wrong system.json format")
+			print ("(MkSNode)# ERROR - Wrong configuration format")
 			self.Exit()
+			return False
 		
+		print("# TODO - Do we need this DeviceInfo?")
 		self.DeviceInfo = MkSDevice.Device(self.UUID, self.Type, self.OSType, self.OSVersion, self.BrandName)
+		return True
 	
 	# If this method called, this Node is HW enabled. 
 	def SetConnector(self, connector):
@@ -205,11 +225,13 @@ class Node():
 	def SetNetwork(self):
 		print ("SetNetwork")
 	
+	def SetState(self, state):
+		self.State = state
+
 	def StateIdle (self):
-		print ("StateIdle")
+		pass
 	
-	def StateConnectDevice (self):
-		print ("StateConnectDevice")
+	def StateConnectHardware (self):
 		if True == self.IsHardwareBased:
 			if None == self.Connector:
 				print ("Error: [Run] Device did not specified")
@@ -236,10 +258,10 @@ class Node():
 				self.Exit()
 				return
 
-		self.State = "INIT_NETWORK"
+		self.SetState("INIT_NETWORK")
 	
 	def StateInitNetwork(self):
-		if True == self.IsNodeWSServiceEnabled:
+		if self.IsNodeWSServiceEnabled is True:
 			self.Network = MkSNetMachine.Network(self.ApiUrl, self.WsUrl)
 			self.Network.SetDeviceType(self.Type)
 			self.Network.SetDeviceUUID(self.UUID)
@@ -249,20 +271,20 @@ class Node():
 			self.Network.OnErrorCallback 			= self.WebSocketErrorCallback
 			self.AccessTick = 0
 
-			self.State = "ACCESS"
+			self.SetState("ACCESS")
 		else:
-			self.State = "WORK"
+			self.SetState("WORK")
 
 	def StateGetAccess (self):
 		if True == self.IsNodeWSServiceEnabled:
-			print ("[DEBUG::Node] StateGetAccess")
 			self.Network.AccessGateway(self.Key, json.dumps({
 				'node_name': str(self.Name),
 				'node_type': self.Type
 			}))
-			self.State = "ACCESS_WAIT"
+
+			self.SetState("ACCESS_WAIT")
 		else:
-			self.State = "WORK"
+			self.SetState("WORK")
 	
 	def StateAccessWait (self):
 		print ("ACCESS_WAIT")
@@ -281,7 +303,7 @@ class Node():
 			self.OnNodeSystemLoaded()
 	
 	def WebSocketConnectedCallback (self):
-		self.State = "WORK"
+		self.SetState("WORK")
 		self.LocalServiceNode.GatewayConnectedEvent()
 		self.OnWSConnected()
 
@@ -364,7 +386,7 @@ class Node():
 		self.State = "ACCESS_WAIT"
 
 	def GetFileContent (self, file):
-		return self.File.LoadStateFromFile(file)
+		return self.File.Load(file)
 
 	def SetFileContent (self, file, content):
 		self.File.SaveStateToFile(file, content)
@@ -376,7 +398,7 @@ class Node():
 		self.AppendToFile(uuid + ".json", "{\"ts\":" + str(time.time()) + ",\"v\":" + str(value) + "},")
 
 	def GetDeviceConfig (self):
-		jsonConfigStr = self.File.LoadStateFromFile("config.json")
+		jsonConfigStr = self.File.Load("config.json")
 		try:
 			dataConfig = json.loads(jsonConfigStr)
 			return dataConfig
@@ -389,58 +411,66 @@ class Node():
 
 	def SetLocalServerStatus(self, is_enabled):
 		self.IsNodeLocalServerEnabled = is_enabled
-
-	def SetMasterNodeStatus(self, is_enabled):
-		self.IsMasterNode = is_enabled
-
-	def SetPureSlaveStatus(self, is_enabled):
-		self.isPureSlave = is_enabled
+	
+	def StartLocalNode(self):
+		print("TODO - (MkSNode.Run) Missing management of network HW disconnection")
+		self.LocalServiceNode.SetNodeUUID(self.UUID)
+		self.LocalServiceNode.SetNodeType(self.Type)
+		self.LocalServiceNode.SetNodeName(self.Name)
+		self.LocalServiceNode.SetGatewayIPAddress(self.GatewayIP)
+		thread.start_new_thread(self.LocalServiceNode.NodeLocalNetworkConectionListener, ())
 
 	def Run (self, callback):
+		# Will be called each half a second.
 		self.WorkingCallback = callback
 		self.ExitEvent.clear()
 		self.ExitLocalServerEvent.clear()
-		self.State = "CONNECT_DEVICE"
+		# Initial state is connect to Gateway.
+		self.SetState("CONNECT_HARDWARE")
 
 		# We need to know if this worker is running for waiting mechanizm
 		self.IsNodeMainEnabled = True
 
 		# Read sytem configuration
-		self.LoadSystemConfig()
+		print("(MkSNode)# Load system configuration ...")
+		if (self.LoadSystemConfig() is False):
+			print("(MkSNode)# Load system configuration ... FAILED")
+			return
 
-		if True == self.IsNodeLocalServerEnabled:
-			self.LocalServiceNode.SetNodeUUID(self.UUID)
-			self.LocalServiceNode.SetNodeType(self.Type)
-			self.LocalServiceNode.SetNodeName(self.Name)
-			self.LocalServiceNode.SetGatewayIPAddress(self.GatewayIP)
-			thread.start_new_thread(self.LocalServiceNode.NodeLocalNetworkConectionListener, ())
+		# Start local node dervice thread
+		if self.IsNodeLocalServerEnabled is True:
+			self.StartLocalNode()
 
 		# Waiting here till SIGNAL from OS will come.
 		while self.IsRunnig:
+			# State machine management
 			self.Method = self.States[self.State]
 			self.Method()
 
+			# User callback
 			self.WorkingCallback()
 			time.sleep(0.5)
 
-		print ("[DEBUG::Node] Exit NodeWork")
-		if True == self.IsHardwareBased:
+		print ("(MkSNode)# Exit Node ...")
+		self.Network.Disconnect()
+
+		if self.IsHardwareBased is True:
 			self.Connector.Disconnect()
 		self.ExitEvent.set()
 		
-		if True == self.IsNodeMainEnabled:
+		if self.IsNodeMainEnabled is True:
 			self.ExitEvent.wait()
 
-		if True == self.LocalServiceNode.LocalSocketServerRun:
+		if self.LocalServiceNode.LocalSocketServerRun is True:
 			self.ExitLocalServerEvent.wait()
 	
 	def Stop (self):
-		print ("[DEBUG::Node] Stop")
+		print ("(MkSNode)# Stop Node ...")
 		self.IsRunnig 								= False
 		self.LocalServiceNode.LocalSocketServerRun 	= False
 	
 	def Pause (self):
-		print ("Pause")
+		pass
 	
 	def Exit (self):
 		self.Stop()

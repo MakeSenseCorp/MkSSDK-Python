@@ -83,7 +83,7 @@ class AbstractNode():
 		self.OnTerminateConnectionCallback 			= None
 		self.OnLocalServerListenerStartedCallback	= None
 		self.OnExitCallback							= None
-		self.OnNewNodeCallback						= None
+		self.ServiceNewNodeCallback					= None
 		self.OnSlaveNodeDisconnectedCallback		= None
 		self.OnSlaveResponseCallback				= None
 		# Network
@@ -157,7 +157,7 @@ class AbstractNode():
 	def ExitRoutine(self):
 		pass
 
-	def SetSates (self, states):
+	def SetState (self, states):
 		self.States = states
 
 	def ChangeState(self, state):
@@ -433,6 +433,7 @@ class AbstractNode():
 									multiData = data.split("MKS: ")
 									for data in multiData[1:]:
 										req = (data.split('\n'))[1]
+										# TODO - Must handled in different thread
 										self.DataSocketInputHandler(sock, req)
 								else:
 									print ("[AbstractNode] Data Invalid")

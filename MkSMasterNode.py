@@ -23,6 +23,7 @@ from mksdk import MkSAbstractNode
 from mksdk import MkSLocalNodesCommands
 from mksdk import MkSShellExecutor
 
+# TODO - Move this clss to other location.
 class MachineInformation():
 	def __init__(self):
 		self.Terminal	= MkSShellExecutor.ShellExecutor()
@@ -56,6 +57,7 @@ class MachineInformation():
 	def GetInfo(self):
 		return self.Json
 
+# TODO - Remove this class from here.
 class LocalPipe():
 	def __init__(self, uuid, pipe):
 		self.Uuid 	= uuid
@@ -91,43 +93,45 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 	def __init__(self):
 		MkSAbstractNode.AbstractNode.__init__(self)
 		# Members
-		self.File 							= MkSFile.File()
-		self.Commands 						= MkSLocalNodesCommands.LocalNodeCommands()
-		self.Terminal 						= MkSShellExecutor.ShellExecutor()
-		self.MachineInfo 					= MachineInformation()
-		self.PortsForClients				= [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32]
-		self.MasterHostName					= socket.gethostname()
-		self.MasterVersion					= "1.0.1"
-		self.PackagesList					= ["Gateway","LinuxTerminal","USBManager"] # Default Master capabilities.
-		self.LocalSlaveList					= [] # Used ONLY by Master.
-		self.InstalledNodes 				= []
-		self.Pipes 							= []
-		self.InstalledApps 					= None
+		self.File 								= MkSFile.File()
+		self.Commands 							= MkSLocalNodesCommands.LocalNodeCommands()
+		self.Terminal 							= MkSShellExecutor.ShellExecutor()
+		self.MachineInfo 						= MachineInformation()
+		self.PortsForClients					= [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32]
+		self.MasterHostName						= socket.gethostname()
+		self.MasterVersion						= "1.0.1"
+		self.PackagesList						= ["Gateway","LinuxTerminal","USBManager"] # Default Master capabilities.
+		self.LocalSlaveList						= [] # Used ONLY by Master.
+		self.InstalledNodes 					= []
+		self.Pipes 								= []
+		self.InstalledApps 						= None
 		# Sates
 		self.States = {
-			'IDLE': 						self.StateIdle,
-			'WORKING': 						self.StateWorking
+			'IDLE': 							self.StateIdle,
+			'WORKING': 							self.StateWorking
 		}
 		# Handlers
-		self.RequestHandlers				= {
-			'get_port': 					self.GetPortRequestHandler,
-			'get_local_nodes': 				self.GetLocalNodesRequestHandler,
-			'get_master_info':				self.GetMasterInfoRequestHandler,
-			'get_file':						self.GetFileHandler,
-			'upload_file':					self.UploadFileHandler
+		self.RequestHandlers					= {
+			'get_port': 						self.GetPortRequestHandler,
+			'get_local_nodes': 					self.GetLocalNodesRequestHandler,
+			'get_master_info':					self.GetMasterInfoRequestHandler,
+			'get_file':							self.GetFileHandler,
+			'upload_file':						self.UploadFileHandler
 		}
-		self.ResponseHandlers 				= {
+		self.ResponseHandlers 					= {
 		}
 		# Callbacks
 		self.OnCustomCommandRequestCallback		= None
 		self.OnCustomCommandResponseCallback	= None
 		# Flags
-		self.IsListenerEnabled 				= False
-		self.PipeStdoutRun					= False
-
+		self.IsListenerEnabled 					= False
+		self.PipeStdoutRun						= False
 		self.ChangeState("IDLE")
+
+	def Initiate(self):
 		self.LoadNodesOnMasterStart()
 
+		print("TODO - (MkSMasterNode.MasterNode) Who stops PipeStdoutListener_Thread thread?")
 		thread.start_new_thread(self.PipeStdoutListener_Thread, ())
 
 	def GetFileHandler(self, packet):
@@ -175,7 +179,7 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 
 		path = os.path.join(".","ui",folder[uiType],"ui." + fileType)
 		print (path)
-		content = objFile.LoadStateFromFile(path)
+		content = objFile.Load(path)
 		
 		if ("html" in fileType):
 			content = content.replace("[NODE_UUID]", self.UUID)
@@ -230,6 +234,7 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 		else:
 			return ""
 
+	# TODO - Is this method in use?
 	def SetNodeActionHandler(self, key):
 		fields = [k for k in request.form]
 		values = [request.form[k] for k in request.form]
@@ -349,17 +354,18 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 	"""
 
 	def GatewayConnectedEvent(self):
-		print ("[DEBUG MASTER]: GatewayConnectedEvent")
+		print ("(Master Node)# Connection to Gateway established ...")
 		for slave in self.LocalSlaveList:
-			if self.OnNewNodeCallback is not None:
-				self.OnNewNodeCallback({ 'ip':		str(slave.IP), 
-										 'port':	slave.Port, 
-										 'uuid':	slave.UUID, 
-										 'type':	slave.Type 
-										})
+			if self.ServiceNewNodeCallback is not None:
+				self.ServiceNewNodeCallback({ 
+												'ip':		str(slave.IP), 
+										 		'port':	slave.Port, 
+										 		'uuid':	slave.UUID, 
+										 		'type':	slave.Type 
+											})
 
 	def GatewayDisConnectedEvent(self):
-		print ("[DEBUG MASTER]: Gateway disconnected")
+		print ("(Master Node)# Connection to Gateway lost ...")
 
 	# TODO - Implement this method.
 	def GetNodeStatusRequestHandler(self, sock, packet):
@@ -424,9 +430,9 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 		jsonInstalledAppsStr 	= ""
 
 		if MkSGlobals.OS_TYPE == "win32":
-			jsonInstalledNodesStr = self.File.LoadStateFromFile("G:\\workspace\\Development\\Git\\makesense\\misc\\configure\\" + MkSGlobals.OS_TYPE + "\\installed_nodes.json")
+			jsonInstalledNodesStr = self.File.Load("G:\\workspace\\Development\\Git\\makesense\\misc\\configure\\" + MkSGlobals.OS_TYPE + "\\installed_nodes.json")
 		elif MkSGlobals.OS_TYPE in ["linux", "linux2"]:
-			jsonInstalledNodesStr = self.File.LoadStateFromFile("../../configure/installed_nodes.json")
+			jsonInstalledNodesStr = self.File.Load("../../configure/installed_nodes.json")
 
 		if (jsonInstalledNodesStr is not "" and jsonInstalledNodesStr is not None):
 			# Load installed nodes.
@@ -440,9 +446,9 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 				self.InstalledNodes.append(node)
 
 		if MkSGlobals.OS_TYPE == "win32":
-			jsonInstalledAppsStr = self.File.LoadStateFromFile("G:\\workspace\\Development\\Git\\makesense\\misc\\configure\\" + MkSGlobals.OS_TYPE + "\\installed_apps.json")
+			jsonInstalledAppsStr = self.File.Load("G:\\workspace\\Development\\Git\\makesense\\misc\\configure\\" + MkSGlobals.OS_TYPE + "\\installed_apps.json")
 		elif MkSGlobals.OS_TYPE in ["linux", "linux2"]:
-			jsonInstalledAppsStr = self.File.LoadStateFromFile("../../configure/installed_apps.json")
+			jsonInstalledAppsStr = self.File.Load("../../configure/installed_apps.json")
 
 		if (jsonInstalledAppsStr is not "" and jsonInstalledAppsStr is not None):
 			# Load installed applications
@@ -461,6 +467,10 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 		#self.UI.AddEndpoint("/generic/node_get_request/<key>", 		"generic_node_get_request", 	self.GenericNodeGETRequestHandler, 		method=['POST'])
 
 	def StateIdle (self):
+		print("(Master Node)# Note, in IDLE state ...")
+		time.sleep(1)
+	
+	def StateNetwork(self):
 		self.ServerAdderss = ('', 16999)
 		status = self.TryStartListener()
 		if True == status:
@@ -516,13 +526,14 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 
 				# TODO - What will happen when slave node will try to get port when we are not connected to AWS?
 				# Send message to Gateway
-				if self.OnNewNodeCallback is not None:
-					self.OnNewNodeCallback({ 'ip':		str(node.IP), 
-											 'port':	port, 
-											 'uuid':	node.UUID, 
-											 'type':	nodeType,
-											 'name':	str(node.Name)
-											})
+				if self.ServiceNewNodeCallback is not None:
+					self.ServiceNewNodeCallback({ 	
+													'ip':		str(node.IP), 
+											 		'port':	port, 
+											 		'uuid':	node.UUID, 
+											 		'type':	nodeType,
+											 		'name':	str(node.Name)
+												})
 			else:
 				# Already assigned port (resending)
 				payload = self.Commands.GetPortResponse(node.Port)
@@ -536,7 +547,7 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 		nodes = ""
 		if self.LocalSlaveList:
 			for node in self.LocalSlaveList:
-				#nodes += "{\"ip\":\"{ip}\",\"port\":\"{port}\",\"uuid\":\"{uuid}\",\"type\":\"{type}\"},".format(ip = str(node.IP), port = str(node.Port), uuid = node.UUID, type = str(node.Type))
+				# TODO - nodes += "{\"ip\":\"{ip}\",\"port\":\"{port}\",\"uuid\":\"{uuid}\",\"type\":\"{type}\"},".format(ip = str(node.IP), port = str(node.Port), uuid = node.UUID, type = str(node.Type))
 				nodes += "{\"ip\":\"" + str(node.IP) + "\",\"port\":" + str(node.Port) + ",\"uuid\":\"" + node.UUID + "\",\"type\":" + str(node.Type) + "},"
 			if nodes is not "":
 				nodes = nodes[:-1]
@@ -547,7 +558,7 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 		nodes = ""
 		if self.LocalSlaveList:
 			for node in self.LocalSlaveList:
-				#nodes += "{\"ip\":\"{ip}\",\"port\":\"{port}\",\"uuid\":\"{uuid}\",\"type\":\"{type}\"},".format(ip = str(node.IP), port = str(node.Port), uuid = node.UUID, type = str(node.Type))
+				# TODO - nodes += "{\"ip\":\"{ip}\",\"port\":\"{port}\",\"uuid\":\"{uuid}\",\"type\":\"{type}\"},".format(ip = str(node.IP), port = str(node.Port), uuid = node.UUID, type = str(node.Type))
 				nodes += "{\"ip\":\"" + str(node.IP) + "\",\"port\":" + str(node.Port) + ",\"uuid\":\"" + node.UUID + "\",\"type\":" + str(node.Type) + "},"
 			if nodes is not "":
 				nodes = nodes[:-1]
@@ -676,15 +687,17 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 				return item.ReadBuffer()
 
 	def PipeStdoutListener_Thread(self):
+		print(("(Master Node)# Starting PIPE listener thread ..."))
 		self.PipeStdoutRun = True
-		while True == self.PipeStdoutRun:
+		while self.PipeStdoutRun:
 			for item in self.Pipes:
 				if item.IsPipeError():
-					print str(item.GetError())
+					print (str(item.GetError()))
 				item.ReadToBuffer()
 			time.sleep(0.5)
 
 	def StartRemoteNode(self, uuid):
+		# TODO - Is this method in use?
 		path = "/home/yevgeniy/workspace/makesense/mksnodes/1981"
 		proc = subprocess.Popen(["python", '-u', "../1981/1981.py", "--path", path], stdout=subprocess.PIPE)
 

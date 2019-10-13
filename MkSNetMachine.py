@@ -112,10 +112,14 @@ class Network ():
 		self.OnConnectionCallback()
 
 	def NodeWebfaceSocket_Thread (self):
+		print("(MkSNetwork)# Connect Gateway ...")
+		self.WSConnection.keep_running = True
 		self.WSConnection.run_forever()
+		print("(MkSNetwork)# Disconnect Gateway ...")
 
 	def Disconnect(self):
-		self.WSConnection.close()
+		self.WSConnection.keep_running = False
+		time.sleep(1)
 
 	def AccessGateway (self, key, payload):
 		# Set user key, commub=nication with applications will be based on key.
@@ -127,8 +131,14 @@ class Network ():
 		self.WSConnection.on_error 		= self.WSConnection_OnError_Handler
 		self.WSConnection.on_close 		= self.WSConnection_OnClose_Handler
 		self.WSConnection.on_open 		= self.WSConnection_OnOpen_Handler
-		self.WSConnection.header		= {'uuid':self.DeviceUUID, 'node_type':str(self.Type), 'payload':str(payload), 'key':key}
-		print (self.WSConnection.header)
+		self.WSConnection.header		= 	{
+											'uuid':self.DeviceUUID, 
+											'node_type':str(self.Type), 
+											'payload':str(payload), 
+											'key':key
+											}
+		self.Disconnect()
+		print("# TODO - This thread will be created each time whrn connection lost or on retry!!!")
 		thread.start_new_thread(self.NodeWebfaceSocket_Thread, ())
 
 		return True

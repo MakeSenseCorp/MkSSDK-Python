@@ -20,7 +20,7 @@ class AbstractDevice():
 		# Events
 		self.OnDataReadyCallback 	= None
 
-		jsonSystemStr = self.File.LoadStateFromFile("system.json")
+		jsonSystemStr = self.File.Load("system.json")
 		try:
 			dataSystem 				= json.loads(jsonSystemStr)
 			self.UUID = dataSystem["node"]["uuid"]

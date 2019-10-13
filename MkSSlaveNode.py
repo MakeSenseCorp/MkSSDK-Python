@@ -122,7 +122,7 @@ class SlaveNode(MkSAbstractNode.AbstractNode):
 
 		path = os.path.join(".","ui",folder[uiType],"ui." + fileType)
 		print (path)
-		content = objFile.LoadStateFromFile(path)
+		content = objFile.Load(path)
 		
 		if ("html" in fileType):
 			content = content.replace("[NODE_UUID]", self.UUID)
@@ -160,13 +160,13 @@ class SlaveNode(MkSAbstractNode.AbstractNode):
 	def GetNodeWidgetHandler(self, key):
 		print ("[SlaveNode]# GetNodeWidgetHandler", self.Pwd + "static/js/node/widget.js")
 		objFile = MkSFile.File()
-		js = objFile.LoadStateFromFile("static/js/node/widget.js")
+		js = objFile.Load("static/js/node/widget.js")
 		return js
 
 	def GetNodeConfigHandler(self, key):
 		print ("[SlaveNode]# GetNodeConfigHandler", self.Pwd + "static/js/node/widget_config.js")
 		objFile = MkSFile.File()
-		js = objFile.LoadStateFromFile("static/js/node/widget_config.js")
+		js = objFile.Load("static/js/node/widget_config.js")
 		return js
 	"""
 	Local Face RESP API methods
@@ -223,6 +223,8 @@ class SlaveNode(MkSAbstractNode.AbstractNode):
 		if status is True:
 			node = self.AppendConnection(sock, self.MyLocalIP, 16999)
 			node.LocalType = "MASTER"
+			# TODO - 	This method cannot change state of statemachine.
+			# 			Return TRUE/FALSE and manage state changes from states method.
 			self.ChangeState("GET_PORT")
 			self.MasterNodesList.append(node)
 			if self.OnMasterFoundCallback is not None:
@@ -232,6 +234,8 @@ class SlaveNode(MkSAbstractNode.AbstractNode):
 		else:
 			self.ChangeState("CONNECT_MASTER")
 			time.sleep(5)
+
+# STATES AREA
 
 	def StateIdle(self):
 		# Init state logic must be here.
@@ -252,27 +256,6 @@ class SlaveNode(MkSAbstractNode.AbstractNode):
 		payload = self.Commands.GetPortRequest(self.UUID, self.Type, self.Name)
 		self.MasterSocket.send(payload)
 		self.ChangeState("WAIT_FOR_PORT")
-	
-	def SendCustomCommandResponse(self, sock, packet, payload):
-		direction = packet["direction"]
-		if ("proxy" in direction):
-			print (" P R O X Y ")
-			msg = self.Commands.ProxyResponse(packet, payload)
-			sock.send(msg)
-		else:
-			print (" R E G U L A R")
-
-	def SendSensorInfoResponse(self, sock, packet, sensors):
-		direction = packet["direction"]
-		if ("proxy" in direction):
-			print (" P R O X Y ")
-			msg = self.Commands.ProxyResponse(packet, sensors)
-			sock.send(msg)
-		else:
-			print (" R E G U L A R")
-
-		#payload = self.Commands.GetSensorInfoResponse(self.UUID, sensors)
-		#sock.send(payload)
 
 	def StateWaitForPort(self):
 		print ("StateWaitForPort")
@@ -296,6 +279,29 @@ class SlaveNode(MkSAbstractNode.AbstractNode):
 
 	def StateExit(self):
 		print ("StateExit")
+
+# END OF STATE AREA
+
+	def SendCustomCommandResponse(self, sock, packet, payload):
+		direction = packet["direction"]
+		if ("proxy" in direction):
+			print (" P R O X Y ")
+			msg = self.Commands.ProxyResponse(packet, payload)
+			sock.send(msg)
+		else:
+			print (" R E G U L A R")
+
+	def SendSensorInfoResponse(self, sock, packet, sensors):
+		direction = packet["direction"]
+		if ("proxy" in direction):
+			print (" P R O X Y ")
+			msg = self.Commands.ProxyResponse(packet, sensors)
+			sock.send(msg)
+		else:
+			print (" R E G U L A R")
+
+		#payload = self.Commands.GetSensorInfoResponse(self.UUID, sensors)
+		#sock.send(payload)
 
 	# INBOUND
 	def HandlerRouter_Request(self, sock, json_data):
@@ -366,6 +372,7 @@ class SlaveNode(MkSAbstractNode.AbstractNode):
 
 	def GetPortResponseHandler(self, sock, packet):
 		self.SlaveListenerPort = packet["port"]
+		# TODO - This is not a correct place to change state.
 		self.ChangeState("START_LISTENER")
 		# Raise event
 
