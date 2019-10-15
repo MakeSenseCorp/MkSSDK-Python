@@ -11,9 +11,12 @@ else:
 import time
 import json
 
+from mksdk import MkSBasicNetworkProtocol
+
 class Network ():
 	def __init__(self, uri, wsuri):
 		self.Name 		  	= "Communication to Node.JS"
+		self.BasicProtocol 	= None
 		self.ServerUri 	  	= uri
 		self.WSServerUri  	= wsuri
 		self.UserName 	  	= ""
@@ -73,7 +76,7 @@ class Network ():
 			return "", False
 
 		if ('info' in data):
-			return data, True;
+			return data, True
 
 		return False
 	
@@ -82,7 +85,7 @@ class Network ():
 		data = self.PostRequset(self.ServerUri + "device/register/", jdata)
 
 		if ('info' in data):
-			return data, True;
+			return data, True
 		
 		return "", False
 
@@ -91,7 +94,7 @@ class Network ():
 		data = self.PostRequset(self.ServerUri + "register/device/node/listener", jdata)
 
 		if ('info' in data):
-			return data, True;
+			return data, True
 		
 		return "", False
 
@@ -124,7 +127,8 @@ class Network ():
 	def AccessGateway (self, key, payload):
 		# Set user key, commub=nication with applications will be based on key.
 		# Key will be obtain by master on provisioning flow.
-		self.UserDevKey = key
+		self.UserDevKey 				= key
+		self.BasicProtocol 				= MkSBasicNetworkProtocol.BasicNetworkProtocol(key)
 		websocket.enableTrace(False)
 		self.WSConnection 				= websocket.WebSocketApp(self.WSServerUri)
 		self.WSConnection.on_message 	= self.WSConnection_OnMessage_Handler
@@ -144,16 +148,16 @@ class Network ():
 		return True
 
 	def SetDeviceUUID (self, uuid):
-		self.DeviceUUID = uuid;
+		self.DeviceUUID = uuid
 
 	def SetDeviceType (self, type):
-		self.Type = type;
+		self.Type = type
 		
 	def SetApiUrl (self, url):
-		self.ServerUri = url;
+		self.ServerUri = url
 		
 	def SetWsUrl (self, url):
-		self.WSServerUri = url;
+		self.WSServerUri = url
 
 	def SendWebSocket(self, packet):
 		if packet is not "" and packet is not None:
@@ -163,67 +167,6 @@ class Network ():
 
 	def SendKeepAlive(self):
 		self.WSConnection.send("{\"packet_type\":\"keepalive\"}")
-
-	def BuildResponse (self, packet, payload):
-		dest 	= packet['header']['destination']
-		src 	= packet['header']['source']
-
-		packet['header']['destination']	= src
-		packet['header']['source']		= dest
-		packet['header']['direction']	= "response"
-		packet['data']['payload']		= payload
-
-		return json.dumps(packet)
-
-	def BuildMessage (self, direction, messageType, destination, source, command, payload, piggy):
-		message = {
-			'header': {
-				'message_type': str(messageType),
-				'destination': str(destination),
-				'source': str(source),
-				'direction': str(direction)
-			},
-			'data': {
-				'header': { 
-					'command': str(command), 
-					'timestamp': str(int(time.time())) 
-				},
-				'payload': payload
-			},
-			'user': {
-				'key': str(self.UserDevKey)
-			},
-			'additional': {
-
-			},
-			'piggybag': piggy
-		}
-
-		return json.dumps(message)
-	
-	def GetUUIDFromJson(self, json):
-		return json['uuid']
-
-	def GetValueFromJson(self, json):
-		return json['value']
-	
-	def GetMessageTypeFromJson(self, json):
-		return json['header']['message_type']
-
-	def GetSourceFromJson(self, json):
-		return json['header']['source']
-
-	def GetDestinationFromJson(self, json):
-		return json['header']['destination']
-
-	def GetDataFromJson(self, json):
-		return json['data']
-
-	def GetCommandFromJson(self, json):
-		return json['data']['header']['command']
-
-	def GetPayloadFromJson(self, json):
-		return json['data']['payload']
 	
 	def SendMessage(self, payload):
 		try:
@@ -232,4 +175,3 @@ class Network ():
 			return False
 		
 		return True
-

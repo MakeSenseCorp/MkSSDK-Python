@@ -308,11 +308,10 @@ class Node():
 		self.OnWSConnected()
 
 	def GetNodeInfoHandler(self, json):
-		print ("GetNodeInfoHandler")
-
 		if self.Network.GetNetworkState() is "CONN":
+			print ("(MkSNode)# [RESPONSE] Node -> Gateway ")
 			payload = self.NodeInfo
-			message = self.Network.BuildResponse(json, payload)
+			message = self.Network.BasicProtocol.BuildResponse(json, payload)
 			self.Network.SendWebSocket(message)
 
 	def GetNodeStatusHandler(self, message_type, source, data):
@@ -328,11 +327,11 @@ class Node():
 	
 	def WebSocketDataArrivedCallback (self, json):
 		self.State 	= "WORK"
-		messageType = self.Network.GetMessageTypeFromJson(json)
-		destination = self.Network.GetDestinationFromJson(json)
-		command 	= self.Network.GetCommandFromJson(json)
+		messageType = self.Network.BasicProtocol.GetMessageTypeFromJson(json)
+		destination = self.Network.BasicProtocol.GetDestinationFromJson(json)
+		command 	= self.Network.BasicProtocol.GetCommandFromJson(json)
 
-		print ("\n[DEBUG::Node Network(In)] " + str(command) + " " + destination + "\n")
+		print ("(MkSNode)# [REQUEST] Gateway -> Node {" + str(command) + ", " + destination + "}")
 
 		# Is this packet for me?
 		if destination in self.UUID:
@@ -341,14 +340,15 @@ class Node():
 			elif messageType == "DIRECT" or messageType == "PRIVATE" or messageType == "BROADCAST" or messageType == "WEBFACE":
 				# If commands located in the list below, do not forward this message and handle it in this context.
 				if command in ["get_node_info", "get_node_status"]:
+					# Only node with Gateway connection will answer from here.
 					self.Handlers[command](json)
 				else:
-					print ("SELF", "WebSocketDataArrivedCallback", "HandleExternalRequest", destination)
+					print ("(MkSNode)# [Websocket INBOUND] Pass to local service ...")
 					self.LocalServiceNode.HandleInternalReqest(json)
 					if self.OnWSDataArrived is not None:
 						self.OnWSDataArrived(json)
 			else:
-				print ("Error: Not support " + request + " request type.")
+				print ("(MkSNode)# [Websocket INBOUND] ERROR - Not support " + request + " request type.")
 		else:
 			print ("WebSocketDataArrivedCallback", "HandleExternalRequest", destination)
 			# Find who has this destination adderes.
