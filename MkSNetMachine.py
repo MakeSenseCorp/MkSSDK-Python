@@ -54,31 +54,6 @@ class Network ():
 			return "failed"
 		
 		return data
-
-	def Authenticate (self, username, password):
-		print ("[DEBUG::Network] Authenticate")
-		data = self.GetRequest(self.ServerUri + "fastlogin/" + self.UserName + "/" + self.Password)
-
-		if ('failed' in data):
-			return False
-
-		jsonData = json.loads(data)
-		if ('error' in jsonData):
-			return False
-		else:
-			self.UserDevKey = jsonData['key']
-			return True
-
-	def InsertDevice (self, device):
-		data = self.GetRequest(self.ServerUri + "insert/device/" + self.UserDevKey + "/" + str(device.Type) + "/" + device.UUID + "/" + device.OSType + "/" + device.OSVersion + "/" + device.BrandName)
-
-		if ('failed' in data):
-			return "", False
-
-		if ('info' in data):
-			return data, True
-
-		return False
 	
 	def RegisterDevice (self, device):
 		jdata = json.dumps([{"key":"" + str(self.UserDevKey) + "", "payload":{"uuid":"" + str(device.UUID) + "","type":"" + str(device.Type) + "","ostype":"" + str(device.OSType) + "","osversion":"" + str(device.OSVersion) + "","brandname":"" + str(device.BrandName) + ""}}])
@@ -128,7 +103,8 @@ class Network ():
 		# Set user key, commub=nication with applications will be based on key.
 		# Key will be obtain by master on provisioning flow.
 		self.UserDevKey 				= key
-		self.BasicProtocol 				= MkSBasicNetworkProtocol.BasicNetworkProtocol(key)
+		self.BasicProtocol 				= MkSBasicNetworkProtocol.BasicNetworkProtocol()
+		self.BasicProtocol.SetKey(key)
 		websocket.enableTrace(False)
 		self.WSConnection 				= websocket.WebSocketApp(self.WSServerUri)
 		self.WSConnection.on_message 	= self.WSConnection_OnMessage_Handler
@@ -142,7 +118,7 @@ class Network ():
 											'key':key
 											}
 		self.Disconnect()
-		print("# TODO - This thread will be created each time whrn connection lost or on retry!!!")
+		print("# TODO - This thread will be created each time when connection lost or on retry!!!")
 		thread.start_new_thread(self.NodeWebfaceSocket_Thread, ())
 
 		return True
@@ -160,17 +136,12 @@ class Network ():
 		self.WSServerUri = url
 
 	def SendWebSocket(self, packet):
-		if packet is not "" and packet is not None:
-			self.WSConnection.send(packet)
-		else:
-			print ("[Node]# Sending packet to Gateway FAILED")
-
-	def SendKeepAlive(self):
-		self.WSConnection.send("{\"packet_type\":\"keepalive\"}")
-	
-	def SendMessage(self, payload):
 		try:
-			self.SendWebSocket(payload)
+			if packet is not "" and packet is not None:
+				print("(MkSNetwork)# [RESPONSE] Node -> Gateway ")
+				self.WSConnection.send(packet)
+			else:
+				print ("(MkSNetwork)# Sending packet to Gateway FAILED")
 		except:
 			return False
 		

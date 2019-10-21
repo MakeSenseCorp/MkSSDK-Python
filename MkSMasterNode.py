@@ -19,8 +19,8 @@ import logging
 
 import MkSGlobals
 from mksdk import MkSFile
+from mksdk import MkSNetMachine
 from mksdk import MkSAbstractNode
-from mksdk import MkSLocalNodesCommands
 from mksdk import MkSShellExecutor
 
 # TODO - Move this clss to other location.
@@ -78,23 +78,10 @@ class LocalPipe():
 	def GetError(self):
 		return self.Pipe.returncode
 
-class LocalNode():
-	def __init__(self, ip, port, uuid, node_type, sock):
-		self.IP 		= ip
-		self.Port 		= port
-		self.UUID 		= uuid
-		self.Socket 	= sock
-		self.Type 		= node_type
-		self.LocalType 	= "UNKNOWN"
-		self.Status 	= "Stopped"
-		self.Obj 		= None
-
 class MasterNode(MkSAbstractNode.AbstractNode):
 	def __init__(self):
 		MkSAbstractNode.AbstractNode.__init__(self)
 		# Members
-		self.File 								= MkSFile.File()
-		self.Commands 							= MkSLocalNodesCommands.LocalNodeCommands()
 		self.Terminal 							= MkSShellExecutor.ShellExecutor()
 		self.MachineInfo 						= MachineInformation()
 		self.PortsForClients					= [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32]
@@ -105,10 +92,25 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 		self.InstalledNodes 					= []
 		self.Pipes 								= []
 		self.InstalledApps 						= None
+		# Node connection to WS information
+		self.GatewayIP 							= ""
+		self.ApiPort 							= "8080"
+		self.WsPort 							= "1981"
+		self.ApiUrl 							= ""
+		self.WsUrl								= ""
+		self.UserName 							= ""
+		self.Password 							= ""
+		# Locks and Events
+		self.NetworkAccessTickLock 				= threading.Lock()
 		# Sates
-		self.States = {
+		self.States 							= {
 			'IDLE': 							self.StateIdle,
-			'WORKING': 							self.StateWorking
+			'INIT':								self.StateInit,
+			'INIT_GATEWAY':						self.StateInitGateway,
+			'ACCESS_GATEWAY': 					self.StateAccessGetway,
+			'ACCESS_WAIT_GATEWAY':				self.StateAccessWaitGatway,
+			'INIT_LOCAL_SERVER':				self.StateInitLocalServer,
+			'WORK': 							self.StateWork
 		}
 		# Handlers
 		self.RequestHandlers					= {
@@ -121,12 +123,19 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 		self.ResponseHandlers 					= {
 		}
 		# Callbacks
+		self.GatewayDataArrivedCallback 		= None
+		self.GatewayConnectedCallback 			= None
+		self.GatewayConnectionClosedCallback 	= None
 		self.OnCustomCommandRequestCallback		= None
 		self.OnCustomCommandResponseCallback	= None
 		# Flags
 		self.IsListenerEnabled 					= False
 		self.PipeStdoutRun						= False
-		self.ChangeState("IDLE")
+		self.SetState("INIT")
+
+	#
+	# ###### MASTER NODE INITIATE ->
+	#
 
 	def Initiate(self):
 		self.LoadNodesOnMasterStart()
@@ -134,38 +143,139 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 		print("TODO - (MkSMasterNode.MasterNode) Who stops PipeStdoutListener_Thread thread?")
 		thread.start_new_thread(self.PipeStdoutListener_Thread, ())
 
+	#
+	# ###### MASTER NODE INITIATE <-
+	#
+
+	#
+	# ###### MASTER NODE STATES ->
+	#
+
+	def StateIdle (self):
+		print("(Master Node)# Note, in IDLE state ...")
+		time.sleep(1)
+	
+	def StateInit (self):
+		self.SetState("INIT_LOCAL_SERVER")
+	
+	def StateInitGateway(self):
+		if self.IsNodeWSServiceEnabled is True:
+			# Create Network instance
+			self.Network = MkSNetMachine.Network(self.ApiUrl, self.WsUrl)
+			self.Network.SetDeviceType(self.Type)
+			self.Network.SetDeviceUUID(self.UUID)
+			# Register to events
+			self.Network.OnConnectionCallback  		= self.WebSocketConnectedCallback
+			self.Network.OnDataArrivedCallback 		= self.WebSocketDataArrivedCallback
+			self.Network.OnConnectionClosedCallback = self.WebSocketConnectionClosedCallback
+			self.Network.OnErrorCallback 			= self.WebSocketErrorCallback
+			self.AccessTick = 0
+
+			self.SetState("ACCESS_GATEWAY")
+		else:
+			if self.IsNodeLocalServerEnabled is True:
+				self.SetState("INIT_LOCAL_SERVER")
+			else:
+				self.SetState("WORK")
+
+	def StateAccessGetway (self):
+		if self.IsNodeWSServiceEnabled is True:
+			self.Network.AccessGateway(self.Key, json.dumps({
+				'node_name': str(self.Name),
+				'node_type': self.Type
+			}))
+
+			self.SetState("ACCESS_WAIT_GATEWAY")
+		else:
+			self.SetState("WORK")
+	
+	def StateAccessWaitGatway (self):
+		if self.AccessTick > 10:
+			self.SetState("ACCESS_WAIT_GATEWAY")
+			self.AccessTick = 0
+		else:
+			self.AccessTick += 1
+	
+	def StateInitLocalServer(self):
+		self.ServerAdderss = ('', 16999)
+		status = self.TryStartListener()
+		if status is True:
+			self.IsListenerEnabled = True
+			self.SetState("INIT_GATEWAY")
+		time.sleep(1)
+
+	def StateWork (self):
+		if self.SystemLoaded is False:
+			self.SystemLoaded = True # Update node that system done loading.
+			self.NodeSystemLoadedCallback()
+	
+	#
+	# ###### MASTER NODE STATES <-
+	#
+	
+	#
+	# ###### MASTER NODE GATAWAY CALLBACKS ->
+	#
+
+	def WebSocketConnectedCallback (self):
+		self.SetState("WORK")
+		if self.GatewayConnectedCallback is not None:
+			self.GatewayConnectedCallback()
+	
+	def WebSocketConnectionClosedCallback (self):
+		self.GatewayDisConnectedEvent()
+		self.OnWSConnectionClosed()
+		self.NetworkAccessTickLock.acquire()
+		try:
+			self.AccessTick = 0
+		finally:
+			self.NetworkAccessTickLock.release()
+		self.SetState("ACCESS_WAIT")
+
+	def WebSocketDataArrivedCallback (self, json):
+		self.SetState("WORK")
+		messageType = self.BasicProtocol.GetMessageTypeFromJson(json)
+		destination = self.BasicProtocol.GetDestinationFromJson(json)
+		command 	= self.BasicProtocol.GetCommandFromJson(json)
+
+		print ("(MkSNode)# [REQUEST] Gateway -> Node {" + str(command) + ", " + destination + "}")
+
+		# Is this packet for me?
+		if destination in self.UUID:
+			if messageType == "CUSTOM":
+				return
+			elif messageType == "DIRECT" or messageType == "PRIVATE" or messageType == "BROADCAST" or messageType == "WEBFACE":
+				# If commands located in the list below, do not forward this message and handle it in this context.
+				if command in ["get_node_info", "get_node_status"]:
+					# Only node with Gateway connection will answer from here.
+					self.RequestHandlers[command](json)
+				else:
+					print ("(MkSNode)# [Websocket INBOUND] Pass to local service ...")
+					self.HandleInternalReqest(json)
+					if self.OnWSDataArrived is not None:
+						self.OnWSDataArrived(json)
+			else:
+				print ("(MkSNode)# [Websocket INBOUND] ERROR - Not support " + request + " request type.")
+		else:
+			print ("WebSocketDataArrivedCallback", "HandleExternalRequest", destination)
+			# Find who has this destination adderes.
+			self.HandleExternalRequest(json)
+	
+	def WebSocketErrorCallback (self):
+		print ("WebSocketErrorCallback")
+		# TODO - Send callback "OnWSError"
+		self.NetworkAccessTickLock.acquire()
+		try:
+			self.AccessTick = 0
+		finally:
+			self.NetworkAccessTickLock.release()
+		self.SetState("ACCESS_WAIT")
+	
+	#
+	# ###### MASTER NODE GATAWAY CALLBACKS <-
+	#
+
 	def GetFileHandler(self, packet):
-		print ("[MasterNode] GetFileHandler")
-
-		'''
-		{
-			'header': {	
-				'source': 'WEBFACE',
-				'destination': 'ac6de837-9863-72a9-c789-a0aae7e9d020', 
-				'message_type': 'DIRECT'
-				}, 
-			'piggybag': {
-				'identifier': 9
-			}, 
-			'data': {
-				'header': {
-					'timestamp': 1554159118729, 
-					'command': 'get_file'
-				}, 
-				'payload': {
-					'file_type': 'js',
-					'file_name': '', 
-					'ui_type': 'config'
-				}
-			},
-			'user': {
-				'key': 'ac6de837-7863-72a9-c789-a0aae7e9d93e'
-			},
-			'additional': {				
-			}
-		}
-		'''
-
 		objFile 	= MkSFile.File()
 		uiType 		= packet["data"]["payload"]["ui_type"]
 		fileType 	= packet["data"]["payload"]["file_type"]
@@ -177,28 +287,23 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 			'thumbnail': 	'thumbnail'
 		}
 
-		path = os.path.join(".","ui",folder[uiType],"ui." + fileType)
-		print (path)
+		path 	= os.path.join(".","ui",folder[uiType],"ui." + fileType)
 		content = objFile.Load(path)
+
+		print ("(MasterNode)# Requested file: {path} ({fileName}.{fileType})".format(path=path,fileName=fileName,fileType=fileType))
 		
 		if ("html" in fileType):
 			content = content.replace("[NODE_UUID]", self.UUID)
 			content = content.replace("[GATEWAY_IP]", self.GatewayIP)
 		
-		resPayload = {
-			'file_type': fileType,
-			'ui_type': uiType,
-			'content': content.encode('hex')
-		}
+		message = self.BasicProtocol.BuildResponse(packet, {
+								'file_type': fileType,
+								'ui_type': uiType,
+								'content': content.encode('hex')
+		})
 
-		command 	= packet['data']['header']['command']
-		source 		= packet["header"]["source"]
-		destination = packet["header"]["destination"]
-		payload 	= resPayload
-		piggy 		= packet["piggybag"]
-
-		if self.OnSlaveResponseCallback is not None:
-			self.OnSlaveResponseCallback("response", source, destination, command, payload, piggy)
+		if self.SendGatewayMessageCallback is not None:
+			self.SendGatewayMessageCallback(message)
 	
 	def UploadFileHandler(self, packet):
 		pass
@@ -358,7 +463,7 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 		for slave in self.LocalSlaveList:
 			if self.ServiceNewNodeCallback is not None:
 				self.ServiceNewNodeCallback({ 
-												'ip':		str(slave.IP), 
+												'ip':	str(slave.IP), 
 										 		'port':	slave.Port, 
 										 		'uuid':	slave.UUID, 
 										 		'type':	slave.Type 
@@ -386,16 +491,13 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 
 		if self.OnSlaveResponseCallback is not None:
 			self.OnSlaveResponseCallback("response", destination, source, command, payload, piggy)
-
-	def GetNodeStatusRequestHandler(self, sock, packet):
-		pass
 		
 	def GetNodeStatusResponseHandler(self, sock, packet):
 		pass
 	
 	def HandleInternalReqest(self, packet):
 		command = packet["data"]["header"]['command']
-		print ("[MasterNode] HandleInternalReqest", command)
+		print ("(MasterNode)# Handle Internal Request " + command)
 		
 		if command in self.RequestHandlers:
 			self.RequestHandlers[command](packet)
@@ -413,11 +515,11 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 		if node is not None:
 			if (direction in "response"):
 				# TODO - Incorrect translation between websocket prot to socket prot
-				msg = self.Commands.GatewayToProxyResponse(destination, source, command, data, piggy)
+				# msg = self.Commands.GatewayToProxyResponse(destination, source, command, data, piggy)
 				node.Socket.send(msg)
 				print ("[MasterNode] HandleInternalReqest RESPONSE")
 			elif (direction in "request"):
-				msg = self.Commands.ProxyRequest(destination, source, command, data, piggy)
+				# msg = self.Commands.ProxyRequest(destination, source, command, data, piggy)
 				node.Socket.send(msg)
 				print ("[MasterNode] HandleInternalReqest REQUEST")
 		else:
@@ -439,10 +541,10 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 			jsonData = json.loads(jsonInstalledNodesStr)
 			for item in jsonData["installed"]:
 				if 1 == item["type"]:
-					node = LocalNode("", 16999, item["uuid"], item["type"], None)
+					node = MkSAbstractNode.LocalNode("", 16999, item["uuid"], item["type"], None)
 					node.Status = "Running"
 				else:
-					node = LocalNode("", 0, item["uuid"], item["type"], None)
+					node = MkSAbstractNode.LocalNode("", 0, item["uuid"], item["type"], None)
 				self.InstalledNodes.append(node)
 
 		if MkSGlobals.OS_TYPE == "win32":
@@ -465,22 +567,6 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 		#self.UI.AddEndpoint("/get/app_html/<key>", 					"get_app_html",					self.GetApplicationHTMLHandler, 		method=['POST'])
 		#self.UI.AddEndpoint("/get/app_js/<key>", 					"get_app_js", 					self.GetApplicationJavaScriptHandler, 	method=['POST'])
 		#self.UI.AddEndpoint("/generic/node_get_request/<key>", 		"generic_node_get_request", 	self.GenericNodeGETRequestHandler, 		method=['POST'])
-
-	def StateIdle (self):
-		print("(Master Node)# Note, in IDLE state ...")
-		time.sleep(1)
-	
-	def StateNetwork(self):
-		self.ServerAdderss = ('', 16999)
-		status = self.TryStartListener()
-		if True == status:
-			self.IsListenerEnabled = True
-			self.ChangeState("WORKING")
-		time.sleep(1)
-
-	def StateWorking(self):
-		if 0 == self.Ticker % 20:
-			pass
 
 	def GetPortRequestHandler(self, sock, packet):
 		nodeType 	= packet['type']
@@ -513,14 +599,14 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 						item.Status = "Running"
 
 				# Send message to all nodes.
-				paylod = self.Commands.MasterAppendNodeResponse(node.IP, port, node.UUID, nodeType)
+				# paylod = self.Commands.MasterAppendNodeResponse(node.IP, port, node.UUID, nodeType)
 				for client in self.Connections:
 					if client.Socket == self.ServerSocket:
 						pass
 					else:
 						client.Socket.send(paylod)
 				self.LocalSlaveList.append(node)
-				payload = self.Commands.GetPortResponse(port)
+				# payload = self.Commands.GetPortResponse(port)
 				# print payload
 				sock.send(payload)
 
@@ -536,11 +622,11 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 												})
 			else:
 				# Already assigned port (resending)
-				payload = self.Commands.GetPortResponse(node.Port)
+				# payload = self.Commands.GetPortResponse(node.Port)
 				sock.send(payload)
 		else:
 			# No available ports
-			payload = self.Commands.GetPortResponse(0)
+			# payload = self.Commands.GetPortResponse(0)
 			sock.send(payload)
 
 	def GetLocalNodesRequestHandler(self, sock, packet):
@@ -551,7 +637,7 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 				nodes += "{\"ip\":\"" + str(node.IP) + "\",\"port\":" + str(node.Port) + ",\"uuid\":\"" + node.UUID + "\",\"type\":" + str(node.Type) + "},"
 			if nodes is not "":
 				nodes = nodes[:-1]
-		payload = self.Commands.GetLocalNodesResponse(nodes)
+		# payload = self.Commands.GetLocalNodesResponse(nodes)
 		sock.send(payload)
 
 	def GetMasterInfoRequestHandler(self, sock, packet):
@@ -562,7 +648,7 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 				nodes += "{\"ip\":\"" + str(node.IP) + "\",\"port\":" + str(node.Port) + ",\"uuid\":\"" + node.UUID + "\",\"type\":" + str(node.Type) + "},"
 			if nodes is not "":
 				nodes = nodes[:-1]
-		payload = self.Commands.GetMasterInfoResponse(self.UUID, self.MasterHostName, nodes)
+		# payload = self.Commands.GetMasterInfoResponse(self.UUID, self.MasterHostName, nodes)
 		sock.send(payload)
 
 	def GetNodeInfoRequestHandler(self, sock, packet):
@@ -641,7 +727,7 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 						item.Port 	= 0
 						item.Status = "Stopped"
 
-				payload = self.Commands.MasterRemoveNodeResponse(slave.IP, slave.Port, slave.UUID, slave.Type)
+				# payload = self.Commands.MasterRemoveNodeResponse(slave.IP, slave.Port, slave.UUID, slave.Type)
 				# Send to all nodes
 				for client in self.Connections:
 					if client.Socket == self.ServerSocket or client.Socket == sock:
@@ -673,7 +759,7 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 	def ExitRemoteNode(self, uuid):
 		node = self.GetNodeByUUID(uuid)
 		if node is not None:
-			payload = self.Commands.ExitRequest()
+			# payload = self.Commands.ExitRequest()
 			node.Socket.send(payload)
 			# Remove pipe (note better to do it on response of exit command)
 			for item in self.Pipes:

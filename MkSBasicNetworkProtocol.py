@@ -4,8 +4,10 @@ import time
 import json
 
 class BasicNetworkProtocol():
-	def __init__(self, key):
+	def __init__(self):
 		self.Name 	= "Message Protocol Between Nodes and Applications"
+	
+	def SetKey(self, key):
 		self.Key    = key
 
 	def GetUUIDFromJson(self, json):
@@ -22,6 +24,9 @@ class BasicNetworkProtocol():
 
 	def GetDestinationFromJson(self, json):
 		return json['header']['destination']
+	
+	def GetDirectionFromJson(self, json):
+		return json['header']['direction']
 
 	def GetDataFromJson(self, json):
 		return json['data']

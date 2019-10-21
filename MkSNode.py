@@ -59,7 +59,7 @@ class Node():
 		self.IsNodeWSServiceEnabled 		= False # Based on HTTP requests and web sockets
 		self.IsNodeLocalServerEnabled 		= False # Based on regular sockets
 		# Inner state
-		self.States = {
+		self.States 						= {
 			'IDLE': 						self.StateIdle,
 			'CONNECT_HARDWARE':				self.StateConnectHardware,
 			'INIT_NETWORK':					self.StateInitNetwork,
@@ -82,12 +82,13 @@ class Node():
 		# Debug
 		self.DebugMode						= False
 		# Handlers
-		self.Handlers						= {
+		self.RequestHandlers				= {
 			'get_node_info': 				self.GetNodeInfoHandler,
 			'get_node_status': 				self.GetNodeStatusHandler,
 			'register_subscriber':			self.RegisterSubscriberHandler,
-			'unregister_subscriber':		self.UnregisterSubscriberHandler,
-			'get_file':						self.GetFileHandler
+			'unregister_subscriber':		self.UnregisterSubscriberHandler
+		}
+		self.ResponseHandlers				= {
 		}
 
 		self.LocalServiceNode.OnExitCallback 					= self.OnExitHandler
@@ -95,6 +96,8 @@ class Node():
 		self.LocalServiceNode.OnSlaveNodeDisconnectedCallback 	= self.OnSlaveNodeDisconnectedHandler
 		self.LocalServiceNode.OnSlaveResponseCallback 			= self.OnSlaveResponseHandler
 		self.LocalServiceNode.OnGetNodeInfoRequestCallback 		= self.OnGetNodeInfoRequestHandler
+		# Refactoring
+		self.LocalServiceNode.SendGatewayMessageCallback 		= self.SendGateway
 
 		parser = argparse.ArgumentParser(description='Execution module called Node')
 		parser.add_argument('--path', action='store',
@@ -103,22 +106,6 @@ class Node():
 
 		if args.pwd is not None:
 			os.chdir(args.pwd)
-
-	# TODO - Not needed, remove
-	def GetFile(self, filename, ui_type):
-		objFile = MkSFile.File()
-		return objFile.Load("static/js/node/" + filename)
-
-	# TODO - Not needed, remove
-	def GetFileHandler(self, message_type, source, data):
-		if self.Network.GetNetworkState() is "CONN":
-			uiType = data["payload"]["ui_type"]
-			fileName = data["payload"]["file_name"]
-
-			content = self.GetFile(fileName, uiType)
-			payload = { 'file_content': content }
-			message = self.Network.BuildMessage("request", "DIRECT", source, self.UUID, "get_file", payload, {})
-			self.Network.SendWebSocket(message)
 
 	def OnNewNodeHandler(self, node):
 		if self.Network.GetNetworkState() is "CONN":
@@ -134,13 +121,20 @@ class Node():
 			message = self.Network.BuildMessage("request", "MASTER", "GATEWAY", self.UUID, "node_disconnected", payload, {})
 			self.Network.SendWebSocket(message)
 
+	# OBSOLETE
 	# Sending response to "get_node_info" request (mostly for proxy request)
 	def OnSlaveResponseHandler(self, direction, dest, src, command, payload, piggy):
 		print ("[DEBUG MASTER] OnSlaveResponseHandler")
 		if self.Network.GetNetworkState() is "CONN":
 			message = self.Network.BuildMessage(direction, "DIRECT", dest, src, command, payload, piggy)
 			self.Network.SendWebSocket(message)
-
+			
+	def SendGateway(self, packet):
+		if self.Network.GetNetworkState() is "CONN":
+			print("(MkSNode)# Sending message to Gateway")
+			self.Network.SendWebSocket(packet)
+	
+	# OBSOLETE
 	def OnGetNodeInfoRequestHandler(self, sock, packet):
 		# Update response packet and encapsulate
 		msg = self.LocalServiceNode.Commands.ProxyResponse(packet, self.NodeInfo)
@@ -204,6 +198,11 @@ class Node():
 				self.IsHardwareBased = True
 			else:
 				self.UUID = dataSystem["node"]["uuid"]
+			
+			self.LocalServiceNode.SetNodeUUID(self.UUID)
+			self.LocalServiceNode.SetNodeType(self.Type)
+			self.LocalServiceNode.SetNodeName(self.Name)
+			self.LocalServiceNode.SetGatewayIPAddress(self.GatewayIP)
 		except:
 			print ("(MkSNode)# ERROR - Wrong configuration format")
 			self.Exit()
@@ -309,7 +308,6 @@ class Node():
 
 	def GetNodeInfoHandler(self, json):
 		if self.Network.GetNetworkState() is "CONN":
-			print ("(MkSNode)# [RESPONSE] Node -> Gateway ")
 			payload = self.NodeInfo
 			message = self.Network.BasicProtocol.BuildResponse(json, payload)
 			self.Network.SendWebSocket(message)
@@ -326,7 +324,7 @@ class Node():
 		print ("UnregisterSubscriberHandler")
 	
 	def WebSocketDataArrivedCallback (self, json):
-		self.State 	= "WORK"
+		self.SetState("WORK")
 		messageType = self.Network.BasicProtocol.GetMessageTypeFromJson(json)
 		destination = self.Network.BasicProtocol.GetDestinationFromJson(json)
 		command 	= self.Network.BasicProtocol.GetCommandFromJson(json)
@@ -341,7 +339,7 @@ class Node():
 				# If commands located in the list below, do not forward this message and handle it in this context.
 				if command in ["get_node_info", "get_node_status"]:
 					# Only node with Gateway connection will answer from here.
-					self.Handlers[command](json)
+					self.RequestHandlers[command](json)
 				else:
 					print ("(MkSNode)# [Websocket INBOUND] Pass to local service ...")
 					self.LocalServiceNode.HandleInternalReqest(json)
@@ -360,9 +358,9 @@ class Node():
 	def SendMessage (self, message_type, destination, command, payload):
 		message = self.Network.BuildMessage("request", message_type, destination, command, payload, {})
 		print ("[DEBUG::Node Network(Out)] " + message)
-		ret = self.Network.SendMessage(message)
+		ret = self.Network.SendWebSocket(message)
 		if False == ret:
-			self.State = "ACCESS"
+			self.SetState("ACCESS")
 		return ret
 
 	def WebSocketConnectionClosedCallback (self):
@@ -373,7 +371,7 @@ class Node():
 			self.AccessTick = 0
 		finally:
 			self.NetworkAccessTickLock.release()
-		self.State = "ACCESS_WAIT"
+		self.SetState("ACCESS_WAIT")
 
 	def WebSocketErrorCallback (self):
 		print ("WebSocketErrorCallback")
@@ -383,7 +381,7 @@ class Node():
 			self.AccessTick = 0
 		finally:
 			self.NetworkAccessTickLock.release()
-		self.State = "ACCESS_WAIT"
+		self.SetState("ACCESS_WAIT")
 
 	def GetFileContent (self, file):
 		return self.File.Load(file)
@@ -414,10 +412,6 @@ class Node():
 	
 	def StartLocalNode(self):
 		print("TODO - (MkSNode.Run) Missing management of network HW disconnection")
-		self.LocalServiceNode.SetNodeUUID(self.UUID)
-		self.LocalServiceNode.SetNodeType(self.Type)
-		self.LocalServiceNode.SetNodeName(self.Name)
-		self.LocalServiceNode.SetGatewayIPAddress(self.GatewayIP)
 		thread.start_new_thread(self.LocalServiceNode.NodeLocalNetworkConectionListener, ())
 
 	def Run (self, callback):
