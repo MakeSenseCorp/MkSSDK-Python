@@ -271,7 +271,7 @@ class AbstractNode():
 			self.SetNodeName(self.Name)
 			self.SetGatewayIPAddress(self.GatewayIP)
 		except Exception as e:
-			print ("(MkSNode)# ERROR - Wrong configuration format\n(EXEPTION)# {error}".format(error=str(e)))
+			print("(MkSNode)# ERROR - Wrong configuration format\n(EXEPTION)# {error}".format(error=str(e)))
 			self.Exit()
 			return False
 		
