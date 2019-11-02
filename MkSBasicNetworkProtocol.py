@@ -36,6 +36,9 @@ class BasicNetworkProtocol():
 
 	def GetPayloadFromJson(self, json):
 		return json['data']['payload']
+	
+	def AppendMagic(self, message):
+		return "MKSS:" + message + ":MKSE"
     
 	def BuildMessage(self, direction, messageType, destination, source, command, payload, piggy):
 		message = {

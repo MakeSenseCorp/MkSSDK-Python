@@ -21,14 +21,18 @@ from mksdk import MkSLocalNodesCommands
 class SlaveNode(MkSAbstractNode.AbstractNode):
 	def __init__(self):
 		MkSAbstractNode.AbstractNode.__init__(self)
-		self.Commands 						= MkSLocalNodesCommands.LocalNodeCommands()
+		self.ClassName						= "Slave Node"
 		self.MasterNodesList				= [] # For future use (slave to slave communication)
 		self.SlaveListenerPort 				= 0
 		self.MasterSocket					= None
+		self.MasterInfo 					= None
+		self.MasterUUID 					= ""
 		# Sates
-		self.States = {
+		self.States 						= {
 			'IDLE': 						self.StateIdle,
+			'INIT':							self.StateInit,
 			'CONNECT_MASTER':				self.StateConnectMaster,
+			'GET_MASTER_INFO':				self.StateGetMasterInfo,
 			'GET_PORT': 					self.StateGetPort,
 			'WAIT_FOR_PORT':				self.StateWaitForPort,
 			'START_LISTENER':				self.StateStartListener,
@@ -37,27 +41,28 @@ class SlaveNode(MkSAbstractNode.AbstractNode):
 		}
 		# Handlers
 		# Response - Handler when response returned to slave (slave is a requestor)
-		self.ResponseHandlers	= {
-			'get_local_nodes': 						self.GetLocalNodeResponseHandler,
-			'get_master_info': 						self.GetMasterInfoResponseHandler,
-			'get_sensor_info': 						self.GetSensorInfoResponseHandler,
-			'set_sensor_info': 						self.SetSensorInfoResponseHandler,
-			'get_port':								self.GetPortResponseHandler,
-			'nodes_list':							self.GetNodesListHandler,
-			'get_node_info':						self.GetNodeInfoHandler,
-			'master_append_node':					self.MasterAppendNode,
-			'master_remove_node':					self.MasterRemoveNodeHandler,
-			'undefined':							self.UndefindHandler
-		}
+		self.NodeResponseHandlers['get_port'] 		= self.GetPortResponseHandler
+		#self.ResponseHandlers	= {
+		#	'get_local_nodes': 						self.GetLocalNodeResponseHandler,
+		#	'get_master_info': 						self.GetMasterInfoResponseHandler,
+		#	'get_sensor_info': 						self.GetSensorInfoResponseHandler,
+		#	'set_sensor_info': 						self.SetSensorInfoResponseHandler,
+		#	'get_port':								self.GetPortResponseHandler,
+		#	'nodes_list':							self.GetNodesListHandler,
+		#	'get_node_info':						self.GetNodeInfoHandler,
+		#	'master_append_node':					self.MasterAppendNode,
+		#	'master_remove_node':					self.MasterRemoveNodeHandler,
+		#	'undefined':							self.UndefindHandler
+		#}
 		# Request - Response handler to sent request. (slave is responder)
-		self.RequestHandlers	= {
-			'get_sensor_info': 						self.GetSensorInfoRequestHandler,
-			'set_sensor_info': 						self.SetSensorInfoRequestHandler,
-			'get_file':								self.GetFileHandler,
-			'upload_file':							self.UploadFileHandler,
-			'exit':									self.ExitHandler,
-			'undefined':							self.UndefindHandler
-		}
+		#self.RequestHandlers	= {
+		#	'get_sensor_info': 						self.GetSensorInfoRequestHandler,
+		#	'set_sensor_info': 						self.SetSensorInfoRequestHandler,
+		#	'get_file':								self.GetFileHandler,
+		#	'upload_file':							self.UploadFileHandler,
+		#	'exit':									self.ExitHandler,
+		#	'undefined':							self.UndefindHandler
+		#}
 		# Callbacks
 		self.LocalServerDataArrivedCallback			= None
 		self.OnGetLocalNodesResponeCallback 		= None
@@ -80,9 +85,126 @@ class SlaveNode(MkSAbstractNode.AbstractNode):
 		self.IsListenerEnabled 						= False
 		# Counters
 		self.MasterConnectionTries 					= 0
-		self.Ticker 								= 0
+		self.MasterInformationTries 				= 0	
 
-		self.ChangeState("IDLE")
+	#
+	# ###### SLAVE NODE INITIATE ->
+	#
+
+	def Initiate(self):
+		self.SetState("INIT")
+
+	#
+	# ###### SLAVE NODE INITIATE <-
+	#
+
+	#
+	# ###### SLAVE NODE STATES ->
+	#
+
+	def StateIdle(self):
+		print ("({classname})# Note, in IDLE state ...".format(classname=self.ClassName))
+		time.sleep(1)
+	
+	def StateInit (self):
+		self.MasterConnectionTries	= 0
+		self.MasterInformationTries	= 0	
+
+		print ("({classname})# Trying to connect Master ({tries}) ...".format(classname=self.ClassName, tries=self.MasterConnectionTries))
+		self.MasterConnectionTries += 1
+		if self.ConnectMaster() is True:
+			self.SetState("GET_MASTER_INFO")
+			print ("({classname})# Send get_node_info request ...".format(classname=self.ClassName))
+			# Send request
+			message = self.BasicProtocol.BuildRequest("DIRECT", "MASTER", self.UUID, "get_node_info", {}, {})
+			packet  = self.BasicProtocol.AppendMagic(message)
+			self.MasterSocket.send(packet)
+		else:
+			self.SetState("CONNECT_MASTER")
+
+	def StateConnectMaster(self):
+		if 0 == self.Ticker % 10:
+			if self.MasterConnectionTries > 3:
+				self.SetState("EXIT")
+			else:
+				print ("({classname})# Trying to connect Master ({tries}) ...".format(classname=self.ClassName, tries=self.MasterConnectionTries))
+				if self.ConnectMaster() is True:
+					self.SetState("GET_MASTER_INFO")
+				else:
+					self.SetState("CONNECT_MASTER")
+					self.MasterConnectionTries += 1
+	
+	def StateGetMasterInfo(self):
+		if 0 == self.Ticker % 10:
+			if self.MasterInformationTries > 3:
+				self.SetState("EXIT")
+			else:
+				print ("({classname})# Send get_node_info request ...".format(classname=self.ClassName))
+				# Send request
+				message = self.BasicProtocol.BuildRequest("DIRECT", "MASTER", self.UUID, "get_node_info", {}, {})
+				packet  = self.BasicProtocol.AppendMagic(message)
+				self.MasterSocket.send(packet)
+				self.MasterInformationTries += 1
+
+	def StateGetPort(self):
+		print ("({classname})# Sending get_port request ...".format(classname=self.ClassName))
+		# Send request
+		message = self.BasicProtocol.BuildRequest("DIRECT", self.MasterUUID, self.UUID, "get_port", self.NodeInfo, {})
+		packet  = self.BasicProtocol.AppendMagic(message)
+		self.MasterSocket.send(packet)
+		self.SetState("WAIT_FOR_PORT")
+
+	def StateWaitForPort(self):
+		if 0 == self.Ticker % 20:
+			if 0 == self.SlaveListenerPort:
+				self.SetState("GET_PORT")
+			else:
+				self.SetState("START_LISTENER")
+
+	def StateStartListener(self):
+		print ("StateStartListener")
+		self.ServerAdderss = ('', self.SlaveListenerPort)
+		status = self.TryStartListener()
+		if True == status:
+			self.IsListenerEnabled = True
+			self.SetState("WORKING")
+
+	def StateWorking(self):
+		if 0 == self.Ticker % 60:
+			self.SendGatewayPing()
+
+	def StateExit(self):
+		self.Exit()
+
+	#
+	# ###### SLAVE NODE STATES <-
+	#
+
+	#
+	# ###### SLAVE NODE GATAWAY CALLBACKS ->
+	#
+
+	def GetNodeInfoResponseHandler(self, sock, packet):
+		source  = self.BasicProtocol.GetSourceFromJson(packet)
+		payload = self.BasicProtocol.GetPayloadFromJson(packet)
+		if source in "MASTER":
+			# We are here because this is a response for slave boot sequence
+			self.MasterInfo = payload
+			self.MasterUUID = payload["uuid"]
+			if self.GetState() in "GET_MASTER_INFO":
+				self.SetState("GET_PORT")
+	
+	def GetPortResponseHandler(self, sock, packet):
+		source  = self.BasicProtocol.GetSourceFromJson(packet)
+		payload = self.BasicProtocol.GetPayloadFromJson(packet)
+
+		if source in self.MasterUUID:
+			self.SlaveListenerPort = payload["port"]
+			self.SetState("START_LISTENER")
+
+	#
+	# ###### SLAVE NODE GATAWAY CALLBACKS <-
+	#
 
 	def MasterAppendNode(self, sock, packet):
 		if self.OnMasterAppendNodeCallback is not None:
@@ -223,64 +345,14 @@ class SlaveNode(MkSAbstractNode.AbstractNode):
 		if status is True:
 			node = self.AppendConnection(sock, self.MyLocalIP, 16999)
 			node.LocalType = "MASTER"
-			# TODO - 	This method cannot change state of statemachine.
-			# 			Return TRUE/FALSE and manage state changes from states method.
-			self.ChangeState("GET_PORT")
 			self.MasterNodesList.append(node)
 			if self.OnMasterFoundCallback is not None:
 				self.OnMasterFoundCallback([sock, self.MyLocalIP])
 			# Save socket as master socket
 			self.MasterSocket = sock
-		else:
-			self.ChangeState("CONNECT_MASTER")
-			time.sleep(5)
+			return True
 
-# STATES AREA
-
-	def StateIdle(self):
-		# Init state logic must be here.
-		print ("StateIdle")
-		self.ConnectMaster()
-
-	def StateConnectMaster(self):
-		print ("StateConnectMaster")
-		if 0 == self.Ticker % 20:
-			if self.MasterConnectionTries > 3:
-				self.ChangeState("EXIT")
-
-			self.ConnectMaster()
-			self.MasterConnectionTries += 1
-
-	def StateGetPort(self):
-		print ("StateGetPort")
-		payload = self.Commands.GetPortRequest(self.UUID, self.Type, self.Name)
-		self.MasterSocket.send(payload)
-		self.ChangeState("WAIT_FOR_PORT")
-
-	def StateWaitForPort(self):
-		print ("StateWaitForPort")
-		if 0 == self.Ticker % 20:
-			if 0 == self.SlaveListenerPort:
-				self.ChangeState("GET_PORT")
-			else:
-				self.ChangeState("START_LISTENER")
-
-	def StateStartListener(self):
-		print ("StateStartListener")
-		self.ServerAdderss = ('', self.SlaveListenerPort)
-		status = self.TryStartListener()
-		if True == status:
-			self.IsListenerEnabled = True
-			self.ChangeState("WORKING")
-
-	def StateWorking(self):
-		if 0 == self.Ticker % 30:
-			self.SendGatewayPing()
-
-	def StateExit(self):
-		print ("StateExit")
-
-# END OF STATE AREA
+		return False
 
 	def SendCustomCommandResponse(self, sock, packet, payload):
 		direction = packet["direction"]
@@ -369,12 +441,6 @@ class SlaveNode(MkSAbstractNode.AbstractNode):
 
 	def SetSensorInfoResponseHandler(self, sock, packet):
 		pass
-
-	def GetPortResponseHandler(self, sock, packet):
-		self.SlaveListenerPort = packet["port"]
-		# TODO - This is not a correct place to change state.
-		self.ChangeState("START_LISTENER")
-		# Raise event
 
 	# RESPONSE Handlers <
 	# REQUEST Handlers <

@@ -70,7 +70,6 @@ class LocalNode():
 class AbstractNode():
 	def __init__(self):
 		self.File 									= MkSFile.File()
-		self.Type 									= 0
 		self.Connector 								= None
 		self.Network								= None
 		# Device information
@@ -92,6 +91,7 @@ class AbstractNode():
 		self.IsHardwareBased 						= False
 		self.IsNodeWSServiceEnabled 				= False # Based on HTTP requests and web sockets
 		self.IsNodeLocalServerEnabled 				= False # Based on regular sockets
+		self.Ticker 								= 0
 		# State machine
 		self.States 								= None
 		# Locks and Events
@@ -198,6 +198,9 @@ class AbstractNode():
 
 	def SetState (self, state):
 		self.State = state
+	
+	def GetState (self):
+		return self.State
 
 	# Overload
 	def HandlerRouter(self, sock, data):
@@ -257,6 +260,7 @@ class AbstractNode():
 			self.BrandName 			= dataSystem["node"]["brandname"]
 			self.Name 				= dataSystem["node"]["name"]
 			self.Description 		= dataSystem["node"]["description"]
+			# TODO - Why is that?
 			if (self.Type == 1):
 				self.BoardType 		= dataSystem["node"]["boardType"]
 			self.UserDefined		= dataSystem["user"]
@@ -270,6 +274,7 @@ class AbstractNode():
 			self.SetNodeType(self.Type)
 			self.SetNodeName(self.Name)
 			self.SetGatewayIPAddress(self.GatewayIP)
+			self.BasicProtocol.SetKey(self.Key)
 		except Exception as e:
 			print("(MkSNode)# ERROR - Wrong configuration format\n(EXEPTION)# {error}".format(error=str(e)))
 			self.Exit()
@@ -398,37 +403,51 @@ class AbstractNode():
 			print ("(MkSAbstractNode)# Failed to open listener, ", str(self.ServerAdderss[1]), e)
 			return False
 
-	def DataSocketInputHandler_Response(self, sock, json_data):
-		print ("(MkSAbstractNode)# Internal socket RESPONSE handler")
-		command = json_data['command']
-		if command in self.NodeResponseHandlers:
-			self.NodeResponseHandlers[command](sock, json_data)
-
-	def DataSocketInputHandler_Resquest(self, sock, json_data):
-		print ("(MkSAbstractNode)# Internal socket REQUEST handler")
-		command = json_data['command']
-		if command in self.NodeRequestHandlers:
-			self.NodeRequestHandlers[command](sock, json_data)
-
 	def DataSocketInputHandler(self, sock, data):
 		try:
-			jsonData 	= json.loads(data)
-			command 	= self.BasicProtocol.GetCommandFromJson(jsonData) # jsonData['command']
-			direction 	= self.BasicProtocol.GetDirectionFromJson(jsonData) # jsonData['direction']
+			packet 		= json.loads(data)
+			command 	= self.BasicProtocol.GetCommandFromJson(packet)
+			direction 	= self.BasicProtocol.GetDirectionFromJson(packet)
+			destination = self.BasicProtocol.GetDestinationFromJson(packet)
+			source 		= self.BasicProtocol.GetSourceFromJson(packet)
 
-			if command in ["get_node_info", "get_node_status"]:
-				print ("(MkSAbstractNode)# ['get_node_info', 'get_node_status']")
-				if direction in ["response", "proxy_response"]:
-					if (direction in "proxy_response"):
-						self.HandlerRouter(sock, data)
-					else:
-						self.DataSocketInputHandler_Response(sock, jsonData)
-				elif direction in ["request", "proxy_request"]:
-					self.DataSocketInputHandler_Resquest(sock, jsonData)
+			print ("({classname})# [{direction}] {source} -> {dest} [{cmd}]".format(
+						classname=self.ClassName,
+						direction=direction,
+						source=source,
+						dest=destination,
+						cmd=command))
+			
+			# Is this packet for me?
+			if destination in self.UUID or (destination in "MASTER" and 1 == self.Type):
+				if direction in "request":
+					if command in self.NodeRequestHandlers.keys():
+						message = self.NodeRequestHandlers[command](sock, packet)
+						packet  = self.BasicProtocol.AppendMagic(message)
+						sock.send(packet)
+				elif direction in "response":
+					if command in self.NodeResponseHandlers.keys():
+						self.NodeResponseHandlers[command](sock, packet)
+				else:
+					pass
 			else:
-				print ("(MkSAbstractNode)# HandlerRouter")
-				# Call for handler.
-				self.HandlerRouter(sock, data)
+				# This massage is external (MOSTLY MASTER)
+				pass
+
+			#if command in ["get_node_info", "get_node_status"]:
+			#	print ("(MkSAbstractNode)# ['get_node_info', 'get_node_status']")
+			#	if direction in ["response", "proxy_response"]:
+			#		if (direction in "proxy_response"):
+			#			self.HandlerRouter(sock, data)
+			#		else:
+			#			self.DataSocketInputHandler_Response(sock, jsonData)
+			#	elif direction in ["request", "proxy_request"]:
+			#		self.DataSocketInputHandler_Resquest(sock, jsonData)
+			#else:
+			#	print ("(MkSAbstractNode)# HandlerRouter")
+			#	# Call for handler.
+			#	self.HandlerRouter(sock, data)
+
 		except Exception as e:
 			print ("[AbstractNode] DataSocketInputHandler ERROR", e, data)
 
@@ -488,7 +507,7 @@ class AbstractNode():
 						conn.setblocking(0)
 						self.AppendConnection(conn, addr[0], addr[1])
 						self.NodeConnectHandler(conn, addr)
-
+						
 						# Raise event for user
 						if self.OnAceptNewConnectionCallback is not None:
 							self.OnAceptNewConnectionCallback(conn)
@@ -508,13 +527,13 @@ class AbstractNode():
 						else:
 							if data:
 								# Each makesense packet should start from magic number "MKS"
-								if "MKS" in data[:3]:
+								if "MKSS" in data[:4]:
 									# One packet can hold multiple MKS messages.
-									multiData = data.split("MKS: ")
-									for data in multiData[1:]:
-										req = (data.split('\n'))[1]
+									multiData = data.split("MKSS:")
+									for packet in multiData[1:]:
 										# TODO - Must handled in different thread
-										self.DataSocketInputHandler(sock, req)
+										if "MKSE" in packet:
+											self.DataSocketInputHandler(sock, packet[:-5])
 								else:
 									print ("[AbstractNode] Data Invalid")
 							else:
@@ -527,7 +546,7 @@ class AbstractNode():
 				for sock in exceptional:
 					print ("[AbstractNode] Socket Exceptional")
 			except Exception as e:
-				print ("[AbstractNode] Connection Close [ERROR]", e)
+				print ("[AbstractNode] [ERROR]", e)
 
 		# Clean all resorses before exit.
 		self.CleanAllSockets()
@@ -632,11 +651,14 @@ class AbstractNode():
 
 			# User callback
 			self.WorkingCallback()
+			self.Ticker += 1
 			time.sleep(0.5)
 		
 		print ("(MkSAbstractNode)# Exit Node ...")
 		self.ExitEvent.set()
-		self.Network.Disconnect()
+		if self.IsNodeWSServiceEnabled is True:
+			if self.Network is not None:
+				self.Network.Disconnect()
 
 		if self.IsHardwareBased is True:
 			self.Connector.Disconnect()

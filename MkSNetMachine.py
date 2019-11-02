@@ -75,25 +75,28 @@ class Network ():
 
 	def WSConnection_OnMessage_Handler (self, ws, message):
 		data = json.loads(message)
-		self.OnDataArrivedCallback(data)
+		if self.OnDataArrivedCallback is not None:
+			self.OnDataArrivedCallback(data)
 
 	def WSConnection_OnError_Handler (self, ws, error):
-	    self.OnErrorCallback()
-	    print (error)
+		if self.OnErrorCallback is not None:
+			self.OnErrorCallback()
+		print ("(MkSNetwork)# " + error)
 
 	def WSConnection_OnClose_Handler (self, ws):
 		self.State = "DISCONN"
-		self.OnConnectionClosedCallback()
+		if self.OnConnectionClosedCallback is not None:
+			self.OnConnectionClosedCallback()
 		
 	def WSConnection_OnOpen_Handler (self, ws):
 		self.State = "CONN"
-		self.OnConnectionCallback()
+		if self.OnConnectionCallback is not None:
+			self.OnConnectionCallback()
 
 	def NodeWebfaceSocket_Thread (self):
-		print("(MkSNetwork)# Connect Gateway ...")
+		print("(MkSNetwork)# Connect Gateway ({url})...".format(url=self.WSServerUri))
 		self.WSConnection.keep_running = True
 		self.WSConnection.run_forever()
-		print("(MkSNetwork)# Disconnect Gateway ...")
 
 	def Disconnect(self):
 		self.WSConnection.keep_running = False
