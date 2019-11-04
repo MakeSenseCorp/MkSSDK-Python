@@ -282,6 +282,10 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 		payload = self.NodeInfo
 		return self.Network.BasicProtocol.BuildResponse(packet, payload)
 	
+	# Description:
+	#	1. Forging response with port for slave to use as listenning port.
+	#	2. Sending new node connected event to all connected nodes.
+	#	3. Sending request with slave details to Gateway.
 	def GetPortRequestHandler(self, sock, packet):
 		if sock is None:
 			return ""
@@ -323,6 +327,20 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 						item.Status = "Running"
 
 				self.LocalSlaveList.append(node)
+				# TODO - What will happen when slave node will try to get port when we are not connected to AWS?
+				# Send message to Gateway
+				payload = 	{ 
+								'node': { 	
+									'ip':	str(node.IP), 
+									'port':	port, 
+									'uuid':	node.UUID, 
+									'type':	nodetype,
+									'name':	str(node.Name)
+								} 
+							}
+				message = self.Network.BasicProtocol.BuildRequest("MASTER", "GATEWAY", self.UUID, "node_connected", payload, {})
+				self.Network.SendWebSocket(message)
+
 				return self.Network.BasicProtocol.BuildResponse(packet, { 'port': port })
 
 				# Send message to all nodes.
@@ -332,20 +350,6 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 				#		pass
 				#	else:
 				#		client.Socket.send(paylod)
-				# self.LocalSlaveList.append(node)
-				# payload = self.Commands.GetPortResponse(port)
-				# sock.send(payload)
-
-				# TODO - What will happen when slave node will try to get port when we are not connected to AWS?
-				# Send message to Gateway
-				# if self.ServiceNewNodeCallback is not None:
-				#	self.ServiceNewNodeCallback({ 	
-				#									'ip':	str(node.IP), 
-				#							 		'port':	port, 
-				#							 		'uuid':	node.UUID, 
-				#							 		'type':	nodetype,
-				#							 		'name':	str(node.Name)
-				#								})
 			else:
 				pass
 				# Already assigned port (resending)
@@ -373,6 +377,18 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 						item.IP 	= ""
 						item.Port 	= 0
 						item.Status = "Stopped"
+				
+				# Send message to Gateway
+				payload = 	{ 
+								'node': { 	
+									'ip':	str(slave.IP), 
+									'port':	slave.Port, 
+									'uuid':	slave.UUID, 
+									'type':	slave.Type
+								} 
+							}
+				message = self.Network.BasicProtocol.BuildRequest("MASTER", "GATEWAY", self.UUID, "node_disconnected", payload, {})
+				self.Network.SendWebSocket(message)
 
 				# payload = self.Commands.MasterRemoveNodeResponse(slave.IP, slave.Port, slave.UUID, slave.Type)
 				# Send to all nodes
@@ -382,14 +398,6 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 				#	else:
 				#		if client.Socket is not None:
 				#			client.Socket.send(payload)
-
-				# Send message to Gateway
-				# if self.OnSlaveNodeDisconnectedCallback is not None:
-				#	self.OnSlaveNodeDisconnectedCallback({ 'ip':	str(slave.IP), 
-				#										 'port':	slave.Port, 
-				#										 'uuid':	slave.UUID, 
-				#										 'type':	slave.Type 
-				#										})
 
 				self.LocalSlaveList.remove(slave)
 				continue
