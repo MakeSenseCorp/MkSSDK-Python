@@ -76,8 +76,6 @@ class SlaveNode(MkSAbstractNode.AbstractNode):
 		self.OnGetSensorInfoRequestCallback			= None
 		self.OnSetSensorInfoRequestCallback 		= None
 		self.OnUploadFileRequestCallback 			= None
-		self.OnCustomCommandRequestCallback			= None
-		self.OnCustomCommandResponseCallback		= None
 		self.OnGetNodeInfoRequestCallback 			= None
 		self.OnMasterAppendNodeCallback 			= None
 		self.OnMasterRemoveNodeCallback 			= None
@@ -184,6 +182,11 @@ class SlaveNode(MkSAbstractNode.AbstractNode):
 	# ###### SLAVE NODE GATAWAY CALLBACKS ->
 	#
 
+	def GetNodeInfoRequestHandler(self, sock, packet):
+		print ("[SlaveNode] GetNodeInfoHandler")
+		payload = self.NodeInfo
+		return self.BasicProtocol.BuildResponse(packet, payload)
+
 	def GetNodeInfoResponseHandler(self, sock, packet):
 		source  = self.BasicProtocol.GetSourceFromJson(packet)
 		payload = self.BasicProtocol.GetPayloadFromJson(packet)
@@ -204,6 +207,39 @@ class SlaveNode(MkSAbstractNode.AbstractNode):
 
 	#
 	# ###### SLAVE NODE GATAWAY CALLBACKS <-
+	#
+
+	def SendGatewayPing(self):
+		print ("({classname})# Sending ping request ...".format(classname=self.ClassName))
+		# Send request
+		message = self.BasicProtocol.BuildRequest("DIRECT", "GATEWAY", self.UUID, "ping", self.NodeInfo, {})
+		packet  = self.BasicProtocol.AppendMagic(message)
+		self.MasterSocket.send(packet)
+	
+	def PreUILoaderHandler(self):
+		print ("[SlaveNode] PreUILoaderHandler")
+		port = 8000 + (self.ServerAdderss[1] - 10000)
+		self.InitiateLocalServer(port)
+		# UI RestAPI
+		self.UI.AddEndpoint("/get/node_widget/<key>",		"get_node_widget",	self.GetNodeWidgetHandler)
+		self.UI.AddEndpoint("/get/node_config/<key>",		"get_node_config",	self.GetNodeConfigHandler)
+
+	def ConnectMaster(self):
+		sock, status = self.ConnectNodeSocket((self.MyLocalIP, 16999))
+		if status is True:
+			node = self.AppendConnection(sock, self.MyLocalIP, 16999)
+			node.LocalType = "MASTER"
+			self.MasterNodesList.append(node)
+			if self.OnMasterFoundCallback is not None:
+				self.OnMasterFoundCallback([sock, self.MyLocalIP])
+			# Save socket as master socket
+			self.MasterSocket = sock
+			return True
+
+		return False
+	
+	#
+	# ############################################################################################
 	#
 
 	def MasterAppendNode(self, sock, packet):
@@ -227,43 +263,6 @@ class SlaveNode(MkSAbstractNode.AbstractNode):
 	def GetNodeInfoHandler(self, sock, packet):
 		if self.OnGetNodeInfoCallback is not None:
 			self.OnGetNodeInfoCallback(packet)
-
-	def GetFileHandler(self, sock, packet):
-		print ("[SlaveNode] GetFileHandler")
-
-		objFile 	= MkSFile.File()
-		uiType 		= packet["payload"]["data"]["ui_type"]
-		fileType 	= packet["payload"]["data"]["file_type"]
-		fileName 	= packet["payload"]["data"]["file_name"]
-
-		folder = {
-			'config': 		'config',
-			'app': 			'app',
-			'thumbnail': 	'thumbnail'
-		}
-
-		path = os.path.join(".","ui",folder[uiType],"ui." + fileType)
-		print (path)
-		content = objFile.Load(path)
-		
-		if ("html" in fileType):
-			content = content.replace("[NODE_UUID]", self.UUID)
-			content = content.replace("[GATEWAY_IP]", self.GatewayIP)
-		
-		payload = {
-			'file_type': fileType,
-			'ui_type': uiType,
-			'content': content.encode('hex')
-		}
-		
-		msg = self.Commands.ProxyResponse(packet, payload)
-		self.MasterSocket.send(msg)
-
-	# GET_NODE_INFO
-	def GetNodeInfoRequestHandler(self, sock, packet):
-		print ("[SlaveNode] GetNodeInfoHandler")
-		if self.OnGetNodeInfoRequestCallback is not None:
-			self.OnGetNodeInfoRequestCallback(sock, packet)
 
 	# TODO - Implement this method.
 	def GetNodeStatusRequestHandler(self, sock, packet):
@@ -297,11 +296,6 @@ class SlaveNode(MkSAbstractNode.AbstractNode):
 		json = self.Commands.GenerateJsonProxyRequest(self.UUID, "WEBFACE", "get_sensor_info", {})
 		msg  = self.Commands.ProxyResponse(json, sensors)
 		self.MasterSocket.send(msg)
-
-	def SendGatewayPing(self):
-		print ("[SlaveNode] SendGatewayPing")
-		# payload = self.Commands.SendPingRequest("GATEWAY", self.UUID)
-		# self.MasterSocket.send(payload)
 	
 	def GetListOfNodeFromGateway(self):
 		print ("[SlaveNode] GetListOfNodeFromGateway")
@@ -332,27 +326,7 @@ class SlaveNode(MkSAbstractNode.AbstractNode):
 		# Find all master nodes on the network.
 		return self.FindMasters()
 
-	def PreUILoaderHandler(self):
-		print ("[SlaveNode] PreUILoaderHandler")
-		port = 8000 + (self.ServerAdderss[1] - 10000)
-		self.InitiateLocalServer(port)
-		# UI RestAPI
-		self.UI.AddEndpoint("/get/node_widget/<key>",		"get_node_widget",	self.GetNodeWidgetHandler)
-		self.UI.AddEndpoint("/get/node_config/<key>",		"get_node_config",	self.GetNodeConfigHandler)
-
-	def ConnectMaster(self):
-		sock, status = self.ConnectNodeSocket((self.MyLocalIP, 16999))
-		if status is True:
-			node = self.AppendConnection(sock, self.MyLocalIP, 16999)
-			node.LocalType = "MASTER"
-			self.MasterNodesList.append(node)
-			if self.OnMasterFoundCallback is not None:
-				self.OnMasterFoundCallback([sock, self.MyLocalIP])
-			# Save socket as master socket
-			self.MasterSocket = sock
-			return True
-
-		return False
+	
 
 	def SendCustomCommandResponse(self, sock, packet, payload):
 		direction = packet["direction"]
@@ -374,38 +348,6 @@ class SlaveNode(MkSAbstractNode.AbstractNode):
 
 		#payload = self.Commands.GetSensorInfoResponse(self.UUID, sensors)
 		#sock.send(payload)
-
-	# INBOUND
-	def HandlerRouter_Request(self, sock, json_data):
-		print ("INBOUND")
-		command = json_data['command']
-		# TODO - IF command type is not in list call unknown callback in user code.
-		if command in self.RequestHandlers:
-			self.RequestHandlers[command](sock, json_data)
-		else:
-			if self.OnCustomCommandRequestCallback is not None:
-				self.OnCustomCommandRequestCallback(sock, json_data)
-
-	# OUTBOUND
-	def HandlerRouter_Response(self, sock, json_data):
-		command = json_data['command']
-		print ("OUTBOUND", json_data)
-		# TODO - IF command type is not in list call unknown callback in user code.
-		if command in self.ResponseHandlers:
-			self.ResponseHandlers[command](sock, json_data)
-		else:
-			if self.OnCustomCommandResponseCallback is not None:
-				self.OnCustomCommandResponseCallback(sock, json_data)
-
-	# TODO - Master and Slave have same HandleRouter, consider moving to abstruct class
-	def HandlerRouter(self, sock, data):
-		jsonData 	= json.loads(data)
-		direction 	= jsonData['direction']
-
-		if direction in ["response", "proxy_response"]:
-			self.HandlerRouter_Response(sock, jsonData)
-		elif direction in ["request", "proxy_request"]:
-			self.HandlerRouter_Request(sock, jsonData)
 
 	def NodeDisconnectHandler(self, sock):
 		print ("NodeDisconnectHandler")

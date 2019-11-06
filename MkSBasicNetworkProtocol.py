@@ -79,3 +79,6 @@ class BasicNetworkProtocol():
 		packet['data']['payload']		= payload
 
 		return json.dumps(packet)
+	
+	def StringifyPacket(self, packet):
+		return json.dumps(packet)

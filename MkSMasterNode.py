@@ -117,7 +117,6 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 		self.NodeRequestHandlers['get_port'] 		= self.GetPortRequestHandler
 		self.NodeRequestHandlers['get_local_nodes'] = self.GetLocalNodesRequestHandler
 		self.NodeRequestHandlers['get_master_info'] = self.GetMasterInfoRequestHandler
-		self.NodeRequestHandlers['get_file'] 		= self.GetFileHandler
 		self.NodeRequestHandlers['upload_file'] 	= self.UploadFileHandler
 		# Callbacks
 		self.GatewayDataArrivedCallback 		= None
@@ -234,13 +233,17 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 		try:
 			self.SetState("WORK")
 			messageType = self.BasicProtocol.GetMessageTypeFromJson(packet)
+			direction 	= self.BasicProtocol.GetDirectionFromJson(packet)
 			destination = self.BasicProtocol.GetDestinationFromJson(packet)
+			source 		= self.BasicProtocol.GetSourceFromJson(packet)
 			command 	= self.BasicProtocol.GetCommandFromJson(packet)
 
-			print ("({classname})# [REQUEST] Gateway -> Node [{cmd}, {dest}]".format(
+			print ("({classname})# [{direction}] {source} -> {dest} [{cmd}]".format(
 						classname=self.ClassName,
-						cmd=str(command),
-						dest=destination))
+						direction=direction,
+						source=source,
+						dest=destination,
+						cmd=command))
 
 			# Is this packet for me?
 			if destination in self.UUID:
@@ -401,42 +404,6 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 
 				self.LocalSlaveList.remove(slave)
 				continue
-	
-	def GetFileHandler(self, sock, packet):
-		objFile 	= MkSFile.File()
-		payload 	= self.BasicProtocol.GetPayloadFromJson(packet)
-		uiType 		= payload["ui_type"]
-		fileType 	= payload["file_type"]
-		fileName 	= payload["file_name"]
-
-		folder = {
-			'config': 		'config',
-			'app': 			'app',
-			'thumbnail': 	'thumbnail'
-		}
-
-		path 	= os.path.join(".","ui",folder[uiType],"ui." + fileType)
-		content = objFile.Load(path)
-
-		print ("({classname})# Requested file: {path} ({fileName}.{fileType})".format(
-				classname=self.ClassName,
-				path=path,
-				fileName=fileName,
-				fileType=fileType))
-		
-		if ("html" in fileType):
-			content = content.replace("[NODE_UUID]", self.UUID)
-			content = content.replace("[GATEWAY_IP]", self.GatewayIP)
-		
-		return self.BasicProtocol.BuildResponse(packet, {
-								'file_type': fileType,
-								'ui_type': uiType,
-								'content': content.encode('hex')
-		})
-
-		# self.Network.SendWebSocket(message)
-		#if self.SendGatewayMessageCallback is not None:
-		#	self.SendGatewayMessageCallback(message)
 	
 	def UploadFileHandler(self, packet):
 		pass
@@ -628,26 +595,15 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 	def GetNodeStatusResponseHandler(self, sock, packet):
 		pass
 
-	# PROXY - Application -> Slave Node
+	# Master as proxy server.
 	def HandleExternalRequest(self, packet):
-		destination = packet["header"]["destination"]
-		source 		= packet["header"]["source"]
-		direction 	= packet["header"]["direction"]
-		data 		= packet["data"]["payload"]
-		command 	= packet["data"]["header"]["command"]
-		piggy  		= packet["piggybag"]
-
-		node = self.GetSlaveNode(destination)
+		destination = self.Network.BasicProtocol.GetDestinationFromJson(packet)
+		node 		= self.GetSlaveNode(destination)
+		
 		if node is not None:
-			if (direction in "response"):
-				# TODO - Incorrect translation between websocket prot to socket prot
-				# msg = self.Commands.GatewayToProxyResponse(destination, source, command, data, piggy)
-				node.Socket.send(msg)
-				print ("[MasterNode] HandleInternalReqest RESPONSE")
-			elif (direction in "request"):
-				# msg = self.Commands.ProxyRequest(destination, source, command, data, piggy)
-				node.Socket.send(msg)
-				print ("[MasterNode] HandleInternalReqest REQUEST")
+			message = self.BasicProtocol.StringifyPacket(packet)
+			message = self.BasicProtocol.AppendMagic(message)
+			node.Socket.send(message)
 		else:
 			print ("[MasterNode] HandleInternalReqest NODE NOT FOUND")
 			# Need to look at other masters list.
@@ -733,56 +689,6 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 	#
 	# DELETE
 	#
-	
-	def HandlerRouter_Request(self, sock, packet):
-		command = packet['command']
-		# TODO - IF command type is not in list call unknown callback in user code.
-		if command in self.RequestHandlers:
-			self.RequestHandlers[command](sock, packet)
-		else:
-			if self.OnCustomCommandRequestCallback is not None:
-				self.OnCustomCommandRequestCallback(sock, packet)
-
-	# OUTBOUND
-	def HandlerRouter_Response(self, sock, packet):
-		command = packet['command']
-		# TODO - IF command type is not in list call unknown callback in user code.
-		if command in self.ResponseHandlers:
-			self.ResponseHandlers[command](sock, packet)
-		else:
-			if self.OnCustomCommandResponseCallback is not None:
-				self.OnCustomCommandResponseCallback(sock, packet)
-
-	# OUTBOUND PROXY
-	def HandlerRouter_Proxy(self, sock, json_data):
-		print ("[MasterNode] HandlerRouter_ProxyResponse")
-		command 	= json_data['command']
-		source 		= json_data["payload"]["header"]["source"]
-		destination = json_data["payload"]["header"]["destination"]
-		payload 	= json_data["payload"]["data"]
-		piggy 		= json_data["piggybag"]
-		direction 	= json_data['direction']
-
-		# Send data response to requestor via Master Node module.
-		if self.OnSlaveResponseCallback is not None:
-			if (direction in "proxy_request"):
-				self.OnSlaveResponseCallback("request", destination, source, command, payload, piggy)
-			elif (direction in "proxy_response"):
-				self.OnSlaveResponseCallback("response", destination, source, command, payload, piggy)
-			else:
-				print("[MasterNode] ERROR - HandlerRouter_Proxy")
-
-	# Description - Handling input date from local server.
-	def HandlerRouter(self, sock, data):
-		jsonData 	= json.loads(data)
-		direction 	= jsonData['direction']
-
-		if "response" == direction:
-			self.HandlerRouter_Response(sock, jsonData)
-		elif "request" == direction:
-			self.HandlerRouter_Request(sock, jsonData)
-		elif direction in ["proxy_request", "proxy_response"]:
-			self.HandlerRouter_Proxy(sock, jsonData)
 
 	def GetSlaveNode(self, uuid):
 		for item in self.LocalSlaveList:

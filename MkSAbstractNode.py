@@ -104,6 +104,8 @@ class AbstractNode():
 		self.NodeSystemLoadedCallback 				= None
 		self.DeviceConnectedCallback 				= None
 		self.OnLocalServerStartedCallback 			= None
+		self.OnApplicationRequestCallback			= None
+		self.OnApplicationResponseCallback			= None
 		self.LocalServerDataArrivedCallback			= None # TODO - What is this callback for?
 		self.OnAceptNewConnectionCallback			= None
 		self.OnMasterFoundCallback					= None
@@ -137,7 +139,8 @@ class AbstractNode():
 		# Handlers
 		self.NodeRequestHandlers					= {
 			'get_node_info': 						self.GetNodeInfoRequestHandler,
-			'get_node_status': 						self.GetNodeStatusRequestHandler
+			'get_node_status': 						self.GetNodeStatusRequestHandler,
+			'get_file': 							self.GetFileHandler
 		}
 		self.NodeResponseHandlers					= {
 			'get_node_info': 						self.GetNodeInfoResponseHandler,
@@ -203,10 +206,6 @@ class AbstractNode():
 		return self.State
 
 	# Overload
-	def HandlerRouter(self, sock, data):
-		pass
-
-	# Overload
 	def NodeConnectHandler(self, conn, addr):
 		pass
 
@@ -221,6 +220,38 @@ class AbstractNode():
 	# Overload
 	def PreUILoaderHandler(self):
 		pass
+
+	def GetFileHandler(self, sock, packet):
+		objFile 	= MkSFile.File()
+		payload 	= self.BasicProtocol.GetPayloadFromJson(packet)
+		uiType 		= payload["ui_type"]
+		fileType 	= payload["file_type"]
+		fileName 	= payload["file_name"]
+
+		folder = {
+			'config': 		'config',
+			'app': 			'app',
+			'thumbnail': 	'thumbnail'
+		}
+
+		path 	= os.path.join(".","ui",folder[uiType],"ui." + fileType)
+		content = objFile.Load(path)
+
+		print ("({classname})# Requested file: {path} ({fileName}.{fileType})".format(
+				classname=self.ClassName,
+				path=path,
+				fileName=fileName,
+				fileType=fileType))
+		
+		if ("html" in fileType):
+			content = content.replace("[NODE_UUID]", self.UUID)
+			content = content.replace("[GATEWAY_IP]", self.GatewayIP)
+		
+		return self.BasicProtocol.BuildResponse(packet, {
+								'file_type': fileType,
+								'ui_type': uiType,
+								'content': content.encode('hex')
+		})
 
 	def LoadSystemConfig(self):
 		if MkSGlobals.OS_TYPE in ["linux", "linux2"]:
@@ -425,28 +456,23 @@ class AbstractNode():
 						message = self.NodeRequestHandlers[command](sock, packet)
 						packet  = self.BasicProtocol.AppendMagic(message)
 						sock.send(packet)
+					else:
+						# This command belongs to the application level
+						if self.OnApplicationRequestCallback is not None:
+							packet = self.OnApplicationRequestCallback(sock, packet)
 				elif direction in "response":
 					if command in self.NodeResponseHandlers.keys():
 						self.NodeResponseHandlers[command](sock, packet)
+					else:
+						# This command belongs to the application level
+						if self.OnApplicationResponseCallback is not None:
+							self.OnApplicationResponseCallback(sock, packet)
 				else:
 					pass
 			else:
 				# This massage is external (MOSTLY MASTER)
-				pass
-
-			#if command in ["get_node_info", "get_node_status"]:
-			#	print ("(MkSAbstractNode)# ['get_node_info', 'get_node_status']")
-			#	if direction in ["response", "proxy_response"]:
-			#		if (direction in "proxy_response"):
-			#			self.HandlerRouter(sock, data)
-			#		else:
-			#			self.DataSocketInputHandler_Response(sock, jsonData)
-			#	elif direction in ["request", "proxy_request"]:
-			#		self.DataSocketInputHandler_Resquest(sock, jsonData)
-			#else:
-			#	print ("(MkSAbstractNode)# HandlerRouter")
-			#	# Call for handler.
-			#	self.HandlerRouter(sock, data)
+				if self.Network is not None:
+					self.Network.SendWebSocket(data)
 
 		except Exception as e:
 			print ("[AbstractNode] DataSocketInputHandler ERROR", e, data)

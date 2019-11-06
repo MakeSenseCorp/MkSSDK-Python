@@ -16,6 +16,7 @@ from mksdk import MkSBasicNetworkProtocol
 class Network ():
 	def __init__(self, uri, wsuri):
 		self.Name 		  	= "Communication to Node.JS"
+		self.ClassName 		= "MkSNetwork"
 		self.BasicProtocol 	= None
 		self.ServerUri 	  	= uri
 		self.WSServerUri  	= wsuri
@@ -141,7 +142,8 @@ class Network ():
 	def SendWebSocket(self, packet):
 		try:
 			if packet is not "" and packet is not None:
-				print("(MkSNetwork)# [RESPONSE] Node -> Gateway ")
+				print ("({classname})# Node -> Gateway".format(
+						classname=self.ClassName))
 				self.WSConnection.send(packet)
 			else:
 				print ("(MkSNetwork)# Sending packet to Gateway FAILED")
