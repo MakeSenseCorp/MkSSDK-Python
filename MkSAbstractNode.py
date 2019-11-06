@@ -459,7 +459,9 @@ class AbstractNode():
 					else:
 						# This command belongs to the application level
 						if self.OnApplicationRequestCallback is not None:
-							packet = self.OnApplicationRequestCallback(sock, packet)
+							message = self.OnApplicationRequestCallback(sock, packet)
+							message  = self.BasicProtocol.AppendMagic(message)
+							sock.send(message)
 				elif direction in "response":
 					if command in self.NodeResponseHandlers.keys():
 						self.NodeResponseHandlers[command](sock, packet)
