@@ -408,6 +408,31 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 	def UploadFileHandler(self, packet):
 		pass
 
+	#
+	# ##################################################################################################
+	#
+
+	def GatewayConnectedEvent(self):
+		print ("(Master Node)# Connection to Gateway established ...")
+		# Send registration of all slaves to Gateway.
+		for slave in self.LocalSlaveList:
+			# Send message to Gateway
+			payload = 	{ 
+							'node': { 	
+								'ip':	str(slave.IP), 
+								'port':	slave.Port, 
+								'uuid':	slave.UUID, 
+								'type':	slave.Type,
+								'name':	str(slave.Name)
+							} 
+						}
+			message = self.Network.BasicProtocol.BuildRequest("MASTER", "GATEWAY", self.UUID, "node_connected", payload, {})
+			self.Network.SendWebSocket(message)
+
+	#
+	# ##################################################################################################
+	#
+
 	"""
 	Local Face RESP API methods
 	"""
@@ -558,39 +583,12 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 	Local Face RESP API methods
 	"""
 
-	def GatewayConnectedEvent(self):
-		print ("(Master Node)# Connection to Gateway established ...")
-		for slave in self.LocalSlaveList:
-			if self.ServiceNewNodeCallback is not None:
-				self.ServiceNewNodeCallback({ 
-												'ip':	str(slave.IP), 
-										 		'port':	slave.Port, 
-										 		'uuid':	slave.UUID, 
-										 		'type':	slave.Type 
-											})
-
 	# TODO - Implement this method.
 	def GetNodeStatusRequestHandler(self, sock, packet):
 		pass
 
 	def GetNodeInfoResponseHandler(self, sock, packet):
 		pass
-
-	# Sending response to "get_node_info" request (mostly for proxy request)
-	#def GetNodeInfoResponseHandler(self, sock, packet):
-	#	print ("[DEBUG MASTER] GetNodeInfoResponseHandler")
-	#	source 		= packet["payload"]["header"]["source"]
-	#	destination = packet["payload"]["header"]["destination"]
-	#	command 	= packet["command"]
-	#	payload 	= packet["payload"]["data"]
-	#	# This data traveling from App request and back to App
-	#	piggy  		= packet["piggybag"]
-	#
-	#	# TODO - If this is a proxy response then trigger OnSlaveResponseCallback.
-	#	# 		 Otherwise this is a response to master request. (MUST HANDLE IT LOCALY)
-	#
-	#	if self.OnSlaveResponseCallback is not None:
-	#		self.OnSlaveResponseCallback("response", destination, source, command, payload, piggy)
 		
 	def GetNodeStatusResponseHandler(self, sock, packet):
 		pass
@@ -659,7 +657,7 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 			if nodes is not "":
 				nodes = nodes[:-1]
 		# payload = self.Commands.GetLocalNodesResponse(nodes)
-		sock.send(payload)
+		# sock.send(payload)
 
 	def GetMasterInfoRequestHandler(self, sock, packet):
 		nodes = ""
@@ -670,19 +668,7 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 			if nodes is not "":
 				nodes = nodes[:-1]
 		# payload = self.Commands.GetMasterInfoResponse(self.UUID, self.MasterHostName, nodes)
-		sock.send(payload)
-
-	#def GetNodeInfoRequestHandler(self, sock, packet):
-	#	direction = self.BasicProtocol.GetDirectionFromJson(json)
-	#	if (direction in "proxy_request"):
-	#		# Send data response to requestor via Master Node module.
-	#		if self.OnSlaveResponseCallback is not None:
-	#			command 	= packet['command']
-	#			source 		= packet["payload"]["header"]["source"]
-	#			destination = packet["payload"]["header"]["destination"]
-	#			payload 	= packet["payload"]["data"]
-	#			piggy 		= packet["piggybag"]
-	#			self.OnSlaveResponseCallback("request", destination, source, command, payload, piggy)
+		# sock.send(payload)
 	
 	# INBOUND
 	

@@ -69,6 +69,7 @@ class LocalNode():
 
 class AbstractNode():
 	def __init__(self):
+		self.ClassName								= ""
 		self.File 									= MkSFile.File()
 		self.Connector 								= None
 		self.Network								= None
@@ -83,17 +84,18 @@ class AbstractNode():
 		self.BoardType 								= ""
 		self.Name 									= "N/A"
 		# Misc
-		self.State 									= 'IDLE'
 		self.IsMainNodeRunnig 						= True
-		self.AccessTick 							= 0
+		self.AccessTick 							= 0 	# Network establishment counter
 		self.RegisteredNodes  						= []
 		self.SystemLoaded							= False
 		self.IsHardwareBased 						= False
 		self.IsNodeWSServiceEnabled 				= False # Based on HTTP requests and web sockets
 		self.IsNodeLocalServerEnabled 				= False # Based on regular sockets
 		self.Ticker 								= 0
+		self.Pwd									= os.getcwd()
 		# State machine
-		self.States 								= None
+		self.State 									= 'IDLE' # Current state of node
+		self.States 								= None	 # States list
 		# Locks and Events
 		self.ExitEvent 								= threading.Event()
 		self.ExitLocalServerEvent					= threading.Event()
@@ -102,38 +104,27 @@ class AbstractNode():
 		# Callbacks
 		self.WorkingCallback 						= None
 		self.NodeSystemLoadedCallback 				= None
+		self.OnLocalServerStartedCallback 			= None # Main local server (listener) rutin started.		
+		self.OnApplicationRequestCallback			= None # Application will get this event on request arrived from local socket
+		self.OnApplicationResponseCallback			= None # Application will get this event on response arrived from local socket
+		self.OnAceptNewConnectionCallback			= None # Local server listener recieved new socket connection
+		self.OnMasterFoundCallback					= None # When master node found or connected this event will be raised.
+		self.OnMasterSearchCallback					= None # Raised on serach of master nodes start.
+		self.OnMasterDisconnectedCallback			= None # When slave node loose connection with master node.
+		self.OnTerminateConnectionCallback 			= None # When local server (listener) terminate socket connection.
+		self.OnLocalServerListenerStartedCallback	= None # When loacl server (listener) succesfully binded port.
+		self.OnExitCallback							= None # When node recieve command to terminate itself.
+		## Unused
 		self.DeviceConnectedCallback 				= None
-		self.OnLocalServerStartedCallback 			= None
-		self.OnApplicationRequestCallback			= None
-		self.OnApplicationResponseCallback			= None
-		self.LocalServerDataArrivedCallback			= None # TODO - What is this callback for?
-		self.OnAceptNewConnectionCallback			= None
-		self.OnMasterFoundCallback					= None
-		self.OnMasterSearchCallback					= None
-		self.OnMasterDisconnectedCallback			= None
-		self.OnTerminateConnectionCallback 			= None
-		self.OnLocalServerListenerStartedCallback	= None
-		self.OnExitCallback							= None
-		self.ServiceNewNodeCallback					= None
-		self.OnSlaveNodeDisconnectedCallback		= None
-		self.OnSlaveResponseCallback				= None
-		# Refactoring
-		self.SendGatewayMessageCallback 			= None
-		self.SendGatewayRequestCallback 			= None
-		self.SendGatewayResponseCallback 			= None
 		# Network
-		self.ServerSocket 							= None
-		self.ServerAdderss							= None
+		self.ServerSocket 							= None # Local server listener
+		self.ServerAdderss							= None # Local server listener
 		self.RecievingSockets						= []
 		self.SendingSockets							= []
 		self.Connections 							= []
 		self.OpenSocketsCounter						= 0
-		# Flags
 		self.IsLocalSocketRunning					= False
 		self.IsListenerEnabled 						= False
-		self.Pwd									= os.getcwd()
-		# Locks and Events
-		self.ExitLocalServerEvent					= threading.Event()
 		# Initialization methods
 		self.MyLocalIP 								= MkSUtils.GetLocalIP()
 		# Handlers
@@ -339,12 +330,14 @@ class AbstractNode():
 		print ("[AbstractNode]# AppendFaceRestTable")
 		self.UI.AddEndpoint(endpoint, endpoint_name, handler, args, method)
 
+	# TODO - REFACTORING
 	def TestWithKeyHandler(self, key):
 		if "ykiveish" in key:
 			return "{\"response\":\"OK\"}"
 		else:
 			return ""
 
+	# TODO - REFACTORING
 	def GetConnectedSocketsListHandler(self, key):
 		if "ykiveish" in key:
 			response = "{\"response\":\"OK\",\"payload\":{\"list\":["
@@ -588,12 +581,19 @@ class AbstractNode():
 			node.LocalType = "NODE"
 		return sock, status
 
-	def ConnectMaster(self, ip):
-		sock, status = self.ConnectNodeSocket((ip, 16999))
+	def ConnectMaster(self):
+		sock, status = self.ConnectNodeSocket((self.MyLocalIP, 16999))
 		if status is True:
-			node = self.AppendConnection(sock, ip, 16999)
+			node = self.AppendConnection(sock, self.MyLocalIP, 16999)
 			node.LocalType = "MASTER"
-		return sock, status
+			self.MasterNodesList.append(node)
+			if self.OnMasterFoundCallback is not None:
+				self.OnMasterFoundCallback([sock, self.MyLocalIP])
+			# Save socket as master socket
+			self.MasterSocket = sock
+			return True
+
+		return False
 
 	def FindMasters(self):
 		# Let user know master search started.

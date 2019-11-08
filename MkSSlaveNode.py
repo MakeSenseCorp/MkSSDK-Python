@@ -64,7 +64,6 @@ class SlaveNode(MkSAbstractNode.AbstractNode):
 		#	'undefined':							self.UndefindHandler
 		#}
 		# Callbacks
-		self.LocalServerDataArrivedCallback			= None
 		self.OnGetLocalNodesResponeCallback 		= None
 		self.OnGetMasterInfoResponseCallback		= None
 		self.OnMasterAppendNodeResponseCallback		= None
@@ -217,44 +216,44 @@ class SlaveNode(MkSAbstractNode.AbstractNode):
 		self.MasterSocket.send(packet)
 	
 	def PreUILoaderHandler(self):
-		print ("[SlaveNode] PreUILoaderHandler")
+		print ("({classname})# PreUILoaderHandler ...".format(classname=self.ClassName))
 		port = 8000 + (self.ServerAdderss[1] - 10000)
 		self.InitiateLocalServer(port)
 		# UI RestAPI
 		self.UI.AddEndpoint("/get/node_widget/<key>",		"get_node_widget",	self.GetNodeWidgetHandler)
 		self.UI.AddEndpoint("/get/node_config/<key>",		"get_node_config",	self.GetNodeConfigHandler)
-
-	def ConnectMaster(self):
-		sock, status = self.ConnectNodeSocket((self.MyLocalIP, 16999))
-		if status is True:
-			node = self.AppendConnection(sock, self.MyLocalIP, 16999)
-			node.LocalType = "MASTER"
-			self.MasterNodesList.append(node)
-			if self.OnMasterFoundCallback is not None:
-				self.OnMasterFoundCallback([sock, self.MyLocalIP])
-			# Save socket as master socket
-			self.MasterSocket = sock
-			return True
-
-		return False
+	
+	def NodeDisconnectHandler(self, sock):
+		print ("({classname})# NodeDisconnectHandler ...".format(classname=self.ClassName))
+		# Check if disconneced connection is a master.
+		for node in self.MasterNodesList:
+			if sock == node.Socket:
+				self.MasterNodesList.remove(node)
+				# If master terminated we need to close node.
+				self.SetState("CONNECT_MASTER")
+				if self.OnMasterDisconnectedCallback is not None:
+					self.OnMasterDisconnectedCallback()
+	
+	def GetMasters(self):
+		return self.MasterNodesList
 	
 	#
 	# ############################################################################################
 	#
 
-	def MasterAppendNode(self, sock, packet):
-		if self.OnMasterAppendNodeCallback is not None:
-			self.OnMasterAppendNodeCallback(packet["node"]["uuid"], 
-											packet["node"]["type"], 
-											packet["node"]["ip"],
-											packet["node"]["port"])
+	#def MasterAppendNode(self, sock, packet):
+	#	if self.OnMasterAppendNodeCallback is not None:
+	#		self.OnMasterAppendNodeCallback(packet["node"]["uuid"], 
+	#										packet["node"]["type"], 
+	#										packet["node"]["ip"],
+	#										packet["node"]["port"])
 	
-	def MasterRemoveNodeHandler(self, sock, packet):
-		if self.OnMasterRemoveNodeCallback is not None:
-			self.OnMasterRemoveNodeCallback(packet["node"]["uuid"], 
-											packet["node"]["type"], 
-											packet["node"]["ip"],
-											packet["node"]["port"])
+	#def MasterRemoveNodeHandler(self, sock, packet):
+	#	if self.OnMasterRemoveNodeCallback is not None:
+	#		self.OnMasterRemoveNodeCallback(packet["node"]["uuid"], 
+	#										packet["node"]["type"], 
+	#										packet["node"]["ip"],
+	#										packet["node"]["port"])
 	
 	def GetNodesListHandler(self, sock, packet):
 		if self.OnGetNodesListCallback is not None:
@@ -326,40 +325,6 @@ class SlaveNode(MkSAbstractNode.AbstractNode):
 		# Find all master nodes on the network.
 		return self.FindMasters()
 
-	
-
-	def SendCustomCommandResponse(self, sock, packet, payload):
-		direction = packet["direction"]
-		if ("proxy" in direction):
-			print (" P R O X Y ")
-			msg = self.Commands.ProxyResponse(packet, payload)
-			sock.send(msg)
-		else:
-			print (" R E G U L A R")
-
-	def SendSensorInfoResponse(self, sock, packet, sensors):
-		direction = packet["direction"]
-		if ("proxy" in direction):
-			print (" P R O X Y ")
-			msg = self.Commands.ProxyResponse(packet, sensors)
-			sock.send(msg)
-		else:
-			print (" R E G U L A R")
-
-		#payload = self.Commands.GetSensorInfoResponse(self.UUID, sensors)
-		#sock.send(payload)
-
-	def NodeDisconnectHandler(self, sock):
-		print ("NodeDisconnectHandler")
-		# Check if disconneced connection is a master.
-		for node in self.MasterNodesList:
-			if sock == node.Socket:
-				self.MasterNodesList.remove(node)
-				# If master terminated we need to close node.
-				self.ChangeState("CONNECT_MASTER")
-				if self.OnMasterDisconnectedCallback is not None:
-					self.OnMasterDisconnectedCallback()
-
 	def NodeMasterAvailable(self, sock):
 		print ("NodeMasterAvailable")
 		# Append new master to the list
@@ -369,8 +334,6 @@ class SlaveNode(MkSAbstractNode.AbstractNode):
 		# Get Master slave nodes.
 		packet = self.CommandsGetLocalNodes()
 		sock.send(packet)
-
-	# RESPONSE Handlers >
 
 	def GetLocalNodeResponseHandler(self, sock, packet):
 		pass
@@ -384,9 +347,6 @@ class SlaveNode(MkSAbstractNode.AbstractNode):
 	def SetSensorInfoResponseHandler(self, sock, packet):
 		pass
 
-	# RESPONSE Handlers <
-	# REQUEST Handlers <
-
 	def GetSensorInfoRequestHandler(self, sock, packet):
 		if self.OnGetSensorInfoRequestCallback is not None:
 			self.OnGetSensorInfoRequestCallback(packet, sock)
@@ -398,15 +358,6 @@ class SlaveNode(MkSAbstractNode.AbstractNode):
 	def UploadFileHandler(self, sock, packet):
 		if self.OnUploadFileRequestCallback is not None:
 			self.OnUploadFileRequestCallback(packet, sock)
-
-	# REQUEST Handlers <	
-
-	def UndefindHandler(self, sock, packet):
-		if None is not self.LocalServerDataArrivedCallback:
-			self.LocalServerDataArrivedCallback(packet, sock)
-
-	def GetMasters(self):
-		return self.MasterNodesList
 
 	def ExitHandler(self, sock, packet):
 		if self.OnExitCallback is not None:
