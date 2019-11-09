@@ -40,44 +40,28 @@ class SlaveNode(MkSAbstractNode.AbstractNode):
 			'EXIT':							self.StateExit
 		}
 		# Handlers
-		# Response - Handler when response returned to slave (slave is a requestor)
 		self.NodeResponseHandlers['get_port'] 		= self.GetPortResponseHandler
 		#self.ResponseHandlers	= {
 		#	'get_local_nodes': 						self.GetLocalNodeResponseHandler,
 		#	'get_master_info': 						self.GetMasterInfoResponseHandler,
 		#	'get_sensor_info': 						self.GetSensorInfoResponseHandler,
 		#	'set_sensor_info': 						self.SetSensorInfoResponseHandler,
-		#	'get_port':								self.GetPortResponseHandler,
-		#	'nodes_list':							self.GetNodesListHandler,
 		#	'get_node_info':						self.GetNodeInfoHandler,
-		#	'master_append_node':					self.MasterAppendNode,
-		#	'master_remove_node':					self.MasterRemoveNodeHandler,
 		#	'undefined':							self.UndefindHandler
 		#}
-		# Request - Response handler to sent request. (slave is responder)
 		#self.RequestHandlers	= {
 		#	'get_sensor_info': 						self.GetSensorInfoRequestHandler,
 		#	'set_sensor_info': 						self.SetSensorInfoRequestHandler,
-		#	'get_file':								self.GetFileHandler,
 		#	'upload_file':							self.UploadFileHandler,
 		#	'exit':									self.ExitHandler,
 		#	'undefined':							self.UndefindHandler
 		#}
 		# Callbacks
-		self.OnGetLocalNodesResponeCallback 		= None
-		self.OnGetMasterInfoResponseCallback		= None
-		self.OnMasterAppendNodeResponseCallback		= None
-		self.OnMasterRemoveNodeResponseCallback 	= None
-		self.OnGetSensorInfoResponseCallback 		= None
 		self.OnGetNodesListCallback 				= None
 		self.OnGetNodeInfoCallback 					= None
-
 		self.OnGetSensorInfoRequestCallback			= None
 		self.OnSetSensorInfoRequestCallback 		= None
 		self.OnUploadFileRequestCallback 			= None
-		self.OnGetNodeInfoRequestCallback 			= None
-		self.OnMasterAppendNodeCallback 			= None
-		self.OnMasterRemoveNodeCallback 			= None
 		# Flags
 		self.IsListenerEnabled 						= False
 		# Counters
@@ -240,24 +224,6 @@ class SlaveNode(MkSAbstractNode.AbstractNode):
 	#
 	# ############################################################################################
 	#
-
-	#def MasterAppendNode(self, sock, packet):
-	#	if self.OnMasterAppendNodeCallback is not None:
-	#		self.OnMasterAppendNodeCallback(packet["node"]["uuid"], 
-	#										packet["node"]["type"], 
-	#										packet["node"]["ip"],
-	#										packet["node"]["port"])
-	
-	#def MasterRemoveNodeHandler(self, sock, packet):
-	#	if self.OnMasterRemoveNodeCallback is not None:
-	#		self.OnMasterRemoveNodeCallback(packet["node"]["uuid"], 
-	#										packet["node"]["type"], 
-	#										packet["node"]["ip"],
-	#										packet["node"]["port"])
-	
-	def GetNodesListHandler(self, sock, packet):
-		if self.OnGetNodesListCallback is not None:
-			self.OnGetNodesListCallback(packet["payload"]["data"])
 	
 	def GetNodeInfoHandler(self, sock, packet):
 		if self.OnGetNodeInfoCallback is not None:

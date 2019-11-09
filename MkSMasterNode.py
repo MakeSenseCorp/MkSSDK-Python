@@ -23,40 +23,6 @@ from mksdk import MkSNetMachine
 from mksdk import MkSAbstractNode
 from mksdk import MkSShellExecutor
 
-# TODO - Move this clss to other location.
-class MachineInformation():
-	def __init__(self):
-		self.Terminal	= MkSShellExecutor.ShellExecutor()
-		self.Json 		= {
-			"cpu": {
-				"arch": "N/A"
-			},
-			"hdd": {
-				"capacity_ratio": "N/A"
-			},
-			"ram": {
-				"capacity_ratio": "N/A"
-			},
-			"sensors": {
-				"temp": "N/A",
-				"freq": "N/A"
-			},
-			"network": {
-				"ip": "N/A"
-			}
-		}
-
-		thread.start_new_thread(self.MachineInformationWorker_Thread, ())
-
-	def MachineInformationWorker_Thread(self):
-		while True:
-			if MkSGlobals.OS_TYPE in ["linux", "linux2"]:
-				self.Json["sensors"]["temp"] = str(self.Terminal.ExecuteCommand("cat /sys/devices/virtual/thermal/thermal_zone0/temp"))
-			time.sleep(5)
-
-	def GetInfo(self):
-		return self.Json
-
 # TODO - Remove this class from here.
 class LocalPipe():
 	def __init__(self, uuid, pipe):
@@ -84,7 +50,6 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 		self.ClassName 							= "Master Node"
 		# Members
 		self.Terminal 							= MkSShellExecutor.ShellExecutor()
-		self.MachineInfo 						= MachineInformation()
 		self.PortsForClients					= [item for item in range(1,33)]
 		self.MasterHostName						= socket.gethostname()
 		self.MasterVersion						= "1.0.1"
@@ -344,25 +309,20 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 				message = self.Network.BasicProtocol.BuildRequest("MASTER", "GATEWAY", self.UUID, "node_connected", payload, {})
 				self.Network.SendWebSocket(message)
 
-				return self.Network.BasicProtocol.BuildResponse(packet, { 'port': port })
+				# Send message (master_append_node) to all nodes.
+				for client in self.Connections:
+					if client.Socket != self.ServerSocket:
+						message = self.Network.BasicProtocol.BuildRequest("DIRECT", client.UUID, self.UUID, "master_append_node", payload, {})
+						message = self.Network.BasicProtocol.AppendMagic(message)
+						client.Socket.send(message)
 
-				# Send message to all nodes.
-				# paylod = self.Commands.MasterAppendNodeResponse(node.IP, port, node.UUID, nodetype)
-				# for client in self.Connections:
-				#	if client.Socket == self.ServerSocket:
-				#		pass
-				#	else:
-				#		client.Socket.send(paylod)
+				return self.Network.BasicProtocol.BuildResponse(packet, { 'port': port })
 			else:
-				pass
 				# Already assigned port (resending)
-				# payload = self.Commands.GetPortResponse(node.Port)
-				# sock.send(payload)
+				return self.Network.BasicProtocol.BuildResponse(packet, { 'port': node.Port })
 		else:
-			pass
 			# No available ports
-			# payload = self.Commands.GetPortResponse(0)
-			# sock.send(payload)
+			return self.Network.BasicProtocol.BuildResponse(packet, { 'port': 0 })
 	
 	def NodeDisconnectHandler(self, sock):		
 		for slave in self.LocalSlaveList:
@@ -393,20 +353,35 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 				message = self.Network.BasicProtocol.BuildRequest("MASTER", "GATEWAY", self.UUID, "node_disconnected", payload, {})
 				self.Network.SendWebSocket(message)
 
-				# payload = self.Commands.MasterRemoveNodeResponse(slave.IP, slave.Port, slave.UUID, slave.Type)
-				# Send to all nodes
-				# for client in self.Connections:
-				#	if client.Socket == self.ServerSocket or client.Socket == sock:
-				#		pass
-				#	else:
-				#		if client.Socket is not None:
-				#			client.Socket.send(payload)
+				# Send message (master_remove_node) to all nodes.
+				for client in self.Connections:
+					if client.Socket == self.ServerSocket or client.Socket == sock:
+						pass
+					else:
+						message = self.Network.BasicProtocol.BuildRequest("DIRECT", client.UUID, self.UUID, "master_remove_node", payload, {})
+						message = self.Network.BasicProtocol.AppendMagic(message)
+						client.Socket.send(message)
 
 				self.LocalSlaveList.remove(slave)
 				continue
 	
-	def UploadFileHandler(self, packet):
-		pass
+	def GetLocalNodesRequestHandler(self, sock, packet):
+		if self.LocalSlaveList:
+			nodes =[]
+			for node in self.LocalSlaveList:
+				nodes.append({
+					'ip': str(node.IP),
+					'port': str(node.Port),
+					'uuid': node.UUID,
+					'type': str(node.Type)
+				})
+		return self.Network.BasicProtocol.BuildResponse(packet, { 'nodes': nodes })
+
+	def GetMasterInfoRequestHandler(self, sock, packet):
+		return self.Network.BasicProtocol.BuildResponse(packet, { })
+	
+	def UploadFileHandler(self, sock, packet):
+		return self.Network.BasicProtocol.BuildResponse(packet, { })
 
 	#
 	# ##################################################################################################
@@ -428,13 +403,79 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 						}
 			message = self.Network.BasicProtocol.BuildRequest("MASTER", "GATEWAY", self.UUID, "node_connected", payload, {})
 			self.Network.SendWebSocket(message)
+	
+	def LoadNodesOnMasterStart(self):
+		jsonInstalledNodesStr 	= ""
+		jsonInstalledAppsStr 	= ""
 
+		if MkSGlobals.OS_TYPE == "win32":
+			jsonInstalledNodesStr = self.File.Load("G:\\workspace\\Development\\Git\\makesense\\misc\\configure\\" + MkSGlobals.OS_TYPE + "\\installed_nodes.json")
+		elif MkSGlobals.OS_TYPE in ["linux", "linux2"]:
+			jsonInstalledNodesStr = self.File.Load("../../configure/installed_nodes.json")
+
+		if (jsonInstalledNodesStr is not "" and jsonInstalledNodesStr is not None):
+			# Load installed nodes.
+			jsonData = json.loads(jsonInstalledNodesStr)
+			for item in jsonData["installed"]:
+				if 1 == item["type"]:
+					node = MkSAbstractNode.LocalNode("", 16999, item["uuid"], item["type"], None)
+					node.Status = "Running"
+				else:
+					node = MkSAbstractNode.LocalNode("", 0, item["uuid"], item["type"], None)
+				self.InstalledNodes.append(node)
+
+		if MkSGlobals.OS_TYPE == "win32":
+			jsonInstalledAppsStr = self.File.Load("G:\\workspace\\Development\\Git\\makesense\\misc\\configure\\" + MkSGlobals.OS_TYPE + "\\installed_apps.json")
+		elif MkSGlobals.OS_TYPE in ["linux", "linux2"]:
+			jsonInstalledAppsStr = self.File.Load("../../configure/installed_apps.json")
+
+		if (jsonInstalledAppsStr is not "" and jsonInstalledAppsStr is not None):
+			# Load installed applications
+			self.InstalledApps = json.loads(jsonInstalledAppsStr)
+
+		#self.InitiateLocalServer(8080)
+		# UI RestAPI
+		#self.UI.AddEndpoint("/get/node_list/<key>", 				"get_node_list", 				self.GetNodeListHandler)
+		#self.UI.AddEndpoint("/get/node_list_by_type/<key>", 		"get_node_list_by_type", 		self.GetNodeListByTypeHandler, 			method=['POST'])
+		#self.UI.AddEndpoint("/set/node_action/<key>", 				"set_node_action", 				self.SetNodeActionHandler, 				method=['POST'])
+		#self.UI.AddEndpoint("/get/node_shell_cmd/<key>", 			"get_node_shell_cmd", 			self.GetNodeShellCommandHandler, 		method=['POST'])
+		#self.UI.AddEndpoint("/get/node_config_info/<key>", 		"get_node_config_info", 		self.GetNodeConfigInfoHandler)
+		#self.UI.AddEndpoint("/get/app_list/<key>", 				"get_app_list", 				self.GetApplicationListHandler)
+		#self.UI.AddEndpoint("/get/app_html/<key>", 				"get_app_html",					self.GetApplicationHTMLHandler, 		method=['POST'])
+		#self.UI.AddEndpoint("/get/app_js/<key>", 					"get_app_js", 					self.GetApplicationJavaScriptHandler, 	method=['POST'])
+		#self.UI.AddEndpoint("/generic/node_get_request/<key>", 	"generic_node_get_request", 	self.GenericNodeGETRequestHandler, 		method=['POST'])
+
+	# Master as proxy server.
+	def HandleExternalRequest(self, packet):
+		destination = self.Network.BasicProtocol.GetDestinationFromJson(packet)
+		node 		= self.GetSlaveNode(destination)
+		
+		if node is not None:
+			message = self.BasicProtocol.StringifyPacket(packet)
+			message = self.BasicProtocol.AppendMagic(message)
+			node.Socket.send(message)
+		else:
+			print ("[MasterNode] HandleInternalReqest NODE NOT FOUND")
+			# Need to look at other masters list.
+			pass
+	
+	def GetSlaveNode(self, uuid):
+		for item in self.LocalSlaveList:
+			if item.UUID == uuid:
+				return item
+		return None
+	
 	#
 	# ##################################################################################################
 	#
 
+	#
+	# ################################ Under Refactoring ###############################################
+	#
+
 	"""
 	Local Face RESP API methods
+	"""
 	"""
 	def GetNodeListHandler(self, key):
 		if "ykiveish" in key:
@@ -580,108 +621,10 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 		except:
 			return ""
 	"""
-	Local Face RESP API methods
 	"""
-
-	# TODO - Implement this method.
-	def GetNodeStatusRequestHandler(self, sock, packet):
-		pass
-
-	def GetNodeInfoResponseHandler(self, sock, packet):
-		pass
-		
-	def GetNodeStatusResponseHandler(self, sock, packet):
-		pass
-
-	# Master as proxy server.
-	def HandleExternalRequest(self, packet):
-		destination = self.Network.BasicProtocol.GetDestinationFromJson(packet)
-		node 		= self.GetSlaveNode(destination)
-		
-		if node is not None:
-			message = self.BasicProtocol.StringifyPacket(packet)
-			message = self.BasicProtocol.AppendMagic(message)
-			node.Socket.send(message)
-		else:
-			print ("[MasterNode] HandleInternalReqest NODE NOT FOUND")
-			# Need to look at other masters list.
-			pass
-
-	def LoadNodesOnMasterStart(self):
-		jsonInstalledNodesStr 	= ""
-		jsonInstalledAppsStr 	= ""
-
-		if MkSGlobals.OS_TYPE == "win32":
-			jsonInstalledNodesStr = self.File.Load("G:\\workspace\\Development\\Git\\makesense\\misc\\configure\\" + MkSGlobals.OS_TYPE + "\\installed_nodes.json")
-		elif MkSGlobals.OS_TYPE in ["linux", "linux2"]:
-			jsonInstalledNodesStr = self.File.Load("../../configure/installed_nodes.json")
-
-		if (jsonInstalledNodesStr is not "" and jsonInstalledNodesStr is not None):
-			# Load installed nodes.
-			jsonData = json.loads(jsonInstalledNodesStr)
-			for item in jsonData["installed"]:
-				if 1 == item["type"]:
-					node = MkSAbstractNode.LocalNode("", 16999, item["uuid"], item["type"], None)
-					node.Status = "Running"
-				else:
-					node = MkSAbstractNode.LocalNode("", 0, item["uuid"], item["type"], None)
-				self.InstalledNodes.append(node)
-
-		if MkSGlobals.OS_TYPE == "win32":
-			jsonInstalledAppsStr = self.File.Load("G:\\workspace\\Development\\Git\\makesense\\misc\\configure\\" + MkSGlobals.OS_TYPE + "\\installed_apps.json")
-		elif MkSGlobals.OS_TYPE in ["linux", "linux2"]:
-			jsonInstalledAppsStr = self.File.Load("../../configure/installed_apps.json")
-
-		if (jsonInstalledAppsStr is not "" and jsonInstalledAppsStr is not None):
-			# Load installed applications
-			self.InstalledApps = json.loads(jsonInstalledAppsStr)
-
-		#self.InitiateLocalServer(8080)
-		# UI RestAPI
-		#self.UI.AddEndpoint("/get/node_list/<key>", 				"get_node_list", 				self.GetNodeListHandler)
-		#self.UI.AddEndpoint("/get/node_list_by_type/<key>", 		"get_node_list_by_type", 		self.GetNodeListByTypeHandler, 			method=['POST'])
-		#self.UI.AddEndpoint("/set/node_action/<key>", 				"set_node_action", 				self.SetNodeActionHandler, 				method=['POST'])
-		#self.UI.AddEndpoint("/get/node_shell_cmd/<key>", 			"get_node_shell_cmd", 			self.GetNodeShellCommandHandler, 		method=['POST'])
-		#self.UI.AddEndpoint("/get/node_config_info/<key>", 			"get_node_config_info", 		self.GetNodeConfigInfoHandler)
-		#self.UI.AddEndpoint("/get/app_list/<key>", 					"get_app_list", 				self.GetApplicationListHandler)
-		#self.UI.AddEndpoint("/get/app_html/<key>", 					"get_app_html",					self.GetApplicationHTMLHandler, 		method=['POST'])
-		#self.UI.AddEndpoint("/get/app_js/<key>", 					"get_app_js", 					self.GetApplicationJavaScriptHandler, 	method=['POST'])
-		#self.UI.AddEndpoint("/generic/node_get_request/<key>", 		"generic_node_get_request", 	self.GenericNodeGETRequestHandler, 		method=['POST'])
-
-	def GetLocalNodesRequestHandler(self, sock, packet):
-		nodes = ""
-		if self.LocalSlaveList:
-			for node in self.LocalSlaveList:
-				# TODO - nodes += "{\"ip\":\"{ip}\",\"port\":\"{port}\",\"uuid\":\"{uuid}\",\"type\":\"{type}\"},".format(ip = str(node.IP), port = str(node.Port), uuid = node.UUID, type = str(node.Type))
-				nodes += "{\"ip\":\"" + str(node.IP) + "\",\"port\":" + str(node.Port) + ",\"uuid\":\"" + node.UUID + "\",\"type\":" + str(node.Type) + "},"
-			if nodes is not "":
-				nodes = nodes[:-1]
-		# payload = self.Commands.GetLocalNodesResponse(nodes)
-		# sock.send(payload)
-
-	def GetMasterInfoRequestHandler(self, sock, packet):
-		nodes = ""
-		if self.LocalSlaveList:
-			for node in self.LocalSlaveList:
-				# TODO - nodes += "{\"ip\":\"{ip}\",\"port\":\"{port}\",\"uuid\":\"{uuid}\",\"type\":\"{type}\"},".format(ip = str(node.IP), port = str(node.Port), uuid = node.UUID, type = str(node.Type))
-				nodes += "{\"ip\":\"" + str(node.IP) + "\",\"port\":" + str(node.Port) + ",\"uuid\":\"" + node.UUID + "\",\"type\":" + str(node.Type) + "},"
-			if nodes is not "":
-				nodes = nodes[:-1]
-		# payload = self.Commands.GetMasterInfoResponse(self.UUID, self.MasterHostName, nodes)
-		# sock.send(payload)
-	
-	# INBOUND
-	
-	#
-	# DELETE
-	#
-
-	def GetSlaveNode(self, uuid):
-		for item in self.LocalSlaveList:
-			if item.UUID == uuid:
-				return item
-		return None
-
+	Local Face RESP API methods
+	"""	
+	"""
 	def GetInstalledNodes(self):
 		return self.InstalledNodes
 
@@ -712,7 +655,6 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 			time.sleep(0.5)
 
 	def StartRemoteNode(self, uuid):
-		# TODO - Is this method in use?
 		path = "/home/yevgeniy/workspace/makesense/mksnodes/1981"
 		proc = subprocess.Popen(["python", '-u', "../1981/1981.py", "--path", path], stdout=subprocess.PIPE)
 
@@ -721,3 +663,4 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 
 	def ExitRoutine(self):
 		self.Terminal.Stop()
+	"""

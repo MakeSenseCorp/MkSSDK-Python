@@ -158,7 +158,7 @@ class AbstractNode():
 	def GatewayDisConnectedEvent(self):
 		pass
 
-	# Overload - This method must be implemented by Master node 
+	# Overload
 	def HandleExternalRequest(self, data):
 		pass
 
@@ -190,12 +190,6 @@ class AbstractNode():
 	def ExitRoutine(self):
 		pass
 
-	def SetState (self, state):
-		self.State = state
-	
-	def GetState (self):
-		return self.State
-
 	# Overload
 	def NodeConnectHandler(self, conn, addr):
 		pass
@@ -211,6 +205,12 @@ class AbstractNode():
 	# Overload
 	def PreUILoaderHandler(self):
 		pass
+	
+	def SetState (self, state):
+		self.State = state
+	
+	def GetState (self):
+		return self.State
 
 	def GetFileHandler(self, sock, packet):
 		objFile 	= MkSFile.File()
