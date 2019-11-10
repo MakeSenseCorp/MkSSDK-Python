@@ -44,13 +44,11 @@ class SlaveNode(MkSAbstractNode.AbstractNode):
 		#self.ResponseHandlers	= {
 		#	'get_local_nodes': 						self.GetLocalNodeResponseHandler,
 		#	'get_master_info': 						self.GetMasterInfoResponseHandler,
-		#	'get_sensor_info': 						self.GetSensorInfoResponseHandler,
 		#	'set_sensor_info': 						self.SetSensorInfoResponseHandler,
 		#	'get_node_info':						self.GetNodeInfoHandler,
 		#	'undefined':							self.UndefindHandler
 		#}
 		#self.RequestHandlers	= {
-		#	'get_sensor_info': 						self.GetSensorInfoRequestHandler,
 		#	'set_sensor_info': 						self.SetSensorInfoRequestHandler,
 		#	'upload_file':							self.UploadFileHandler,
 		#	'exit':									self.ExitHandler,
@@ -149,8 +147,13 @@ class SlaveNode(MkSAbstractNode.AbstractNode):
 		if True == status:
 			self.IsListenerEnabled = True
 			self.SetState("WORKING")
-
+	
 	def StateWorking(self):
+		if self.SystemLoaded is False:
+			self.SystemLoaded = True # Update node that system done loading.
+			if self.NodeSystemLoadedCallback is not None:
+				self.NodeSystemLoadedCallback()
+		
 		if 0 == self.Ticker % 60:
 			self.SendGatewayPing()
 
@@ -312,14 +315,6 @@ class SlaveNode(MkSAbstractNode.AbstractNode):
 
 	def SetSensorInfoResponseHandler(self, sock, packet):
 		pass
-
-	def GetSensorInfoRequestHandler(self, sock, packet):
-		if self.OnGetSensorInfoRequestCallback is not None:
-			self.OnGetSensorInfoRequestCallback(packet, sock)
-
-	def SetSensorInfoRequestHandler(self, sock, packet):
-		if self.OnSetSensorInfoRequestCallback is not None:
-			self.OnSetSensorInfoRequestCallback(packet, sock)
 
 	def UploadFileHandler(self, sock, packet):
 		if self.OnUploadFileRequestCallback is not None:
