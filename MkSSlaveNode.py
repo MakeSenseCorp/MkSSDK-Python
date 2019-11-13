@@ -195,6 +195,25 @@ class SlaveNode(MkSAbstractNode.AbstractNode):
 	# ###### SLAVE NODE GATAWAY CALLBACKS <-
 	#
 
+	def EmitOnNodeChange(self, data):
+		print ("({classname})# Emit onNodeChange event ...".format(classname=self.ClassName))
+		for item in self.OnDeviceChangeList:
+			payload 	= item["payload"]
+			item_type	= payload["item_type"]
+
+			if item_type == 1: 		# Node
+				uuid = payload["uuid"]
+				message = self.BasicProtocol.BuildRequest("DIRECT", uuid, self.UUID, "on_node_change", data, {})
+			elif item_type == 2: 	# Webface
+				webface_indexer = payload["webface_indexer"]
+				message = self.BasicProtocol.BuildRequest("DIRECT", "WEBFACE", self.UUID, "on_node_change", data, {
+										'identifier':-1,
+										'webface_indexer':webface_indexer
+									})
+			
+			packet  = self.BasicProtocol.AppendMagic(message)
+			self.MasterSocket.send(packet)
+
 	def SendGatewayPing(self):
 		print ("({classname})# Sending ping request ...".format(classname=self.ClassName))
 		# Send request

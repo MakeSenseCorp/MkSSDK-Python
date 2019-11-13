@@ -114,6 +114,8 @@ class AbstractNode():
 		self.OnTerminateConnectionCallback 			= None # When local server (listener) terminate socket connection.
 		self.OnLocalServerListenerStartedCallback	= None # When loacl server (listener) succesfully binded port.
 		self.OnExitCallback							= None # When node recieve command to terminate itself.
+		# Registered items
+		self.OnDeviceChangeList						= [] # Register command "register_on_node_change"
 		## Unused
 		self.DeviceConnectedCallback 				= None
 		# Network
@@ -131,7 +133,9 @@ class AbstractNode():
 		self.NodeRequestHandlers					= {
 			'get_node_info': 						self.GetNodeInfoRequestHandler,
 			'get_node_status': 						self.GetNodeStatusRequestHandler,
-			'get_file': 							self.GetFileHandler
+			'get_file': 							self.GetFileHandler,
+			'register_on_node_change':				self.RegisterOnNodeChangeHandler,
+			'unregister_on_node_change':			self.UnregisterOnNodeChangeHandler
 		}
 		self.NodeResponseHandlers					= {
 			'get_node_info': 						self.GetNodeInfoResponseHandler,
@@ -211,6 +215,50 @@ class AbstractNode():
 	
 	def GetState (self):
 		return self.State
+
+	def RegisterOnNodeChangeHandler(self, sock, packet):
+		payload 	= self.BasicProtocol.GetPayloadFromJson(packet)
+		piggy 		= self.BasicProtocol.GetPiggybagFromJson(packet)
+		item_type 	= payload["item_type"]
+		if item_type == 2:
+			payload["webface_indexer"] = piggy["webface_indexer"]
+		self.OnDeviceChangeList.append({
+							'ts':		time.time(),
+							'payload':	payload
+							})
+
+		return self.BasicProtocol.BuildResponse(packet, {
+			'registered': "OK"
+		})
+	
+	def UnregisterOnNodeChangeHandler(self, sock, packet):
+		payload 		= self.BasicProtocol.GetPayloadFromJson(packet)
+		item_type		= payload["item_type"]
+
+		if item_type == 1: 		# Node
+			uuid = payload["uuid"]
+			# TODO - Unregister node
+		elif item_type == 2: 	# Webface
+			webface_indexer = payload["webface_indexer"]
+			for item in self.OnDeviceChangeList:
+				item_payload = item["payload"]
+				if "webface_indexer" in item_payload:
+					if item_payload["webface_indexer"] == webface_indexer:
+						self.OnDeviceChangeList.remove(item)
+						print ("({classname})# Unregistered WEBFACE session ({webface_indexer}))".format(
+								classname=self.ClassName,
+								webface_indexer=str(webface_indexer)))
+						return self.BasicProtocol.BuildResponse(packet, {
+							'unregistered': "OK"
+						})
+		
+		return self.BasicProtocol.BuildResponse(packet, {
+			'unregistered': "FAILED"
+		})
+	
+	# Overload
+	def EmitOnNodeChange(self, payload):
+		pass
 
 	def GetFileHandler(self, sock, packet):
 		objFile 	= MkSFile.File()
