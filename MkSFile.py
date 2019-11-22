@@ -33,3 +33,7 @@ class File ():
 	def ListFilesInFolder(self, path):
 		onlyfiles = [f for f in os.listdir(path) if os.path.isfile(os.path.join(path, f))]
 		return onlyfiles
+	
+	def ListAllInFolder(self, path):
+		onlyfiles = [f for f in os.listdir(path)]
+		return onlyfiles
