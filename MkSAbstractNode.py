@@ -286,6 +286,9 @@ class AbstractNode():
 			content = content.replace("[NODE_UUID]", self.UUID)
 			content = content.replace("[GATEWAY_IP]", self.GatewayIP)
 		
+		# TODO - Minify file content
+		content = content.replace("\t","")
+		
 		return self.BasicProtocol.BuildResponse(packet, {
 								'file_type': fileType,
 								'ui_type': uiType,
