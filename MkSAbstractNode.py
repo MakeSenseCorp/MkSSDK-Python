@@ -275,12 +275,6 @@ class AbstractNode():
 
 		path 	= os.path.join(".","ui",folder[uiType],"ui." + fileType)
 		content = objFile.Load(path)
-
-		print ("({classname})# Requested file: {path} ({fileName}.{fileType})".format(
-				classname=self.ClassName,
-				path=path,
-				fileName=fileName,
-				fileType=fileType))
 		
 		if ("html" in fileType):
 			content = content.replace("[NODE_UUID]", self.UUID)
@@ -288,6 +282,13 @@ class AbstractNode():
 		
 		# TODO - Minify file content
 		content = content.replace("\t","")
+
+		print ("({classname})# Requested file: {path} ({fileName}.{fileType}) ({length})".format(
+				classname=self.ClassName,
+				path=path,
+				fileName=fileName,
+				fileType=fileType,
+				length=str(len(content))))
 		
 		return self.BasicProtocol.BuildResponse(packet, {
 								'file_type': fileType,
