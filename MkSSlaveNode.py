@@ -16,7 +16,6 @@ import logging
 import MkSGlobals
 from mksdk import MkSFile
 from mksdk import MkSAbstractNode
-from mksdk import MkSLocalNodesCommands
 
 class SlaveNode(MkSAbstractNode.AbstractNode):
 	def __init__(self):
@@ -32,6 +31,7 @@ class SlaveNode(MkSAbstractNode.AbstractNode):
 			'IDLE': 						self.StateIdle,
 			'INIT':							self.StateInit,
 			'CONNECT_MASTER':				self.StateConnectMaster,
+			'FIND_PORT_MANUALY':			self.StateFindPortManualy,
 			'GET_MASTER_INFO':				self.StateGetMasterInfo,
 			'GET_PORT': 					self.StateGetPort,
 			'WAIT_FOR_PORT':				self.StateWaitForPort,
@@ -64,7 +64,8 @@ class SlaveNode(MkSAbstractNode.AbstractNode):
 		self.IsListenerEnabled 						= False
 		# Counters
 		self.MasterConnectionTries 					= 0
-		self.MasterInformationTries 				= 0	
+		self.MasterInformationTries 				= 0
+		self.MasterTickTimeout 						= 1
 
 	#
 	# ###### SLAVE NODE INITIATE ->
@@ -102,9 +103,10 @@ class SlaveNode(MkSAbstractNode.AbstractNode):
 			self.SetState("CONNECT_MASTER")
 
 	def StateConnectMaster(self):
-		if 0 == self.Ticker % 10:
+		if 0 == self.Ticker % self.MasterTickTimeout:
 			if self.MasterConnectionTries > 3:
-				self.SetState("EXIT")
+				# self.SetState("EXIT")
+				self.SetState("FIND_PORT_MANUALY")
 			else:
 				print ("({classname})# Trying to connect Master ({tries}) ...".format(classname=self.ClassName, tries=self.MasterConnectionTries))
 				if self.ConnectMaster() is True:
@@ -116,7 +118,8 @@ class SlaveNode(MkSAbstractNode.AbstractNode):
 	def StateGetMasterInfo(self):
 		if 0 == self.Ticker % 10:
 			if self.MasterInformationTries > 3:
-				self.SetState("EXIT")
+				# self.SetState("EXIT")
+				self.SetState("FIND_PORT_MANUALY")
 			else:
 				print ("({classname})# Send get_node_info request ...".format(classname=self.ClassName))
 				# Send request
@@ -132,6 +135,21 @@ class SlaveNode(MkSAbstractNode.AbstractNode):
 		packet  = self.BasicProtocol.AppendMagic(message)
 		self.MasterSocket.send(packet)
 		self.SetState("WAIT_FOR_PORT")
+	
+	def StateFindPortManualy(self):
+		print ("({classname})# Trying to find port manualy ...".format(classname=self.ClassName))
+		if self.SlaveListenerPort == 0:
+			for idx in range(1,33):
+				port = 10000 + idx
+				sock, status = self.ConnectNodeSocket((self.MyLocalIP, port))
+				if status is False:
+					self.SlaveListenerPort = port
+					self.SetState("START_LISTENER")
+					return
+				else:
+					sock.close()
+		else:
+			self.SetState("START_LISTENER")
 
 	def StateWaitForPort(self):
 		if 0 == self.Ticker % 20:
@@ -141,11 +159,12 @@ class SlaveNode(MkSAbstractNode.AbstractNode):
 				self.SetState("START_LISTENER")
 
 	def StateStartListener(self):
-		print ("StateStartListener")
+		print ("({classname})# Trying to start listener ...".format(classname=self.ClassName))
 		self.ServerAdderss = ('', self.SlaveListenerPort)
 		status = self.TryStartListener()
-		if True == status:
+		if status is True:
 			self.IsListenerEnabled = True
+			self.LocalWSManager.RunServer()
 			self.SetState("WORKING")
 	
 	def StateWorking(self):
@@ -212,14 +231,21 @@ class SlaveNode(MkSAbstractNode.AbstractNode):
 									})
 			
 			packet  = self.BasicProtocol.AppendMagic(message)
-			self.MasterSocket.send(packet)
+			if self.MasterSocket is None:
+				pass
+			else:
+				self.MasterSocket.send(packet)
 
 	def SendGatewayPing(self):
 		print ("({classname})# Sending ping request ...".format(classname=self.ClassName))
 		# Send request
 		message = self.BasicProtocol.BuildRequest("DIRECT", "GATEWAY", self.UUID, "ping", self.NodeInfo, {})
 		packet  = self.BasicProtocol.AppendMagic(message)
-		self.MasterSocket.send(packet)
+
+		if self.MasterSocket is None:
+			pass
+		else:
+			self.MasterSocket.send(packet)
 	
 	def PreUILoaderHandler(self):
 		print ("({classname})# PreUILoaderHandler ...".format(classname=self.ClassName))

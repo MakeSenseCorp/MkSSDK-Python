@@ -12,6 +12,9 @@ import socket, select
 import argparse
 
 from flask import Flask, render_template, jsonify, Response, request
+from flask_socketio import SocketIO, emit
+from geventwebsocket import WebSocketServer, WebSocketApplication, Resource
+from collections import OrderedDict
 #from flask_cors import CORS
 import logging
 
@@ -27,20 +30,28 @@ class EndpointAction(object):
 		self.DataToJS = args
 
 	def __call__(self, *args):
-		return render_template(self.Page, data=self.DataToJS)
+		return render_template(self.Page, data=self.DataToJS), 200, {
+			'Cache-Control': 'no-cache, no-store, must-revalidate',
+			'Pragma': 'no-cache',
+			'Expires': '0',
+			'Cache-Control': 'public, max-age=0'
+		}
 
 class WebInterface():
 	def __init__(self, name, port):
-		self.App = Flask(name)
-		self.Port = port
-		#CORS(self.App)
+		self.ClassName 	= "WebInterface"
+		self.App 		= Flask(name)
+		self.Port 		= port
 
+		#self.App.config['SEND_FILE_MAX_AGE_DEFAULT'] = 0
+
+		#CORS(self.App)
 		#self.Log = logging.getLogger('werkzeug')
 		#self.Log.disabled = True
 		#self.App.logger.disabled = True
 
 	def WebInterfaceWorker_Thread(self):
-		print ("[AbstractNode]# WebInterfaceWorker_Thread", self.Port)
+		print ("({classname})# Starting local webface on port ({port}) ...".format(classname=self.ClassName, port=str(self.Port)))
 		self.App.run(host='0.0.0.0', port=self.Port)
 
 	def Run(self):
@@ -51,6 +62,64 @@ class WebInterface():
 			self.App.add_url_rule(endpoint, endpoint_name, EndpointAction(endpoint_name, args))
 		else:
 			self.App.add_url_rule(endpoint, endpoint_name, handler, methods=method)
+
+class MkSLocalWebsocketServer():
+	def __init__(self):
+		self.ClassName 				= "LocalWebsocketServer"
+		self.ApplicationSockets 	= {}
+		self.ServerRunning 			= False
+		# Events
+		self.OnDataArrivedEvent 	= None
+	
+	def AppendSocket(self, ws_id, ws):
+		print ("({classname})# Append new connection".format(classname=self.ClassName))
+		self.ApplicationSockets[ws_id] = ws
+	
+	def RemoveSocket(self, ws_id):
+		print ("({classname})# Remove connection".format(classname=self.ClassName))
+		del self.ApplicationSockets[ws_id]
+	
+	def WSDataArrived(self, ws, data):
+		if self.OnDataArrivedEvent is not None:
+			self.OnDataArrivedEvent(ws, data)
+	
+	def SendSocket(self, ws_id, data):
+		self.ApplicationSockets[ws_id].send(data)
+	
+	def IsServerRunnig(self):
+		return self.ServerRunning
+
+	def Worker(self):
+		try:
+			server = WebSocketServer(('', 1982), Resource(OrderedDict([('/', NodeWSApplication)])))
+
+			self.ServerRunning = True
+			server.serve_forever()
+		except:
+			self.ServerRunning = False
+	
+	def RunServer(self):
+		if self.ServerRunning is False:
+			thread.start_new_thread(self.Worker, ())
+
+WSManager = MkSLocalWebsocketServer()
+
+class NodeWSApplication(WebSocketApplication):
+	def __init__(self, *args, **kwargs):
+		self.ClassName = "NodeWSApplication"
+		super(NodeWSApplication, self).__init__(*args, **kwargs)
+	
+	def on_open(self):
+		print ("({classname})# CONNECTION OPENED".format(classname=self.ClassName))
+		WSManager.AppendSocket(id(self.ws), self.ws)
+
+	def on_message(self, message):
+		print ("({classname})# MESSAGE RECIEVED {0} {1}".format(id(self.ws),message,classname=self.ClassName))
+		WSManager.WSDataArrived(self.ws, message)
+
+	def on_close(self, reason):
+		print ("({classname})# CONNECTION CLOSED".format(classname=self.ClassName))
+		WSManager.RemoveSocket(id(self.ws))
 
 class LocalNode():
 	def __init__(self, ip, port, uuid, node_type, sock):
@@ -73,6 +142,7 @@ class AbstractNode():
 		self.File 									= MkSFile.File()
 		self.Connector 								= None
 		self.Network								= None
+		self.LocalWSManager							= WSManager
 		# Device information
 		self.Type 									= 0
 		self.UUID 									= ""
@@ -266,6 +336,7 @@ class AbstractNode():
 		uiType 		= payload["ui_type"]
 		fileType 	= payload["file_type"]
 		fileName 	= payload["file_name"]
+		client_type = packet["additional"]["client_type"]
 
 		folder = {
 			'config': 		'config',
@@ -279,9 +350,61 @@ class AbstractNode():
 		if ("html" in fileType):
 			content = content.replace("[NODE_UUID]", self.UUID)
 			content = content.replace("[GATEWAY_IP]", self.GatewayIP)
-		
+
+			if client_type == "global_ws":
+				css = '''
+					<link rel="stylesheet" href="/static/lib/bootstrap/css/bootstrap.min.css" crossorigin="anonymous">
+					<link rel="stylesheet" href="/static/lib/bootstrap/css/bootstrap-slider.css" crossorigin="anonymous">
+					<link rel="stylesheet" href="/static/lib/fontawesome-5.11.2/css/all.min.css">
+					<link rel="stylesheet" href="/static/lib/bootstrap4-editable/css/bootstrap-editable.css">
+				'''
+
+				script = '''
+					<script src="/static/lib/nodes/js/jquery_3_3_1/jquery.min.js"></script>
+					<script src="/static/lib/nodes/js/popper_1_14_7/popper.min.js" crossorigin="anonymous"></script>
+					<script src="/static/lib/bootstrap/js/bootstrap.min.js" crossorigin="anonymous"></script>
+					<script src="/static/lib/bootstrap/js/bootstrap-slider.js" crossorigin="anonymous"></script>
+					<script src="/static/lib/nodes/js/feather_4_19/feather.min.js"></script>
+					<script src="/static/lib/nodes/map/feather_4_19/feather.min.js.map"></script>
+					<script src="/static/lib/bootstrap4-editable/js/bootstrap-editable.min.js"></script>
+					
+					<script src="mksdk-js/MkSAPI.js"></script>
+					<script src="mksdk-js/MkSCommon.js"></script>
+					<script src="mksdk-js/MkSGateway.js"></script>
+					<script src="mksdk-js/MkSWebface.js"></script>
+				'''
+			elif client_type == "local_ws":
+				css = '''
+					<link rel="stylesheet" href="static/lib/bootstrap/css/bootstrap.min.css" crossorigin="anonymous">
+					<link rel="stylesheet" href="static/lib/bootstrap/css/bootstrap-slider.css" crossorigin="anonymous">
+					<link rel="stylesheet" href="static/lib/fontawesome-5.11.2/css/all.min.css">
+					<link rel="stylesheet" href="static/lib/bootstrap4-editable/css/bootstrap-editable.css">
+				'''
+
+				script = '''
+					<script src="static/lib/nodes/js/jquery_3_3_1/jquery.min.js"></script>
+					<script src="static/lib/nodes/js/popper_1_14_7/popper.min.js" crossorigin="anonymous"></script>
+					<script src="static/lib/bootstrap/js/bootstrap.min.js" crossorigin="anonymous"></script>
+					<script src="static/lib/bootstrap/js/bootstrap-slider.js" crossorigin="anonymous"></script>
+					<script src="static/lib/nodes/js/feather_4_19/feather.min.js"></script>
+					<script src="static/lib/nodes/map/feather_4_19/feather.min.js.map"></script>
+					<script src="static/lib/bootstrap4-editable/js/bootstrap-editable.min.js"></script>
+					
+					<script src="static/mksdk-js/MkSAPI.js"></script>
+					<script src="static/mksdk-js/MkSCommon.js"></script>
+					<script src="static/mksdk-js/MkSGateway.js"></script>
+					<script src="static/mksdk-js/MkSWebface.js"></script>
+				'''
+			else:
+				css 	= ""
+				script 	= ""
+
+
 		# TODO - Minify file content
 		content = content.replace("\t","")
+
+		content = content.replace("[CSS]",css)
+		content = content.replace("[SCRIPTS]",script)
 
 		print ("({classname})# Requested file: {path} ({fileName}.{fileType}) ({length})".format(
 				classname=self.ClassName,
@@ -364,7 +487,8 @@ class AbstractNode():
 		# Data for the pages.
 		jsonUIData 	= {
 			'ip': str(self.MyLocalIP),
-			'port': str(port)
+			'port': str(port),
+			'uuid': str(self.UUID)
 		}
 		data = json.dumps(jsonUIData)
 		# UI Pages
@@ -379,7 +503,6 @@ class AbstractNode():
 		self.UI.AddEndpoint("/get/socket_list/<key>", 			"get_socket_list", 				self.GetConnectedSocketsListHandler)
 
 	def AppendFaceRestTable(self, endpoint=None, endpoint_name=None, handler=None, args=None, method=['GET']):
-		print ("[AbstractNode]# AppendFaceRestTable")
 		self.UI.AddEndpoint(endpoint, endpoint_name, handler, args, method)
 
 	# TODO - REFACTORING
@@ -478,6 +601,48 @@ class AbstractNode():
 			self.RemoveConnection(self.ServerSocket)
 			print ("(MkSAbstractNode)# Failed to open listener, ", str(self.ServerAdderss[1]), e)
 			return False
+	
+	def LocalWSDataArrivedHandler(self, ws, data):
+		print("({classname})# (WS) {0}".format(data,classname=self.ClassName))
+		try:
+			packet 		= json.loads(data)
+			if ("HANDSHAKE" == self.BasicProtocol.GetMessageTypeFromJson(packet)):
+				return
+			
+			command 	= self.BasicProtocol.GetCommandFromJson(packet)
+			direction 	= self.BasicProtocol.GetDirectionFromJson(packet)
+			destination = self.BasicProtocol.GetDestinationFromJson(packet)
+			source 		= self.BasicProtocol.GetSourceFromJson(packet)
+
+			packet["additional"]["client_type"] = "local_ws"
+
+			print ("({classname})# [{direction}] {source} -> {dest} [{cmd}]".format(
+						classname=self.ClassName,
+						direction=direction,
+						source=source,
+						dest=destination,
+						cmd=command))
+
+			if direction in "request":
+				if command in self.NodeRequestHandlers.keys():
+					message = self.NodeRequestHandlers[command](ws, packet)
+					ws.send(message)
+				else:
+					# This command belongs to the application level
+					if self.OnApplicationRequestCallback is not None:
+						message = self.OnApplicationRequestCallback(ws, packet)
+						ws.send(message)
+			elif direction in "response":
+				if command in self.NodeResponseHandlers.keys():
+					self.NodeResponseHandlers[command](ws, packet)
+				else:
+					# This command belongs to the application level
+					if self.OnApplicationResponseCallback is not None:
+						self.OnApplicationResponseCallback(ws, packet)
+			else:
+				pass
+		except Exception as e:
+			print ("[AbstractNode] LocalWSDataArrivedHandler ERROR", e, data)
 
 	def DataSocketInputHandler(self, sock, data):
 		try:
@@ -486,6 +651,8 @@ class AbstractNode():
 			direction 	= self.BasicProtocol.GetDirectionFromJson(packet)
 			destination = self.BasicProtocol.GetDestinationFromJson(packet)
 			source 		= self.BasicProtocol.GetSourceFromJson(packet)
+
+			packet["additional"]["client_type"] = "global_ws"
 
 			print ("({classname})# [{direction}] {source} -> {dest} [{cmd}]".format(
 						classname=self.ClassName,
@@ -531,7 +698,6 @@ class AbstractNode():
 			sock.connect(ip_addr_port)
 			return sock, True
 		except:
-			print ("[AbstractNode] Could not connect server", ip_addr_port)
 			return None, False
 
 	def DisconnectNodeSocket(self, sock):
@@ -704,10 +870,11 @@ class AbstractNode():
 	def StartLocalNode(self):
 		print("TODO - (MkSNode.Run) Missing management of network HW disconnection")
 		thread.start_new_thread(self.NodeLocalNetworkConectionListener, ())
-	
+
 	def Run (self, callback):
 		# Will be called each half a second.
 		self.WorkingCallback = callback
+		self.LocalWSManager.OnDataArrivedEvent = self.LocalWSDataArrivedHandler
 		self.ExitEvent.clear()
 		self.ExitLocalServerEvent.clear()
 		# Initial state is connect to Gateway.
@@ -730,7 +897,10 @@ class AbstractNode():
 			self.Method()
 
 			# User callback
-			self.WorkingCallback()
+			if ("WORKING" == self.GetState() and self.SystemLoaded is True):
+				self.WorkingCallback()
+				if self.LocalWSManager.IsServerRunnig() is False:
+					self.Exit()
 			self.Ticker += 1
 			time.sleep(0.5)
 		

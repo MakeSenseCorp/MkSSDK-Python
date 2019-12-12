@@ -11,7 +11,6 @@ import threading
 import socket
 
 from mksdk import MkSAbstractNode
-from mksdk import MkSLocalNodesCommands
 
 class ApplicationNode(MkSAbstractNode.AbstractNode):
 	def __init__(self, master_ip_list):
