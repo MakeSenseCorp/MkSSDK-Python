@@ -80,10 +80,19 @@ class MkSLocalWebsocketServer():
 		del self.ApplicationSockets[ws_id]
 	
 	def WSDataArrived(self, ws, data):
+		# TODO - Append webface type
+		packet	= json.loads(data)
+		if ("HANDSHAKE" == packet['header']['message_type']):
+			return
+		
+		packet["additional"]["ws_id"] = id(ws)
+		packet["additional"]["pipe"]  = "LOCAL_WS"
+		data = json.dumps(packet)
+
 		if self.OnDataArrivedEvent is not None:
 			self.OnDataArrivedEvent(ws, data)
 	
-	def SendSocket(self, ws_id, data):
+	def Send(self, ws_id, data):
 		self.ApplicationSockets[ws_id].send(data)
 	
 	def IsServerRunnig(self):
@@ -291,7 +300,13 @@ class AbstractNode():
 		piggy 		= self.BasicProtocol.GetPiggybagFromJson(packet)
 		item_type 	= payload["item_type"]
 		if item_type == 2:
-			payload["webface_indexer"] = piggy["webface_indexer"]
+			if packet["additional"]["pipe"] == "GATEWAY":
+				payload["webface_indexer"] = piggy["webface_indexer"]
+			elif packet["additional"]["pipe"] == "LOCAL_WS":
+				payload["ws_id"] = packet["additional"]["ws_id"]
+			
+			payload["pipe"] = packet["additional"]["pipe"]
+
 		self.OnDeviceChangeList.append({
 							'ts':		time.time(),
 							'payload':	payload
@@ -331,12 +346,13 @@ class AbstractNode():
 		pass
 
 	def GetFileHandler(self, sock, packet):
-		objFile 	= MkSFile.File()
-		payload 	= self.BasicProtocol.GetPayloadFromJson(packet)
-		uiType 		= payload["ui_type"]
-		fileType 	= payload["file_type"]
-		fileName 	= payload["file_name"]
-		client_type = packet["additional"]["client_type"]
+		objFile 		= MkSFile.File()
+		payload 		= self.BasicProtocol.GetPayloadFromJson(packet)
+		uiType 			= payload["ui_type"]
+		fileType 		= payload["file_type"]
+		fileName 		= payload["file_name"]
+		client_type 	= packet["additional"]["client_type"]
+		machine_type 	= "pc"
 
 		folder = {
 			'config': 		'config',
@@ -344,7 +360,7 @@ class AbstractNode():
 			'thumbnail': 	'thumbnail'
 		}
 
-		path 	= os.path.join(".","ui",folder[uiType],"ui." + fileType)
+		path 	= os.path.join(".","ui",machine_type,folder[uiType],"ui." + fileType)
 		content = objFile.Load(path)
 		
 		if ("html" in fileType):

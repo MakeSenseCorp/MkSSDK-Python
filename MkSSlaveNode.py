@@ -98,7 +98,10 @@ class SlaveNode(MkSAbstractNode.AbstractNode):
 			# Send request
 			message = self.BasicProtocol.BuildRequest("DIRECT", "MASTER", self.UUID, "get_node_info", {}, {})
 			packet  = self.BasicProtocol.AppendMagic(message)
-			self.MasterSocket.send(packet)
+			if self.MasterSocket is None:
+				pass
+			else:
+				self.MasterSocket.send(packet)
 		else:
 			self.SetState("CONNECT_MASTER")
 
@@ -125,7 +128,10 @@ class SlaveNode(MkSAbstractNode.AbstractNode):
 				# Send request
 				message = self.BasicProtocol.BuildRequest("DIRECT", "MASTER", self.UUID, "get_node_info", {}, {})
 				packet  = self.BasicProtocol.AppendMagic(message)
-				self.MasterSocket.send(packet)
+				if self.MasterSocket is None:
+					pass
+				else:
+					self.MasterSocket.send(packet)
 				self.MasterInformationTries += 1
 
 	def StateGetPort(self):
@@ -133,7 +139,10 @@ class SlaveNode(MkSAbstractNode.AbstractNode):
 		# Send request
 		message = self.BasicProtocol.BuildRequest("DIRECT", self.MasterUUID, self.UUID, "get_port", self.NodeInfo, {})
 		packet  = self.BasicProtocol.AppendMagic(message)
-		self.MasterSocket.send(packet)
+		if self.MasterSocket is None:
+			pass
+		else:
+			self.MasterSocket.send(packet)
 		self.SetState("WAIT_FOR_PORT")
 	
 	def StateFindPortManualy(self):
@@ -224,20 +233,26 @@ class SlaveNode(MkSAbstractNode.AbstractNode):
 				uuid = payload["uuid"]
 				message = self.BasicProtocol.BuildRequest("DIRECT", uuid, self.UUID, "on_node_change", data, {})
 			elif item_type == 2: 	# Webface
-				webface_indexer = payload["webface_indexer"]
-				message = self.BasicProtocol.BuildRequest("DIRECT", "WEBFACE", self.UUID, "on_node_change", data, {
-										'identifier':-1,
-										'webface_indexer':webface_indexer
-									})
-			
-			packet  = self.BasicProtocol.AppendMagic(message)
-			if self.MasterSocket is None:
-				pass
-			else:
-				self.MasterSocket.send(packet)
+				if payload["pipe"] == "GATEWAY":
+					webface_indexer = payload["webface_indexer"]
+					message = self.BasicProtocol.BuildRequest("DIRECT", "WEBFACE", self.UUID, "on_node_change", data, {
+						'identifier':-1,
+						'webface_indexer':webface_indexer
+					})
+
+					packet  = self.BasicProtocol.AppendMagic(message)
+					if self.MasterSocket is None:
+						pass
+					else:
+						self.MasterSocket.send(packet)
+				elif payload["pipe"] == "LOCAL_WS":
+					ws_id = payload["ws_id"]
+					message = self.BasicProtocol.BuildRequest("DIRECT", "WEBFACE", self.UUID, "on_node_change", data, {
+						'identifier':-1
+					})
+					self.LocalWSManager.Send(ws_id, message)
 
 	def SendGatewayPing(self):
-		print ("({classname})# Sending ping request ...".format(classname=self.ClassName))
 		# Send request
 		message = self.BasicProtocol.BuildRequest("DIRECT", "GATEWAY", self.UUID, "ping", self.NodeInfo, {})
 		packet  = self.BasicProtocol.AppendMagic(message)
@@ -245,6 +260,7 @@ class SlaveNode(MkSAbstractNode.AbstractNode):
 		if self.MasterSocket is None:
 			pass
 		else:
+			print ("({classname})# Sending ping request ...".format(classname=self.ClassName))
 			self.MasterSocket.send(packet)
 	
 	def PreUILoaderHandler(self):
@@ -305,25 +321,39 @@ class SlaveNode(MkSAbstractNode.AbstractNode):
 	"""
 	Local Face RESP API methods
 	"""
+	# TODO - NO master change.
 	def SendSensorInfoChange(self, sensors):
 		json = self.Commands.GenerateJsonProxyRequest(self.UUID, "WEBFACE", "get_sensor_info", {})
 		msg  = self.Commands.ProxyResponse(json, sensors)
-		self.MasterSocket.send(msg)
+		if self.MasterSocket is None:
+			pass
+		else:
+			self.MasterSocket.send(msg)
 	
 	def GetListOfNodeFromGateway(self):
 		print ("[SlaveNode] GetListOfNodeFromGateway")
 		payload = self.Commands.SendListOfNodesRequest("GATEWAY", self.UUID)
-		self.MasterSocket.send(payload)
+		if self.MasterSocket is None:
+			pass
+		else:
+			self.MasterSocket.send(payload)
 	
+	# TODO - NO master change.
 	def GetNodeInfo(self, uuid):
 		print ("[SlaveNode] GetNodeInfo")
 		payload = self.Commands.NodeInfoRequest(uuid, self.UUID)
-		self.MasterSocket.send(payload)
+		if self.MasterSocket is None:
+			pass
+		else:
+			self.MasterSocket.send(payload)
 	
 	def SendMessageToNodeViaGateway(self, uuid, message_type, data):
 		print ("[SlaveNode] SendMessageToNodeViaGateway")
 		payload = self.Commands.SendMessageToNodeViaGatewayRequest(message_type, uuid, self.UUID, data)
-		self.MasterSocket.send(payload)
+		if self.MasterSocket is None:
+			pass
+		else:
+			self.MasterSocket.send(payload)
 
 	def CleanMasterList(self):
 		for node in self.MasterNodesList:
