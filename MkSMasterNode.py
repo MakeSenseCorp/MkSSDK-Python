@@ -203,6 +203,8 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 			source 		= self.BasicProtocol.GetSourceFromJson(packet)
 			command 	= self.BasicProtocol.GetCommandFromJson(packet)
 
+			packet["additional"]["client_type"] = "global_ws"
+
 			print ("({classname})# [{direction}] {source} -> {dest} [{cmd}]".format(
 						classname=self.ClassName,
 						direction=direction,
@@ -228,7 +230,7 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 				# Find who has this destination adderes.
 				self.HandleExternalRequest(packet)
 		except Exception as e:
-			print("({classname})# ERROR - Data arrived issue\n(EXEPTION)# {error}".format(
+			print("({classname})# WebSocket Error - Data arrived issue\n(EXEPTION)# {error}".format(
 						classname=self.ClassName,
 						error=str(e)))
 	

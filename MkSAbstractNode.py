@@ -70,14 +70,17 @@ class MkSLocalWebsocketServer():
 		self.ServerRunning 			= False
 		# Events
 		self.OnDataArrivedEvent 	= None
+		self.OnWSDisconnected 		= None
 	
 	def AppendSocket(self, ws_id, ws):
-		print ("({classname})# Append new connection".format(classname=self.ClassName))
+		print ("({classname})# Append new connection ({0})".format(ws_id, classname=self.ClassName))
 		self.ApplicationSockets[ws_id] = ws
 	
 	def RemoveSocket(self, ws_id):
-		print ("({classname})# Remove connection".format(classname=self.ClassName))
+		print ("({classname})# Remove connection ({0})".format(ws_id, classname=self.ClassName))
 		del self.ApplicationSockets[ws_id]
+		if self.OnWSDisconnected is not None:
+			self.OnWSDisconnected(ws_id)
 	
 	def WSDataArrived(self, ws, data):
 		# TODO - Append webface type
@@ -93,7 +96,10 @@ class MkSLocalWebsocketServer():
 			self.OnDataArrivedEvent(ws, data)
 	
 	def Send(self, ws_id, data):
-		self.ApplicationSockets[ws_id].send(data)
+		if ws_id in self.ApplicationSockets:
+			self.ApplicationSockets[ws_id].send(data)
+		else:
+			print ("({classname})# ERROR - This socket ({0}) does not exist. (Might be closed)".format(ws_id, classname=self.ClassName))
 	
 	def IsServerRunnig(self):
 		return self.ServerRunning
@@ -103,8 +109,10 @@ class MkSLocalWebsocketServer():
 			server = WebSocketServer(('', 1982), Resource(OrderedDict([('/', NodeWSApplication)])))
 
 			self.ServerRunning = True
+			print ("({classname})# Staring local WS server ...".format(classname=self.ClassName))
 			server.serve_forever()
-		except:
+		except Exception as e:
+			print ("({classname})# [ERROR] Stoping local WS server ... {0}".format(str(e), classname=self.ClassName))
 			self.ServerRunning = False
 	
 	def RunServer(self):
@@ -123,8 +131,11 @@ class NodeWSApplication(WebSocketApplication):
 		WSManager.AppendSocket(id(self.ws), self.ws)
 
 	def on_message(self, message):
-		print ("({classname})# MESSAGE RECIEVED {0} {1}".format(id(self.ws),message,classname=self.ClassName))
-		WSManager.WSDataArrived(self.ws, message)
+		#print ("({classname})# MESSAGE RECIEVED {0} {1}".format(id(self.ws),message,classname=self.ClassName))
+		if message is not None:
+			WSManager.WSDataArrived(self.ws, message)
+		else:
+			print ("({classname})# ERROR - Message is not valid".format(classname=self.ClassName))
 
 	def on_close(self, reason):
 		print ("({classname})# CONNECTION CLOSED".format(classname=self.ClassName))
@@ -195,6 +206,8 @@ class AbstractNode():
 		self.OnExitCallback							= None # When node recieve command to terminate itself.
 		# Registered items
 		self.OnDeviceChangeList						= [] # Register command "register_on_node_change"
+		# Synchronization
+		self.DeviceChangeListLock 					= threading.Lock()
 		## Unused
 		self.DeviceConnectedCallback 				= None
 		# Network
@@ -295,6 +308,53 @@ class AbstractNode():
 	def GetState (self):
 		return self.State
 
+	def AppendDeviceChangeList(self, payload):
+		self.DeviceChangeListLock.acquire()
+		for item in self.OnDeviceChangeList:
+			if item["payload"]["ws_id"] == payload["ws_id"]:
+				self.DeviceChangeListLock.release()
+				return
+
+		self.OnDeviceChangeList.append({
+			'ts':		time.time(),
+			'payload':	payload
+		})		
+		self.DeviceChangeListLock.release()
+	
+	def RemoveDeviceChangeListLocal(self, id):
+		# Context of geventwebsocket (PAY ATTENTION)
+		self.DeviceChangeListLock.acquire()
+		is_removed = False
+
+		for i in xrange(len(self.OnDeviceChangeList) - 1, -1, -1):
+			item = self.OnDeviceChangeList[i]
+			item_payload = item["payload"]
+			if "ws_id" in item_payload:
+				if item_payload["ws_id"] == id:
+					del self.OnDeviceChangeList[i]
+					print ("({classname})# Unregistered WEBFACE local session ({ws_id}) ({length}))".format(
+							classname=self.ClassName,
+							ws_id=str(id),
+							length=len(self.OnDeviceChangeList)))
+					is_removed = True
+		self.DeviceChangeListLock.release()
+		return is_removed
+	
+	def RemoveDeviceChangeListGlobal(self, id):
+		self.DeviceChangeListLock.acquire()
+		for item in self.OnDeviceChangeList:
+			item_payload = item["payload"]
+			if "webface_indexer" in item_payload:
+				if item_payload["webface_indexer"] == id:
+					self.OnDeviceChangeList.remove(item)
+					print ("({classname})# Unregistered WEBFACE global session ({webface_indexer}))".format(
+							classname=self.ClassName,
+							webface_indexer=str(id)))
+					self.DeviceChangeListLock.release()
+					return True
+		self.DeviceChangeListLock.release()
+		return False
+
 	def RegisterOnNodeChangeHandler(self, sock, packet):
 		payload 	= self.BasicProtocol.GetPayloadFromJson(packet)
 		piggy 		= self.BasicProtocol.GetPiggybagFromJson(packet)
@@ -306,14 +366,13 @@ class AbstractNode():
 				payload["ws_id"] = packet["additional"]["ws_id"]
 			
 			payload["pipe"] = packet["additional"]["pipe"]
-
-		self.OnDeviceChangeList.append({
-							'ts':		time.time(),
-							'payload':	payload
-							})
-
+			self.AppendDeviceChangeList(payload)
+			return self.BasicProtocol.BuildResponse(packet, {
+				'registered': "OK"
+			})
+		
 		return self.BasicProtocol.BuildResponse(packet, {
-			'registered': "OK"
+			'registered': "NO REGISTERED"
 		})
 	
 	def UnregisterOnNodeChangeHandler(self, sock, packet):
@@ -324,23 +383,29 @@ class AbstractNode():
 			uuid = payload["uuid"]
 			# TODO - Unregister node
 		elif item_type == 2: 	# Webface
-			webface_indexer = payload["webface_indexer"]
-			for item in self.OnDeviceChangeList:
-				item_payload = item["payload"]
-				if "webface_indexer" in item_payload:
-					if item_payload["webface_indexer"] == webface_indexer:
-						self.OnDeviceChangeList.remove(item)
-						print ("({classname})# Unregistered WEBFACE session ({webface_indexer}))".format(
-								classname=self.ClassName,
-								webface_indexer=str(webface_indexer)))
-						return self.BasicProtocol.BuildResponse(packet, {
-							'unregistered': "OK"
-						})
+			if packet["additional"]["pipe"] == "GATEWAY":
+				webface_indexer = payload["webface_indexer"]
+				if self.UnregisterGlobalWS(webface_indexer) is True:
+					return self.BasicProtocol.BuildResponse(packet, {
+						'unregistered': "OK"
+					})
+			elif packet["additional"]["pipe"] == "LOCAL_WS":
+				ws_id = packet["additional"]["ws_id"]
+				if self.UnregisterLocalWS(ws_id) is True:
+					return self.BasicProtocol.BuildResponse(packet, {
+						'unregistered': "OK"
+					})
 		
 		return self.BasicProtocol.BuildResponse(packet, {
 			'unregistered': "FAILED"
 		})
 	
+	def UnregisterLocalWS(self, id):
+		return self.RemoveDeviceChangeListLocal(id)
+
+	def UnregisterGlobalWS(self, id):
+		return self.RemoveDeviceChangeListGlobal(id)
+
 	# Overload
 	def EmitOnNodeChange(self, payload):
 		pass
@@ -414,13 +479,13 @@ class AbstractNode():
 			else:
 				css 	= ""
 				script 	= ""
+			
+			content = content.replace("[CSS]",css)
+			content = content.replace("[SCRIPTS]",script)
 
 
 		# TODO - Minify file content
 		content = content.replace("\t","")
-
-		content = content.replace("[CSS]",css)
-		content = content.replace("[SCRIPTS]",script)
 
 		print ("({classname})# Requested file: {path} ({fileName}.{fileType}) ({length})".format(
 				classname=self.ClassName,
@@ -618,8 +683,11 @@ class AbstractNode():
 			print ("(MkSAbstractNode)# Failed to open listener, ", str(self.ServerAdderss[1]), e)
 			return False
 	
+	def LocalWSDisconnectedHandler(self, ws_id):
+		self.UnregisterLocalWS(ws_id)
+
 	def LocalWSDataArrivedHandler(self, ws, data):
-		print("({classname})# (WS) {0}".format(data,classname=self.ClassName))
+		# print("({classname})# (WS) {0}".format(data,classname=self.ClassName))
 		try:
 			packet 		= json.loads(data)
 			if ("HANDSHAKE" == self.BasicProtocol.GetMessageTypeFromJson(packet)):
@@ -890,7 +958,8 @@ class AbstractNode():
 	def Run (self, callback):
 		# Will be called each half a second.
 		self.WorkingCallback = callback
-		self.LocalWSManager.OnDataArrivedEvent = self.LocalWSDataArrivedHandler
+		self.LocalWSManager.OnDataArrivedEvent  = self.LocalWSDataArrivedHandler
+		self.LocalWSManager.OnWSDisconnected 	= self.LocalWSDisconnectedHandler
 		self.ExitEvent.clear()
 		self.ExitLocalServerEvent.clear()
 		# Initial state is connect to Gateway.
@@ -915,7 +984,8 @@ class AbstractNode():
 			# User callback
 			if ("WORKING" == self.GetState() and self.SystemLoaded is True):
 				self.WorkingCallback()
-				if self.LocalWSManager.IsServerRunnig() is False:
+				if self.LocalWSManager.IsServerRunnig() is False and self.MasterSocket is None:
+					print ("({classname})# Exiting main thread ... ({0}, {1}) ...".format(self.LocalWSManager.IsServerRunnig(), self.MasterSocket, classname=self.ClassName ))
 					self.Exit()
 			self.Ticker += 1
 			time.sleep(0.5)

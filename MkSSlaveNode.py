@@ -225,6 +225,7 @@ class SlaveNode(MkSAbstractNode.AbstractNode):
 
 	def EmitOnNodeChange(self, data):
 		print ("({classname})# Emit onNodeChange event ...".format(classname=self.ClassName))
+		self.DeviceChangeListLock.acquire()
 		for item in self.OnDeviceChangeList:
 			payload 	= item["payload"]
 			item_type	= payload["item_type"]
@@ -251,6 +252,7 @@ class SlaveNode(MkSAbstractNode.AbstractNode):
 						'identifier':-1
 					})
 					self.LocalWSManager.Send(ws_id, message)
+		self.DeviceChangeListLock.release()
 
 	def SendGatewayPing(self):
 		# Send request
