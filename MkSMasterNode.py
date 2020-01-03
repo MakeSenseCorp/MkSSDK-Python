@@ -76,7 +76,7 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 			'ACCESS_GATEWAY': 					self.StateAccessGetway,
 			'ACCESS_WAIT_GATEWAY':				self.StateAccessWaitGatway,
 			'INIT_LOCAL_SERVER':				self.StateInitLocalServer,
-			'WORK': 							self.StateWork
+			'WORKING': 							self.StateWork
 		}
 		# Handlers
 		self.NodeRequestHandlers['get_port'] 		= self.GetPortRequestHandler
@@ -137,7 +137,7 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 			if self.IsNodeLocalServerEnabled is True:
 				self.SetState("INIT_LOCAL_SERVER")
 			else:
-				self.SetState("WORK")
+				self.SetState("WORKING")
 
 	def StateAccessGetway (self):
 		if self.IsNodeWSServiceEnabled is True:
@@ -148,7 +148,7 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 
 			self.SetState("ACCESS_WAIT_GATEWAY")
 		else:
-			self.SetState("WORK")
+			self.SetState("WORKING")
 	
 	def StateAccessWaitGatway (self):
 		if self.AccessTick > 10:
@@ -180,7 +180,7 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 	#
 
 	def WebSocketConnectedCallback (self):
-		self.SetState("WORK")
+		self.SetState("WORKING")
 		if self.GatewayConnectedCallback is not None:
 			self.GatewayConnectedCallback()
 	
@@ -196,7 +196,7 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 
 	def WebSocketDataArrivedCallback (self, packet):
 		try:
-			self.SetState("WORK")
+			self.SetState("WORKING")
 			messageType = self.BasicProtocol.GetMessageTypeFromJson(packet)
 			direction 	= self.BasicProtocol.GetDirectionFromJson(packet)
 			destination = self.BasicProtocol.GetDestinationFromJson(packet)

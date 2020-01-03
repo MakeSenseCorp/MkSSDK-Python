@@ -220,7 +220,8 @@ class AbstractNode():
 		self.IsLocalSocketRunning					= False
 		self.IsListenerEnabled 						= False
 		# Initialization methods
-		self.MyLocalIP 								= MkSUtils.GetLocalIP()
+		self.MyLocalIP 								= ""
+		self.NetworkCards 							= MkSUtils.GetIPList()
 		# Handlers
 		self.NodeRequestHandlers					= {
 			'get_node_info': 						self.GetNodeInfoRequestHandler,
@@ -537,6 +538,11 @@ class AbstractNode():
 		try:
 			dataSystem 				= json.loads(strSystemJson)
 			dataConfig 				= json.loads(strMachineJson)
+
+			for network in self.NetworkCards:
+				if network["iface"] in dataConfig["network"]["iface"]:
+					self.MyLocalIP = network["ip"]
+
 			self.NodeInfo 			= dataSystem["node"]
 			# Node connection to WS information
 			self.Key 				= dataConfig["network"]["key"]
@@ -998,9 +1004,11 @@ class AbstractNode():
 			# User callback
 			if ("WORKING" == self.GetState() and self.SystemLoaded is True):
 				self.WorkingCallback()
-				if self.LocalWSManager.IsServerRunnig() is False and self.MasterSocket is None:
-					print ("({classname})# Exiting main thread ... ({0}, {1}) ...".format(self.LocalWSManager.IsServerRunnig(), self.MasterSocket, classname=self.ClassName ))
-					self.Exit()
+				# This check is for client nodes
+				if (self.Type != 1):
+					if self.LocalWSManager.IsServerRunnig() is False and self.MasterSocket is None:
+						print ("({classname})# Exiting main thread ... ({0}, {1}) ...".format(self.LocalWSManager.IsServerRunnig(), self.MasterSocket, classname=self.ClassName ))
+						self.Exit()
 			self.Ticker += 1
 			time.sleep(0.5)
 		
