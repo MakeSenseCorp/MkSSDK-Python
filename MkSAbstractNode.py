@@ -308,10 +308,23 @@ class AbstractNode():
 	def GetState (self):
 		return self.State
 
-	def AppendDeviceChangeList(self, payload):
+	def AppendDeviceChangeListLocal(self, payload):
 		self.DeviceChangeListLock.acquire()
 		for item in self.OnDeviceChangeList:
 			if item["payload"]["ws_id"] == payload["ws_id"]:
+				self.DeviceChangeListLock.release()
+				return
+
+		self.OnDeviceChangeList.append({
+			'ts':		time.time(),
+			'payload':	payload
+		})		
+		self.DeviceChangeListLock.release()
+	
+	def AppendDeviceChangeListGlobal(self, payload):
+		self.DeviceChangeListLock.acquire()
+		for item in self.OnDeviceChangeList:
+			if item["payload"]["webface_indexer"] == payload["webface_indexer"]:
 				self.DeviceChangeListLock.release()
 				return
 
@@ -360,13 +373,14 @@ class AbstractNode():
 		piggy 		= self.BasicProtocol.GetPiggybagFromJson(packet)
 		item_type 	= payload["item_type"]
 		if item_type == 2:
+			payload["pipe"] = packet["additional"]["pipe"]
 			if packet["additional"]["pipe"] == "GATEWAY":
 				payload["webface_indexer"] = piggy["webface_indexer"]
+				self.AppendDeviceChangeListGlobal(payload)
 			elif packet["additional"]["pipe"] == "LOCAL_WS":
 				payload["ws_id"] = packet["additional"]["ws_id"]
+				self.AppendDeviceChangeListLocal(payload)
 			
-			payload["pipe"] = packet["additional"]["pipe"]
-			self.AppendDeviceChangeList(payload)
 			return self.BasicProtocol.BuildResponse(packet, {
 				'registered': "OK"
 			})
