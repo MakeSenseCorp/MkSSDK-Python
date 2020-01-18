@@ -317,6 +317,15 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 						message = self.Network.BasicProtocol.BuildRequest("DIRECT", client.UUID, self.UUID, "master_append_node", payload, {})
 						message = self.Network.BasicProtocol.AppendMagic(message)
 						client.Socket.send(message)
+				
+				# Store UUID if it is a service
+				if nodetype == 101:
+					self.EMailServiceUUID 		= node.UUID
+				elif nodetype == 102:
+					self.SMSServiceUUID 		= node.UUID
+				elif nodetype == 103:
+					self.IPScannerServiceUUID 	= node.UUID
+					self.RegisterOnNodeChangeEvent(self.IPScannerServiceUUID)
 
 				return self.Network.BasicProtocol.BuildResponse(packet, { 'port': port })
 			else:
@@ -388,6 +397,13 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 	#
 	# ##################################################################################################
 	#
+
+	def SendRequest(self, uuid, msg_type, command, payload, additional):
+		# Generate request
+		message = self.Network.BasicProtocol.BuildRequest(msg_type, uuid, self.UUID, command, payload, additional)
+		# TODO - Check if we need to send it via Gateway
+		# Send message
+		self.Network.SendWebSocket(message)
 
 	def GatewayConnectedEvent(self):
 		print ("(Master Node)# Connection to Gateway established ...")

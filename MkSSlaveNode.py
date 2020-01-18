@@ -223,6 +223,16 @@ class SlaveNode(MkSAbstractNode.AbstractNode):
 	# ###### SLAVE NODE GATAWAY CALLBACKS <-
 	#
 
+	def SendRequest(self, uuid, msg_type, command, payload, additional):
+		# Generate request
+		message = self.Network.BasicProtocol.BuildRequest(msg_type, uuid, self.UUID, command, payload, additional)
+		message = self.Network.BasicProtocol.AppendMagic(message)
+		if self.MasterSocket is None:
+			pass
+			# TODO - Send over local websocket
+		else:
+			self.MasterSocket.send(packet)
+
 	def EmitOnNodeChange(self, data):
 		print ("({classname})# Emit onNodeChange event ...".format(classname=self.ClassName))
 		self.DeviceChangeListLock.acquire()
@@ -230,10 +240,17 @@ class SlaveNode(MkSAbstractNode.AbstractNode):
 			payload 	= item["payload"]
 			item_type	= payload["item_type"]
 
-			if item_type == 1: 		# Node
+			# Node
+			if item_type == 1:
 				uuid = payload["uuid"]
 				message = self.BasicProtocol.BuildRequest("DIRECT", uuid, self.UUID, "on_node_change", data, {})
-			elif item_type == 2: 	# Webface
+				packet  = self.BasicProtocol.AppendMagic(message)
+				if self.MasterSocket is None:
+					pass
+				else:
+					self.MasterSocket.send(packet)
+			# Webface
+			elif item_type == 2:
 				if payload["pipe"] == "GATEWAY":
 					webface_indexer = payload["webface_indexer"]
 					message = self.BasicProtocol.BuildRequest("DIRECT", "WEBFACE", self.UUID, "on_node_change", data, {

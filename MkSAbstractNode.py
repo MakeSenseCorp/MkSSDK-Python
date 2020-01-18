@@ -208,6 +208,10 @@ class AbstractNode():
 		self.OnDeviceChangeList						= [] # Register command "register_on_node_change"
 		# Synchronization
 		self.DeviceChangeListLock 					= threading.Lock()
+		# Services
+		self.IPScannerServiceUUID					= ""
+		self.EMailServiceUUID						= ""
+		self.SMSServiceUUID							= ""
 		## Unused
 		self.DeviceConnectedCallback 				= None
 		# Network
@@ -238,6 +242,7 @@ class AbstractNode():
 		self.UI 									= None
 		self.LocalWebPort							= ""
 		self.BasicProtocol 							= MkSBasicNetworkProtocol.BasicNetworkProtocol()
+		print(self.NetworkCards)
 
 		parser = argparse.ArgumentParser(description='Execution module called Node')
 		parser.add_argument('--path', action='store',
@@ -302,12 +307,41 @@ class AbstractNode():
 	# Overload
 	def PreUILoaderHandler(self):
 		pass
+
+	# Overload
+	def SendRequest(self, uuid, msg_type, command, payload, additional):
+		pass
 	
 	def SetState (self, state):
 		self.State = state
 	
 	def GetState (self):
 		return self.State
+	
+	def FindEmailService(self):
+		pass
+
+	def FindIPScannerService(self):
+		pass
+
+	def FindNode(self, category1, category2, category3):
+		pass
+
+	def SendRequestToNode(self, uuid, command, payload):
+		self.SendRequest(uuid, "DIRECT", command, payload, {})
+
+	def AppendDeviceChangeListNode(self, payload):
+		self.DeviceChangeListLock.acquire()
+		for item in self.OnDeviceChangeList:
+			if item["uuid"] == payload["uuid"]:
+				self.DeviceChangeListLock.release()
+				return
+
+		self.OnDeviceChangeList.append({
+			'ts':		time.time(),
+			'payload':	payload
+		})		
+		self.DeviceChangeListLock.release()
 
 	def AppendDeviceChangeListLocal(self, payload):
 		self.DeviceChangeListLock.acquire()
@@ -335,6 +369,24 @@ class AbstractNode():
 		})		
 		self.DeviceChangeListLock.release()
 	
+	def RemoveDeviceChangeListNode(self, uuid):
+		# Context of geventwebsocket (PAY ATTENTION)
+		self.DeviceChangeListLock.acquire()
+		is_removed = False
+
+		for i in xrange(len(self.OnDeviceChangeList) - 1, -1, -1):
+			item = self.OnDeviceChangeList[i]
+			item_payload = item["payload"]
+			if item_payload["uuid"] == uuid:
+				del self.OnDeviceChangeList[i]
+				print ("({classname})# Unregistered WEBFACE local session ({uuid}) ({length}))".format(
+						classname=self.ClassName,
+						uuid=str(uuid),
+						length=len(self.OnDeviceChangeList)))
+				is_removed = True
+		self.DeviceChangeListLock.release()
+		return is_removed
+
 	def RemoveDeviceChangeListLocal(self, id):
 		# Context of geventwebsocket (PAY ATTENTION)
 		self.DeviceChangeListLock.acquire()
@@ -369,11 +421,28 @@ class AbstractNode():
 		self.DeviceChangeListLock.release()
 		return False
 
+	def UnRegisterOnNodeChangeEvent(self, uuid):
+		self.SendRequestToNode(uuid, "unregister_on_node_change", {
+				'item_type': 1,
+				'uuid':	self.UUID
+			})
+
+	def RegisterOnNodeChangeEvent(self, uuid):
+		self.SendRequestToNode(uuid, "register_on_node_change", {
+				'item_type': 1,
+				'uuid':	self.UUID
+			})
+	
 	def RegisterOnNodeChangeHandler(self, sock, packet):
+		print ("({classname})# On Node change request recieved ...".format(classname=self.ClassName))
 		payload 	= self.BasicProtocol.GetPayloadFromJson(packet)
-		piggy 		= self.BasicProtocol.GetPiggybagFromJson(packet)
 		item_type 	= payload["item_type"]
-		if item_type == 2:
+		# Node
+		if item_type == 1:
+			self.AppendDeviceChangeListNode(payload)
+		# Webface
+		elif item_type == 2:
+			piggy = self.BasicProtocol.GetPiggybagFromJson(packet)
 			payload["pipe"] = packet["additional"]["pipe"]
 			if packet["additional"]["pipe"] == "GATEWAY":
 				payload["webface_indexer"] = piggy["webface_indexer"]
@@ -394,10 +463,12 @@ class AbstractNode():
 		payload 		= self.BasicProtocol.GetPayloadFromJson(packet)
 		item_type		= payload["item_type"]
 
-		if item_type == 1: 		# Node
+		# Node
+		if item_type == 1:
 			uuid = payload["uuid"]
-			# TODO - Unregister node
-		elif item_type == 2: 	# Webface
+			self.RemoveDeviceChangeListNode(uuid)
+		# Webface
+		elif item_type == 2:
 			if packet["additional"]["pipe"] == "GATEWAY":
 				webface_indexer = payload["webface_indexer"]
 				if self.UnregisterGlobalWS(webface_indexer) is True:
