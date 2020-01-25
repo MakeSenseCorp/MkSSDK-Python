@@ -40,7 +40,7 @@ class SlaveNode(MkSAbstractNode.AbstractNode):
 			'EXIT':							self.StateExit
 		}
 		# Handlers
-		self.NodeResponseHandlers['get_port'] 		= self.GetPortResponseHandler
+		self.NodeResponseHandlers['get_port'] 			= self.GetPortResponseHandler
 		#self.ResponseHandlers	= {
 		#	'get_local_nodes': 						self.GetLocalNodeResponseHandler,
 		#	'get_master_info': 						self.GetMasterInfoResponseHandler,
@@ -65,7 +65,7 @@ class SlaveNode(MkSAbstractNode.AbstractNode):
 		# Counters
 		self.MasterConnectionTries 					= 0
 		self.MasterInformationTries 				= 0
-		self.MasterTickTimeout 						= 1
+		self.MasterTickTimeout 						= 5
 
 	#
 	# ###### SLAVE NODE INITIATE ->
@@ -197,19 +197,24 @@ class SlaveNode(MkSAbstractNode.AbstractNode):
 	#
 
 	def GetNodeInfoRequestHandler(self, sock, packet):
-		print ("[SlaveNode] GetNodeInfoHandler")
+		print ("({classname})# Node Info Request ...".format(classname=self.ClassName))
 		payload = self.NodeInfo
 		return self.BasicProtocol.BuildResponse(packet, payload)
 
 	def GetNodeInfoResponseHandler(self, sock, packet):
-		source  = self.BasicProtocol.GetSourceFromJson(packet)
-		payload = self.BasicProtocol.GetPayloadFromJson(packet)
+		source  	= self.BasicProtocol.GetSourceFromJson(packet)
+		payload 	= self.BasicProtocol.GetPayloadFromJson(packet)
+		additional 	= self.BasicProtocol.GetAdditionalFromJson(packet)
+		print ("({classname})# Node Info Response ...".format(classname=self.ClassName))
 		if source in "MASTER":
 			# We are here because this is a response for slave boot sequence
 			self.MasterInfo = payload
 			self.MasterUUID = payload["uuid"]
 			if self.GetState() in "GET_MASTER_INFO":
 				self.SetState("GET_PORT")
+		else:
+			if self.OnGetNodeInfoCallback is not None:
+				self.OnGetNodeInfoCallback(payload, additional["online"])
 	
 	def GetPortResponseHandler(self, sock, packet):
 		source  = self.BasicProtocol.GetSourceFromJson(packet)
@@ -225,8 +230,8 @@ class SlaveNode(MkSAbstractNode.AbstractNode):
 
 	def SendRequest(self, uuid, msg_type, command, payload, additional):
 		# Generate request
-		message = self.Network.BasicProtocol.BuildRequest(msg_type, uuid, self.UUID, command, payload, additional)
-		message = self.Network.BasicProtocol.AppendMagic(message)
+		message = self.BasicProtocol.BuildRequest(msg_type, uuid, self.UUID, command, payload, additional)
+		packet  = self.BasicProtocol.AppendMagic(message)
 		if self.MasterSocket is None:
 			pass
 			# TODO - Send over local websocket
@@ -361,14 +366,6 @@ class SlaveNode(MkSAbstractNode.AbstractNode):
 	def GetNodeInfo(self, uuid):
 		print ("[SlaveNode] GetNodeInfo")
 		payload = self.Commands.NodeInfoRequest(uuid, self.UUID)
-		if self.MasterSocket is None:
-			pass
-		else:
-			self.MasterSocket.send(payload)
-	
-	def SendMessageToNodeViaGateway(self, uuid, message_type, data):
-		print ("[SlaveNode] SendMessageToNodeViaGateway")
-		payload = self.Commands.SendMessageToNodeViaGatewayRequest(message_type, uuid, self.UUID, data)
 		if self.MasterSocket is None:
 			pass
 		else:

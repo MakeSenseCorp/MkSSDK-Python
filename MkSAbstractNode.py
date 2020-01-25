@@ -152,6 +152,7 @@ class LocalNode():
 		self.LocalType 	= "UNKNOWN"
 		self.Status 	= "Stopped"
 		self.Obj 		= None
+		self.Info 		= None
 	
 	def SetNodeName(self, name):
 		self.Name = name
@@ -183,6 +184,7 @@ class AbstractNode():
 		self.IsNodeLocalServerEnabled 				= False # Based on regular sockets
 		self.Ticker 								= 0
 		self.Pwd									= os.getcwd()
+		self.IsMaster 								= False
 		# State machine
 		self.State 									= 'IDLE' # Current state of node
 		self.States 								= None	 # States list
@@ -212,6 +214,10 @@ class AbstractNode():
 		self.IPScannerServiceUUID					= ""
 		self.EMailServiceUUID						= ""
 		self.SMSServiceUUID							= ""
+		self.Services 								= {}
+		self.NetworkOnlineDevicesList 				= []
+		# Timers
+		self.ServiceSearchTS						= time.time()
 		## Unused
 		self.DeviceConnectedCallback 				= None
 		# Network
@@ -232,17 +238,42 @@ class AbstractNode():
 			'get_node_status': 						self.GetNodeStatusRequestHandler,
 			'get_file': 							self.GetFileHandler,
 			'register_on_node_change':				self.RegisterOnNodeChangeHandler,
-			'unregister_on_node_change':			self.UnregisterOnNodeChangeHandler
+			'unregister_on_node_change':			self.UnregisterOnNodeChangeHandler,
+			'find_node':							self.FindNodeRequestHandler,
+			'master_append_node':					self.MasterAppendNodeRequestHandler,
+			'master_remove_node':					self.MasterRemoveNodeRequestHandler
 		}
 		self.NodeResponseHandlers					= {
 			'get_node_info': 						self.GetNodeInfoResponseHandler,
-			'get_node_status': 						self.GetNodeStatusResponseHandler
+			'get_node_status': 						self.GetNodeStatusResponseHandler,
+			'find_node': 							self.FindNodeResponseHandler,
+			'master_append_node':					self.MasterAppendNodeResponseHandler,
+			'master_remove_node':					self.MasterRemoveNodeResponseHandler,
+			'get_online_devices':					self.GetOnlineDevicesHandler
 		}
 		# LocalFace UI
 		self.UI 									= None
 		self.LocalWebPort							= ""
 		self.BasicProtocol 							= MkSBasicNetworkProtocol.BasicNetworkProtocol()
 		print(self.NetworkCards)
+
+		self.Services[101] = {
+			'uuid': "",
+			'name': "eMail",
+			'enabled': 0
+		}
+
+		self.Services[102] = {
+			'uuid': "",
+			'name': "SMS",
+			'enabled': 0
+		}
+
+		self.Services[103] = {
+			'uuid': "",
+			'name': "IP Scanner",
+			'enabled': 0
+		}
 
 		parser = argparse.ArgumentParser(description='Execution module called Node')
 		parser.add_argument('--path', action='store',
@@ -311,6 +342,73 @@ class AbstractNode():
 	# Overload
 	def SendRequest(self, uuid, msg_type, command, payload, additional):
 		pass
+
+	# Overload
+	def EmitOnNodeChange(self, payload):
+		pass
+
+	def GetOnlineDevicesHandler(self, sock, packet):
+		print ("({classname})# Online network device list ...".format(classname=self.ClassName))
+		payload = self.BasicProtocol.GetPayloadFromJson(packet)
+		self.NetworkOnlineDevicesList = payload["online_devices"]
+
+	def MasterAppendNodeRequestHandler(self, sock, packet):
+		pass
+
+	def MasterRemoveNodeRequestHandler(self, sock, packet):
+		pass
+
+	def MasterAppendNodeResponseHandler(self, sock, packet):
+		payload 	= self.BasicProtocol.GetPayloadFromJson(packet)
+		additional = self.BasicProtocol.GetAdditionalFromJson(packet)
+
+		additional["online"] = True
+		packet = self.BasicProtocol.SetAdditional(packet, additional)
+
+		if payload["tagging"]["cat_1"] == "service":
+			self.Services[payload["type"]]["uuid"] 		= payload["uuid"]
+			self.Services[payload["type"]]["enabled"] 	= 1
+		self.GetNodeInfoResponseHandler(sock, packet)
+
+	def MasterRemoveNodeResponseHandler(self, sock, packet):
+		payload 	= self.BasicProtocol.GetPayloadFromJson(packet)
+		additional = self.BasicProtocol.GetAdditionalFromJson(packet)
+		
+		additional["online"] = False
+		packet = self.BasicProtocol.SetAdditional(packet, additional)
+
+		if payload["tagging"]["cat_1"] == "service":
+			self.Services[payload["type"]]["uuid"] 		= ""
+			self.Services[payload["type"]]["enabled"] 	= 0
+		self.GetNodeInfoResponseHandler(sock, packet)
+
+	def FindNodeResponseHandler(self, sock, packet):
+		payload 	= self.BasicProtocol.GetPayloadFromJson(packet)
+		additional 	= self.BasicProtocol.GetAdditionalFromJson(packet)
+
+		additional["online"] = True
+		packet = self.BasicProtocol.SetAdditional(packet, additional)
+
+		if payload["tagging"]["cat_1"] == "service":
+			self.Services[payload["type"]]["uuid"] 		= payload["uuid"]
+			self.Services[payload["type"]]["enabled"] 	= 1
+		self.GetNodeInfoResponseHandler(sock, packet)
+
+	def FindNodeRequestHandler(self, sock, packet):
+		print ("({classname})# Search node request ...".format(classname=self.ClassName))
+		payload = self.BasicProtocol.GetPayloadFromJson(packet)
+		cat_1 = payload["cat_1"]
+		cat_2 = payload["cat_2"]
+		cat_3 = payload["cat_3"]
+		node_type = payload["type"]
+
+		if str(node_type) == str(self.Type):
+			return self.BasicProtocol.BuildResponse(packet, self.NodeInfo)
+
+		if cat_1 in "service" and cat_2 in "network" and cat_3 in "ip_scanner" and node_type == 0:
+			return self.BasicProtocol.BuildResponse(packet, self.NodeInfo)
+		else:
+			return ""
 	
 	def SetState (self, state):
 		self.State = state
@@ -318,14 +416,39 @@ class AbstractNode():
 	def GetState (self):
 		return self.State
 	
+	def GetServices(self):
+		enabled_services = []
+		for key in self.Services:
+			if self.Services[key]["enabled"] == 1:
+				enabled_services.append({ 
+					'name': self.Services[key]["name"],
+					'type': key
+				})
+		return enabled_services
+
+	def FindSMSService(self):
+		self.FindNode("service", "network", "sms", 0)
+	
 	def FindEmailService(self):
-		pass
+		self.FindNode("service", "network", "email", 0)
 
 	def FindIPScannerService(self):
-		pass
+		self.FindNode("service", "network", "ip_scanner", 0)
+	
+	def ScanNetwork(self):
+		self.SendRequestToNode(self.Services[103]["uuid"], "get_online_devices", {})
 
-	def FindNode(self, category1, category2, category3):
-		pass
+	def GetNetworkOnlineDevicesList(self):
+		return self.NetworkOnlineDevicesList
+
+	def FindNode(self, category1, category2, category3, node_type):
+		payload = {
+			'cat_1': category1,
+			'cat_2': category2,
+			'cat_3': category3,
+			'type': node_type
+		}
+		self.SendRequest("BROADCAST", "BROADCAST", "find_node", payload, {})
 
 	def SendRequestToNode(self, uuid, command, payload):
 		self.SendRequest(uuid, "DIRECT", command, payload, {})
@@ -492,10 +615,6 @@ class AbstractNode():
 	def UnregisterGlobalWS(self, id):
 		return self.RemoveDeviceChangeListGlobal(id)
 
-	# Overload
-	def EmitOnNodeChange(self, payload):
-		pass
-
 	def GetFileHandler(self, sock, packet):
 		objFile 		= MkSFile.File()
 		payload 		= self.BasicProtocol.GetPayloadFromJson(packet)
@@ -614,7 +733,8 @@ class AbstractNode():
 				if network["iface"] in dataConfig["network"]["iface"]:
 					self.MyLocalIP = network["ip"]
 
-			self.NodeInfo 			= dataSystem["node"]
+			self.NodeInfo 			= dataSystem["node"]["info"]
+			self.ServiceDepened 	= dataSystem["node"]["service"]["depend"]
 			# Node connection to WS information
 			self.Key 				= dataConfig["network"]["key"]
 			self.GatewayIP			= dataConfig["network"]["gateway"]
@@ -623,21 +743,21 @@ class AbstractNode():
 			self.ApiUrl 			= "http://{gateway}:{api_port}".format(gateway=self.GatewayIP, api_port=self.ApiPort)
 			self.WsUrl				= "ws://{gateway}:{ws_port}".format(gateway=self.GatewayIP, ws_port=self.WsPort)
 			# Device information
-			self.Type 				= dataSystem["node"]["type"]
-			self.OSType 			= dataSystem["node"]["ostype"]
-			self.OSVersion 			= dataSystem["node"]["osversion"]
-			self.BrandName 			= dataSystem["node"]["brandname"]
-			self.Name 				= dataSystem["node"]["name"]
-			self.Description 		= dataSystem["node"]["description"]
+			self.Type 				= self.NodeInfo["type"]
+			self.OSType 			= self.NodeInfo["ostype"]
+			self.OSVersion 			= self.NodeInfo["osversion"]
+			self.BrandName 			= self.NodeInfo["brandname"]
+			self.Name 				= self.NodeInfo["name"]
+			self.Description 		= self.NodeInfo["description"]
 			# TODO - Why is that?
 			if (self.Type == 1):
-				self.BoardType 		= dataSystem["node"]["boardType"]
+				self.BoardType 		= self.NodeInfo["boardType"]
 			self.UserDefined		= dataSystem["user"]
 			# Device UUID MUST be read from HW device.
-			if "True" == dataSystem["node"]["isHW"]:
+			if "True" == self.NodeInfo["isHW"]:
 				self.IsHardwareBased = True
 			else:
-				self.UUID = dataSystem["node"]["uuid"]
+				self.UUID = self.NodeInfo["uuid"]
 			
 			self.SetNodeUUID(self.UUID)
 			self.SetNodeType(self.Type)
@@ -822,6 +942,7 @@ class AbstractNode():
 	def DataSocketInputHandler(self, sock, data):
 		try:
 			packet 		= json.loads(data)
+			messageType = self.BasicProtocol.GetMessageTypeFromJson(packet)
 			command 	= self.BasicProtocol.GetCommandFromJson(packet)
 			direction 	= self.BasicProtocol.GetDirectionFromJson(packet)
 			destination = self.BasicProtocol.GetDestinationFromJson(packet)
@@ -836,17 +957,27 @@ class AbstractNode():
 						dest=destination,
 						cmd=command))
 			
+			if messageType == "BROADCAST":
+				pass
+
+			if destination in self.UUID and source in self.UUID:
+				return
+			
 			# Is this packet for me?
 			if destination in self.UUID or (destination in "MASTER" and 1 == self.Type):
 				if direction in "request":
 					if command in self.NodeRequestHandlers.keys():
 						message = self.NodeRequestHandlers[command](sock, packet)
+						if message == "":
+							return
 						packet  = self.BasicProtocol.AppendMagic(message)
 						sock.send(packet)
 					else:
 						# This command belongs to the application level
 						if self.OnApplicationRequestCallback is not None:
 							message = self.OnApplicationRequestCallback(sock, packet)
+							if message == "":
+								return
 							message  = self.BasicProtocol.AppendMagic(message)
 							sock.send(message)
 				elif direction in "response":
@@ -1045,6 +1176,24 @@ class AbstractNode():
 	def StartLocalNode(self):
 		print("TODO - (MkSNode.Run) Missing management of network HW disconnection")
 		thread.start_new_thread(self.NodeLocalNetworkConectionListener, ())
+	
+	def ServicesManager(self):
+		if self.IsMaster is True:
+			return
+		
+		if len(self.ServiceDepened) == 0:
+			return
+		
+		if time.time() - self.ServiceSearchTS > 10:
+			for depend_srv_type in self.ServiceDepened:
+				for key in self.Services:
+					service = self.Services[key]
+					if key == depend_srv_type:
+						if service["enabled"] == 0:
+							self.FindNode("", "", "", depend_srv_type)
+						else:
+							self.ScanNetwork()
+			self.ServiceSearchTS = time.time()
 
 	def Run (self, callback):
 		# Will be called each half a second.
@@ -1074,12 +1223,15 @@ class AbstractNode():
 
 			# User callback
 			if ("WORKING" == self.GetState() and self.SystemLoaded is True):
+				#TODO - Services section must be in differebt thread
+				self.ServicesManager()
 				self.WorkingCallback()
 				# This check is for client nodes
 				if (self.Type != 1):
 					if self.LocalWSManager.IsServerRunnig() is False and self.MasterSocket is None:
 						print ("({classname})# Exiting main thread ... ({0}, {1}) ...".format(self.LocalWSManager.IsServerRunnig(), self.MasterSocket, classname=self.ClassName ))
 						self.Exit()
+
 			self.Ticker += 1
 			time.sleep(0.5)
 		

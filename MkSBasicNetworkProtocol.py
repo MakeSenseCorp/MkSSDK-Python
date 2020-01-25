@@ -40,6 +40,13 @@ class BasicNetworkProtocol():
 	def GetPiggybagFromJson(self, json):
 		return json['piggybag']
 	
+	def GetAdditionalFromJson(self, json):
+		return json['additional']
+	
+	def SetAdditional(self, packet, additional):
+		packet['additional'] = additional
+		return packet
+	
 	def AppendMagic(self, message):
 		return "MKSS:" + message + ":MKSE"
     

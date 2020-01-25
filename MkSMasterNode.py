@@ -57,6 +57,7 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 		self.LocalSlaveList						= [] # Used ONLY by Master.
 		self.InstalledNodes 					= []
 		self.Pipes 								= []
+		self.IsMaster 							= True
 		self.InstalledApps 						= None
 		# Node connection to WS information
 		self.GatewayIP 							= ""
@@ -194,7 +195,9 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 			self.NetworkAccessTickLock.release()
 		self.SetState("ACCESS_GATEWAY")
 
+	# TODO - Must be dealt with different thread (we must have thread poll)
 	def WebSocketDataArrivedCallback (self, packet):
+		self.NetworkAccessTickLock.acquire()
 		try:
 			self.SetState("WORKING")
 			messageType = self.BasicProtocol.GetMessageTypeFromJson(packet)
@@ -211,12 +214,20 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 						source=source,
 						dest=destination,
 						cmd=command))
+			
+			if messageType == "BROADCAST":
+				pass
+		
+			if destination in source:
+				self.NetworkAccessTickLock.release()
+				return
 
 			# Is this packet for me?
 			if destination in self.UUID:
 				if messageType == "CUSTOM":
+					self.NetworkAccessTickLock.release()
 					return
-				elif messageType in ["DIRECT", "PRIVATE", "BROADCAST", "WEBFACE"]:
+				elif messageType in ["DIRECT", "PRIVATE", "WEBFACE"]:
 					if command in self.NodeRequestHandlers.keys():
 						message = self.NodeRequestHandlers[command](None, packet)
 						self.Network.SendWebSocket(message)
@@ -224,15 +235,17 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 						if self.GatewayDataArrivedCallback is not None:
 							self.GatewayDataArrivedCallback(None, packet)
 				else:
-					print ("(Master Node)# [Websocket INBOUND] ERROR - Not support " + request + " request type.")
+					print ("({classname})# [Websocket INBOUND] ERROR - Not support {0} request type.".format(messageType, classname=self.ClassName))
 			else:
 				print ("(Master Node)# Not mine ... Sending to slave ... " + destination)
 				# Find who has this destination adderes.
 				self.HandleExternalRequest(packet)
 		except Exception as e:
-			print("({classname})# WebSocket Error - Data arrived issue\n(EXEPTION)# {error}".format(
+			print("({classname})# WebSocket Error - Data arrived issue\nPACKET#\n{0}\n(EXEPTION)# {error}".format(
+						packet,
 						classname=self.ClassName,
 						error=str(e)))
+		self.NetworkAccessTickLock.release()
 	
 	def WebSocketErrorCallback (self):
 		print ("(Master Node)# ERROR - Gateway socket error")
@@ -248,6 +261,21 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 	# ###### MASTER NODE GATAWAY CALLBACKS <-
 	#
 
+	# Master as proxy server.
+	def HandleExternalRequest(self, packet):
+		print ("({classname})# External request (PROXY)".format(classname=self.ClassName))
+		destination = self.Network.BasicProtocol.GetDestinationFromJson(packet)
+		node 		= self.GetSlaveNode(destination)
+		
+		if node is not None:
+			message = self.BasicProtocol.StringifyPacket(packet)
+			message = self.BasicProtocol.AppendMagic(message)
+			node.Socket.send(message)
+		else:
+			print ("[MasterNode] HandleInternalReqest NODE NOT FOUND")
+			# Need to look at other masters list.
+			pass
+
 	def GetNodeInfoRequestHandler(self, sock, packet):
 		payload = self.NodeInfo
 		return self.Network.BasicProtocol.BuildResponse(packet, payload)
@@ -260,11 +288,11 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 		if sock is None:
 			return ""
 		
-		payload = self.BasicProtocol.GetPayloadFromJson(packet)
+		node_info = self.BasicProtocol.GetPayloadFromJson(packet)
 
-		nodetype 	= payload['type']
-		uuid 		= payload['uuid']
-		name 		= payload['name']
+		nodetype 	= node_info['type']
+		uuid 		= node_info['uuid']
+		name 		= node_info['name']
 
 		print ("({classname})# {uuid} {name} {nodetype}".format(
 						classname=self.ClassName,
@@ -288,6 +316,7 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 				node.Port = port
 				node.UUID = uuid
 				node.SetNodeName(name)
+				node.Info = node_info
 
 				# Update installed node list (UI will be updated)
 				for item in self.InstalledNodes:
@@ -314,7 +343,7 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 				# Send message (master_append_node) to all nodes.
 				for client in self.Connections:
 					if client.Socket != self.ServerSocket:
-						message = self.Network.BasicProtocol.BuildRequest("DIRECT", client.UUID, self.UUID, "master_append_node", payload, {})
+						message = self.Network.BasicProtocol.BuildMessage("response", "DIRECT", client.UUID, self.UUID, "master_append_node", node_info, {})
 						message = self.Network.BasicProtocol.AppendMagic(message)
 						client.Socket.send(message)
 				
@@ -369,7 +398,7 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 					if client.Socket == self.ServerSocket or client.Socket == sock:
 						pass
 					else:
-						message = self.Network.BasicProtocol.BuildRequest("DIRECT", client.UUID, self.UUID, "master_remove_node", payload, {})
+						message = self.Network.BasicProtocol.BuildMessage("response", "DIRECT", client.UUID, self.UUID, "master_remove_node", slave.Info, {})
 						message = self.Network.BasicProtocol.AppendMagic(message)
 						client.Socket.send(message)
 
@@ -462,20 +491,6 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 		#self.UI.AddEndpoint("/get/app_html/<key>", 				"get_app_html",					self.GetApplicationHTMLHandler, 		method=['POST'])
 		#self.UI.AddEndpoint("/get/app_js/<key>", 					"get_app_js", 					self.GetApplicationJavaScriptHandler, 	method=['POST'])
 		#self.UI.AddEndpoint("/generic/node_get_request/<key>", 	"generic_node_get_request", 	self.GenericNodeGETRequestHandler, 		method=['POST'])
-
-	# Master as proxy server.
-	def HandleExternalRequest(self, packet):
-		destination = self.Network.BasicProtocol.GetDestinationFromJson(packet)
-		node 		= self.GetSlaveNode(destination)
-		
-		if node is not None:
-			message = self.BasicProtocol.StringifyPacket(packet)
-			message = self.BasicProtocol.AppendMagic(message)
-			node.Socket.send(message)
-		else:
-			print ("[MasterNode] HandleInternalReqest NODE NOT FOUND")
-			# Need to look at other masters list.
-			pass
 	
 	def GetSlaveNode(self, uuid):
 		for item in self.LocalSlaveList:
