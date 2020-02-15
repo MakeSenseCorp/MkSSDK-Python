@@ -206,6 +206,7 @@ class AbstractNode():
 		self.OnTerminateConnectionCallback 			= None # When local server (listener) terminate socket connection.
 		self.OnLocalServerListenerStartedCallback	= None # When loacl server (listener) succesfully binded port.
 		self.OnExitCallback							= None # When node recieve command to terminate itself.
+		self.OnGetNodesListCallback 				= None # Get all online nodes from GLOBAL gateway (Not implemented yet)
 		# Registered items
 		self.OnDeviceChangeList						= [] # Register command "register_on_node_change"
 		# Synchronization

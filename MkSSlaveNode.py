@@ -55,7 +55,6 @@ class SlaveNode(MkSAbstractNode.AbstractNode):
 		#	'undefined':							self.UndefindHandler
 		#}
 		# Callbacks
-		self.OnGetNodesListCallback 				= None
 		self.OnGetNodeInfoCallback 					= None
 		self.OnGetSensorInfoRequestCallback			= None
 		self.OnSetSensorInfoRequestCallback 		= None
@@ -199,6 +198,8 @@ class SlaveNode(MkSAbstractNode.AbstractNode):
 	def GetNodeInfoRequestHandler(self, sock, packet):
 		print ("({classname})# Node Info Request ...".format(classname=self.ClassName))
 		payload = self.NodeInfo
+		payload["is_master"] 	= False
+		payload["master_uuid"] 	= self.MasterUUID
 		return self.BasicProtocol.BuildResponse(packet, payload)
 
 	def GetNodeInfoResponseHandler(self, sock, packet):

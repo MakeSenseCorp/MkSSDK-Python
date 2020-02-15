@@ -278,6 +278,8 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 
 	def GetNodeInfoRequestHandler(self, sock, packet):
 		payload = self.NodeInfo
+		payload["is_master"] 	= True
+		payload["master_uuid"] 	= ""
 		return self.Network.BasicProtocol.BuildResponse(packet, payload)
 	
 	# Description:
