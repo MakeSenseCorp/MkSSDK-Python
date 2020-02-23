@@ -623,6 +623,7 @@ class AbstractNode():
 		fileType 		= payload["file_type"]
 		fileName 		= payload["file_name"]
 		client_type 	= packet["additional"]["client_type"]
+		stamping 		= packet["stamping"]
 		machine_type 	= "pc"
 
 		folder = {
@@ -636,7 +637,14 @@ class AbstractNode():
 		
 		if ("html" in fileType):
 			content = content.replace("[NODE_UUID]", self.UUID)
-			content = content.replace("[GATEWAY_IP]", self.GatewayIP)
+			if stamping is None:
+				print ("({classname})# [ERROR] Missing STAMPING in packet ...".format(classname=self.ClassName))
+				content = content.replace("[GATEWAY_IP]", self.GatewayIP)
+			else:
+				if "cloud_t" in stamping:
+					content = content.replace("[GATEWAY_IP]", "ec2-54-188-199-33.us-west-2.compute.amazonaws.com")
+				else:
+					content = content.replace("[GATEWAY_IP]", self.GatewayIP)
 
 			if client_type == "global_ws":
 				css = '''
@@ -685,7 +693,7 @@ class AbstractNode():
 			else:
 				css 	= ""
 				script 	= ""
-			
+		
 			content = content.replace("[CSS]",css)
 			content = content.replace("[SCRIPTS]",script)
 

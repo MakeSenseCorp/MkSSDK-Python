@@ -71,7 +71,8 @@ class BasicNetworkProtocol():
 			'additional': {
 
 			},
-			'piggybag': piggy
+			'piggybag': piggy,
+			'stamping': []
 		}
 
 		return json.dumps(message)
