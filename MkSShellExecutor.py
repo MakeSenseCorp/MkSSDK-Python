@@ -39,5 +39,10 @@ class ShellExecutor():
 		#self.Pipe.stdin.flush()
 		#data = self.Pipe.stdout.read()
 		#return data
-		proc = subprocess.Popen(command, shell=True, stdout=subprocess.PIPE)
-		return proc.stdout.read()
+		data = None
+		try:
+			proc = subprocess.Popen(command, shell=True, stdout=subprocess.PIPE)
+			data = proc.stdout.read()
+		except Exception as e:
+			print("ExecuteCommand Exception", e)
+		return data
