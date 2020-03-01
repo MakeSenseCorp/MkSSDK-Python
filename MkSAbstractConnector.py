@@ -9,10 +9,9 @@ else:
 import threading
 
 class AbstractConnector():
-	def __init__(self, local_device):
+	def __init__(self):
 		self.Protocol 		= None
 		self.Adaptor 		= None
-		self.LocalDevice 	= local_device
 		# Flags
 		self.IsConnected = False
 		# Callbacks

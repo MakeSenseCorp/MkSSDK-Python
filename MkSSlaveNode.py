@@ -64,7 +64,7 @@ class SlaveNode(MkSAbstractNode.AbstractNode):
 		# Counters
 		self.MasterConnectionTries 					= 0
 		self.MasterInformationTries 				= 0
-		self.MasterTickTimeout 						= 5
+		self.MasterTickTimeout 						= 1
 
 	#
 	# ###### SLAVE NODE INITIATE ->

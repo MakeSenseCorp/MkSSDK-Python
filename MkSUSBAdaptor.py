@@ -31,12 +31,15 @@ class Adaptor ():
 		self.OnSerialErrorCallback 			  = None
 		self.OnSerialConnectionClosedCallback = None
 
+		self.RawData						  = ""
+		self.PacketEnds 					  = [False, False]
+
 		self.Initiate()
 
 	def Initiate (self):
 		dev = os.listdir(self.UsbPath)
 		self.Interfaces = [item for item in dev if "ttyUSB" in item]
-		print self.Interfaces
+		print (self.Interfaces)
 
 	def ConnectDevice(self, id, withtimeout):
 		self.SerialAdapter 			= serial.Serial()
@@ -87,11 +90,12 @@ class Adaptor ():
 		self.SendRequest = True
 
 		# Send PAUSE request to HW
-		self.SerialAdapter.write(str(struct.pack("BBH", 0xDE, 0xAD, 0x5)) + '\n')
-		time.sleep(0.2)
+		#self.SerialAdapter.write(str(struct.pack("BBBH", 0xDE, 0xAD, 0x5)) + '\n')
+		#time.sleep(0.2)
 
 		# Now the device pause all async (if supporting) tasks
-		print ("[OUT] " + ":".join("{:02x}".format(ord(c)) for c in data))
+		print ("[TX] " + ":".join("{:02x}".format(ord(c)) for c in data))
+		time.sleep(1)
 		self.SerialAdapter.write(str(data) + '\n')
 		while self.DataArrived == False and self.DeviceConnected == True:
 			time.sleep(0.1)
@@ -101,21 +105,50 @@ class Adaptor ():
 	def RecievePacketsWorker (self):
 		while self.RecievePacketsWorkerRunning == True:
 			try:
-				self.RXData = self.SerialAdapter.readline()
-				if self.RXData == "" and self.DataArrived == False:
-					self.RXData = self.SerialAdapter.readline()
-			except Exception, e:
+				self.RawData += self.SerialAdapter.read(1)
+				#print (":".join("{:02x}".format(ord(c)) for c in self.RawData))
+				if len(self.RawData) > 1:
+					if self.PacketEnds[0] == False:
+						byte_one, byte_two = struct.unpack("BB", self.RawData)
+						if byte_one == 0xde and byte_two == 0xad: # Confirmed start packet
+							self.PacketEnds[0] = True
+						elif byte_one == 0xad and byte_two == 0xde: # Error
+							self.PacketEnds[0] = False
+							self.PacketEnds[1] = False
+							self.RawData = ""
+					elif self.PacketEnds[1] == False:
+						byte_one, byte_two = struct.unpack("BB", self.RawData[-2:])
+						if byte_one == 0xad and byte_two == 0xde: # Confirmed start packet
+							self.PacketEnds[1] = True
+						elif byte_one == 0xde and byte_two == 0xad: # Error
+							self.PacketEnds[0] = True
+							self.PacketEnds[1] = False
+							self.RawData = ""
+
+				if self.PacketEnds[0] is True and self.PacketEnds[1] is True:
+					direction = ord(self.RawData[2])
+					if True == self.SendRequest and direction == 0x2:
+						if self.DataArrived == False:
+							self.DataArrived = True
+							self.SendRequest = False
+							print ("[RX] " + ":".join("{:02x}".format(ord(c)) for c in self.RawData))
+							self.RXData = self.RawData
+							self.RawData = ""
+							self.PacketEnds[0] = False
+							self.PacketEnds[1] = False
+					elif direction == 0x3:
+						print ("[ASYNC] " + ":".join("{:02x}".format(ord(c)) for c in self.RawData))
+						if len(self.RawData) > 2:
+							self.RXData = self.RawData
+							self.OnSerialAsyncDataCallback(self.RXData)
+						self.RawData = ""
+						self.PacketEnds[0] = False
+						self.PacketEnds[1] = False
+			except Exception as e:
 				print ("ERROR: Serial adpater. " + str(e))
-				self.RXData = ""
-				# Need to reconnect, send event to Node.
+				self.RawData = ""
 				if self.OnSerialConnectionClosedCallback != None:
 					self.OnSerialConnectionClosedCallback(self.DeviceComNumber)
-			if True == self.SendRequest:
-				if self.DataArrived == False:
-					self.DataArrived = True
-					print ("[IN]  " + ":".join("{:02x}".format(ord(c)) for c in self.RXData))
-			else:
-				print ("[IN ASYNC]  " + ":".join("{:02x}".format(ord(c)) for c in self.RXData))
-				if len(self.RXData) > 2:
-					self.OnSerialAsyncDataCallback(self.RXData)
+		
 		self.ExitRecievePacketsWorker = True
+		print("Exit USB Adaptor")
