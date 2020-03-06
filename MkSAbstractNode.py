@@ -88,8 +88,9 @@ class MkSLocalWebsocketServer():
 		if ("HANDSHAKE" == packet['header']['message_type']):
 			return
 		
-		packet["additional"]["ws_id"] = id(ws)
-		packet["additional"]["pipe"]  = "LOCAL_WS"
+		packet["additional"]["ws_id"] 	= id(ws)
+		packet["additional"]["pipe"]  	= "LOCAL_WS"
+		packet["stamping"] 				= ['local_ws']
 		data = json.dumps(packet)
 
 		if self.OnDataArrivedEvent is not None:
@@ -685,8 +686,8 @@ class AbstractNode():
 					<script src="static/lib/nodes/map/feather_4_19/feather.min.js.map"></script>
 					<script src="static/lib/bootstrap4-editable/js/bootstrap-editable.min.js"></script>
 					
-					<script src="static/mksdk-js/MkSAPI.js"></script>
 					<script src="static/mksdk-js/MkSCommon.js"></script>
+					<script src="static/mksdk-js/MkSAPI.js"></script>
 					<script src="static/mksdk-js/MkSGateway.js"></script>
 					<script src="static/mksdk-js/MkSWebface.js"></script>
 				'''

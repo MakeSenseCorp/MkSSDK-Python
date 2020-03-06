@@ -8,44 +8,35 @@ if sys.version_info[0] < 3:
 	import thread
 else:
 	import _thread
+import threading
 
 class Adaptor ():
-	UsbPath = ""
-	Interfaces = ""
-	SerialAdapter = None
+	def __init__(self, path, baudrate):
+		self.ClassName 						  = "Adaptor"
+		self.SerialAdapter 					  = None
+		self.DevicePath						  = path
+		self.DeviceBaudrate					  = baudrate
 
-	def __init__(self, asyncCallback):
-		self.UsbPath 						  = "/dev/"
 		self.DataArrived 					  = False
 		self.SendRequest 					  = False
 		self.RXData 						  = ""
 		self.RecievePacketsWorkerRunning 	  = True
 		self.DeviceConnected				  = False
-		self.DeviceConnectedName 			  = ""
-		self.DeviceComNumber 				  = 0
 		self.ExitRecievePacketsWorker 		  = False
 		# Callbacks
 		self.OnSerialConnectedCallback 		  = None
 		self.OnSerialDataArrivedCallback 	  = None
-		self.OnSerialAsyncDataCallback 	  	  = asyncCallback
+		self.OnSerialAsyncDataCallback 	  	  = None
 		self.OnSerialErrorCallback 			  = None
 		self.OnSerialConnectionClosedCallback = None
 
 		self.RawData						  = ""
 		self.PacketEnds 					  = [False, False]
 
-		self.Initiate()
-
-	def Initiate (self):
-		dev = os.listdir(self.UsbPath)
-		self.Interfaces = [item for item in dev if "ttyUSB" in item]
-		print (self.Interfaces)
-
-	def ConnectDevice(self, id, withtimeout):
+	def Connect(self, withtimeout):
 		self.SerialAdapter 			= serial.Serial()
-		self.SerialAdapter.port		= self.UsbPath + self.Interfaces[id-1]
-		self.DeviceComNumber 		= id
-		self.SerialAdapter.baudrate	= 9600
+		self.SerialAdapter.port		= self.DevicePath
+		self.SerialAdapter.baudrate	= self.DeviceBaudrate
 		
 		try:
 			# That will disable the assertion of DTR which is resetting the board.
@@ -60,13 +51,12 @@ class Adaptor ():
 			# since setting that flag entails opening the port, which causes a reset. 
 			# So we need to add a delay long enough to get past the bootloader make delay 3 sec.
 			time.sleep(3)
-		except Exception, e:
-			print ("ERROR: Serial adpater. " + str(e))
+		except Exception as e:
+			print ("({classname})# [ERROR] (Connect) {0}".format(str(e),classname=self.ClassName))
 			return False
 			
 		if self.SerialAdapter != None:
-			print ("Connected to " + self.UsbPath + self.Interfaces[id-1])
-			self.DeviceConnectedName 			= self.UsbPath + self.Interfaces[id-1]
+			print ("({classname})# CONNECTED {0}".format(self.DevicePath,classname=self.ClassName))
 			self.RecievePacketsWorkerRunning 	= True
 			self.DeviceConnected 				= True
 			self.ExitRecievePacketsWorker		= False
@@ -75,17 +65,18 @@ class Adaptor ():
 		
 		return False
 
-	def DisconnectDevice (self):
+	def Disconnect(self):
 		self.DeviceConnected 			 = False
 		self.RecievePacketsWorkerRunning = False
-		print ("[DEBUG::Adaptor] DisconnectDevice")
 		while self.ExitRecievePacketsWorker == False and self.DeviceConnected == True:
 			time.sleep(0.1)
 		if self.SerialAdapter != None:
 			self.SerialAdapter.close()
-		print ("Serial connection to " + self.DeviceConnectedName + " was closed ...")
+		print ("({classname})# DISCONNECTED {0}".format(self.DevicePath,classname=self.ClassName))
+		if self.OnSerialConnectionClosedCallback is not None:
+			self.OnSerialConnectionClosedCallback(self.DevicePath)
 
-	def Send (self, data):
+	def Send(self, data):
 		self.DataArrived = False
 		self.SendRequest = True
 
@@ -94,7 +85,7 @@ class Adaptor ():
 		#time.sleep(0.2)
 
 		# Now the device pause all async (if supporting) tasks
-		print ("[TX] " + ":".join("{:02x}".format(ord(c)) for c in data))
+		print ("({classname})# TX {0}".format(":".join("{:02x}".format(ord(c)) for c in data),classname=self.ClassName))
 		time.sleep(1)
 		self.SerialAdapter.write(str(data) + '\n')
 		while self.DataArrived == False and self.DeviceConnected == True:
@@ -131,24 +122,26 @@ class Adaptor ():
 						if self.DataArrived == False:
 							self.DataArrived = True
 							self.SendRequest = False
-							print ("[RX] " + ":".join("{:02x}".format(ord(c)) for c in self.RawData))
+							print ("({classname})# RX {0}".format(":".join("{:02x}".format(ord(c)) for c in self.RawData),classname=self.ClassName))
 							self.RXData = self.RawData
 							self.RawData = ""
 							self.PacketEnds[0] = False
 							self.PacketEnds[1] = False
 					elif direction == 0x3:
-						print ("[ASYNC] " + ":".join("{:02x}".format(ord(c)) for c in self.RawData))
+						print ("({classname})# ASYNC {0}".format(":".join("{:02x}".format(ord(c)) for c in self.RawData),classname=self.ClassName))
 						if len(self.RawData) > 2:
 							self.RXData = self.RawData
-							self.OnSerialAsyncDataCallback(self.RXData)
+							self.OnSerialAsyncDataCallback(self.DevicePath, self.RXData)
 						self.RawData = ""
 						self.PacketEnds[0] = False
 						self.PacketEnds[1] = False
 			except Exception as e:
-				print ("ERROR: Serial adpater. " + str(e))
+				print ("({classname})# [ERROR] (RecievePacketsWorker) {0}".format(str(e),classname=self.ClassName))
 				self.RawData = ""
-				if self.OnSerialConnectionClosedCallback != None:
-					self.OnSerialConnectionClosedCallback(self.DeviceComNumber)
-		
+				self.RXData  = ""
+				self.PacketEnds[0] 	= False
+				self.PacketEnds[1] 	= False
+				self.DataArrived 	= True
+				
 		self.ExitRecievePacketsWorker = True
-		print("Exit USB Adaptor")
+		print ("({classname})# Exit USB Adaptor".format(classname=self.ClassName))

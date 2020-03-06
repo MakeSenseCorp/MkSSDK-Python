@@ -23,9 +23,6 @@ class AbstractConnector():
 	def SetAdaptor(self, adaptor):
 		self.Adaptor = adaptor
 
-	def SetDeviceDisconnectCallback(self, callback):
-		self.OnDeviceDisconnectCallback = callback
-
 	def Connect(self, type):
 		return self.IsConnected
 
@@ -39,13 +36,4 @@ class AbstractConnector():
 		return ""
 
 	def GetDeviceInfo(self):
-		return ""
-
-	def SetSensorInfo(self, info):
-		return True
-
-	def GetSensorInfo(self, info):
-		return ""
-
-	def GetSensorListInfo(self):
 		return ""

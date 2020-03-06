@@ -1,6 +1,7 @@
 #!/usr/bin/python
 import os
 import sys
+import json
 
 class File ():
 	def __init__(self):
@@ -29,6 +30,11 @@ class File ():
 			file.close()
 			return data
 		return ""
+	
+	def SaveJSON(self, filename, data):
+		db_file = open(filename, "w")
+		json.dump(data, db_file, indent=2)
+		db_file.close()
 	
 	def ListFilesInFolder(self, path):
 		onlyfiles = [f for f in os.listdir(path) if os.path.isfile(os.path.join(path, f))]
