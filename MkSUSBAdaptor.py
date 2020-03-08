@@ -85,11 +85,13 @@ class Adaptor ():
 		#time.sleep(0.2)
 
 		# Now the device pause all async (if supporting) tasks
-		print ("({classname})# TX {0}".format(":".join("{:02x}".format(ord(c)) for c in data),classname=self.ClassName))
-		time.sleep(1)
+		time.sleep(0.1)
 		self.SerialAdapter.write(str(data) + '\n')
-		while self.DataArrived == False and self.DeviceConnected == True:
+		print ("({classname})# TX {0}".format(":".join("{:02x}".format(ord(c)) for c in data),classname=self.ClassName))
+		tick_timer = 0
+		while self.DataArrived == False and self.DeviceConnected == True and tick_timer < 30:
 			time.sleep(0.1)
+			tick_timer += 1
 		self.SendRequest = False
 		return self.RXData
 
@@ -136,7 +138,12 @@ class Adaptor ():
 						self.PacketEnds[0] = False
 						self.PacketEnds[1] = False
 			except Exception as e:
-				print ("({classname})# [ERROR] (RecievePacketsWorker) {0}".format(str(e),classname=self.ClassName))
+				print ("({classname})# [ERROR] (RecievePacketsWorker) {0} {1}".format(str(e), str(len(self.RawData)), classname=self.ClassName))
+				if "device disconnected?" in str(e):
+					# Device disconnected
+					self.DeviceConnected 				= True
+					self.RecievePacketsWorkerRunning 	= False
+					self.Disconnect()
 				self.RawData = ""
 				self.RXData  = ""
 				self.PacketEnds[0] 	= False
