@@ -32,17 +32,14 @@ class Connector (MkSAbstractConnector.AbstractConnector):
 		if status is True:
 			tx_packet = self.Protocol.GetDeviceTypeCommand()
 			rx_packet = adaptor.Send(tx_packet)
-			if (len(rx_packet) > 4):
-				magic_one, magic_two, direction, op_code, content_length = struct.unpack("BBBBB", rx_packet[0:5])
-				# print(magic_one, magic_two, direction, op_code, content_length)
-				if (magic_one == 0xde and magic_two == 0xad):
-					deviceType = rx_packet[5:-2]
-					if str(deviceType) == str(self.NodeType):
-						self.Adapters.append({
-							'dev': adaptor,
-							'path': path
-						})
-						return True
+			if (len(rx_packet) > 3):
+				deviceType = ''.join([str(unichr(elem)) for elem in rx_packet[3:]])
+				if str(deviceType) == str(self.NodeType):
+					self.Adapters.append({
+						'dev': adaptor,
+						'path': path
+					})
+					return True
 			adaptor.Disconnect()
 		return False
 	
@@ -85,8 +82,8 @@ class Connector (MkSAbstractConnector.AbstractConnector):
 	def OnAdapterDisconnected(self, path):
 		adaptor = self.FindAdaptor(path)
 		if self.AdaptorDisconnectedEvent is not None and adaptor is not None:
-			if "type" in adaptor:
-				self.AdaptorDisconnectedEvent(path, adaptor["type"])
+			if "rf_type" in adaptor:
+				self.AdaptorDisconnectedEvent(path, adaptor["rf_type"])
 		if adaptor is not None:
 			self.Adapters.remove(adaptor)
 

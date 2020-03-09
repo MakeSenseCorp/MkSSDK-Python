@@ -17,9 +17,9 @@ class Adaptor ():
 		self.DevicePath						  = path
 		self.DeviceBaudrate					  = baudrate
 
+		self.SendRequest					  = False
 		self.DataArrived 					  = False
-		self.SendRequest 					  = False
-		self.RXData 						  = ""
+		self.RXData 						  = []
 		self.RecievePacketsWorkerRunning 	  = True
 		self.DeviceConnected				  = False
 		self.ExitRecievePacketsWorker 		  = False
@@ -29,9 +29,6 @@ class Adaptor ():
 		self.OnSerialAsyncDataCallback 	  	  = None
 		self.OnSerialErrorCallback 			  = None
 		self.OnSerialConnectionClosedCallback = None
-
-		self.RawData						  = ""
-		self.PacketEnds 					  = [False, False]
 
 	def Connect(self, withtimeout):
 		self.SerialAdapter 			= serial.Serial()
@@ -77,13 +74,12 @@ class Adaptor ():
 			self.OnSerialConnectionClosedCallback(self.DevicePath)
 
 	def Send(self, data):
-		self.DataArrived = False
-		self.SendRequest = True
-
 		# Send PAUSE request to HW
 		#self.SerialAdapter.write(str(struct.pack("BBBH", 0xDE, 0xAD, 0x5)) + '\n')
 		#time.sleep(0.2)
 
+		self.DataArrived = False
+		self.SendRequest = True
 		# Now the device pause all async (if supporting) tasks
 		time.sleep(0.1)
 		self.SerialAdapter.write(str(data) + '\n')
@@ -92,62 +88,60 @@ class Adaptor ():
 		while self.DataArrived == False and self.DeviceConnected == True and tick_timer < 30:
 			time.sleep(0.1)
 			tick_timer += 1
+		print ("({classname})# RX {0}".format(self.RXData,classname=self.ClassName))
 		self.SendRequest = False
 		return self.RXData
 
 	def RecievePacketsWorker (self):
+		shift_buffer 		= [0, 0]
+		packet_data_start 	= False
+		packet_data_end 	= False
+		packet_data			= []
 		while self.RecievePacketsWorkerRunning == True:
 			try:
-				self.RawData += self.SerialAdapter.read(1)
-				#print (":".join("{:02x}".format(ord(c)) for c in self.RawData))
-				if len(self.RawData) > 1:
-					if self.PacketEnds[0] == False:
-						byte_one, byte_two = struct.unpack("BB", self.RawData)
-						if byte_one == 0xde and byte_two == 0xad: # Confirmed start packet
-							self.PacketEnds[0] = True
-						elif byte_one == 0xad and byte_two == 0xde: # Error
-							self.PacketEnds[0] = False
-							self.PacketEnds[1] = False
-							self.RawData = ""
-					elif self.PacketEnds[1] == False:
-						byte_one, byte_two = struct.unpack("BB", self.RawData[-2:])
-						if byte_one == 0xad and byte_two == 0xde: # Confirmed start packet
-							self.PacketEnds[1] = True
-						elif byte_one == 0xde and byte_two == 0xad: # Error
-							self.PacketEnds[0] = True
-							self.PacketEnds[1] = False
-							self.RawData = ""
+				s_byte = self.SerialAdapter.read(1)
+				if s_byte != "":
+					shift_buffer[0] = shift_buffer[1]
+					shift_buffer[1] = struct.unpack("B", s_byte)[0]
+					# ''.join([str(elem) if elem not in ['\r','\n',''] else "-" for elem in shift_buffer])
 
-				if self.PacketEnds[0] is True and self.PacketEnds[1] is True:
-					direction = ord(self.RawData[2])
-					if True == self.SendRequest and direction == 0x2:
-						if self.DataArrived == False:
-							self.DataArrived = True
-							self.SendRequest = False
-							print ("({classname})# RX {0}".format(":".join("{:02x}".format(ord(c)) for c in self.RawData),classname=self.ClassName))
-							self.RXData = self.RawData
-							self.RawData = ""
-							self.PacketEnds[0] = False
-							self.PacketEnds[1] = False
-					elif direction == 0x3:
-						print ("({classname})# ASYNC {0}".format(":".join("{:02x}".format(ord(c)) for c in self.RawData),classname=self.ClassName))
-						if len(self.RawData) > 2:
-							self.RXData = self.RawData
-							self.OnSerialAsyncDataCallback(self.DevicePath, self.RXData)
-						self.RawData = ""
-						self.PacketEnds[0] = False
-						self.PacketEnds[1] = False
+					if shift_buffer[0] == 0xde and shift_buffer[1] == 0xad: 	# Confirmed start packet
+						packet_data = []
+						packet_data_start	= True
+					elif shift_buffer[0] == 0xad and shift_buffer[1] == 0xde: # Confirmed end packet
+						packet_data_end 	= True
+
+					if packet_data_start is True and packet_data_end is True: # Whole packet arrived
+						self.RXData = packet_data[1:-1]
+						direction = self.RXData[0]
+						if True == self.SendRequest and direction == 2:
+							if self.DataArrived == False:
+								self.DataArrived = True
+						elif direction == 3:
+							# ":".join("{:02x}".format(ord(c)) for c in self.RXData)
+							print ("({classname})# ASYNC {0}".format(self.RXData,classname=self.ClassName))
+							if len(self.RXData) > 2:
+								if self.OnSerialAsyncDataCallback is not None:
+									self.OnSerialAsyncDataCallback(self.DevicePath, self.RXData)
+						packet_data_start	= False
+						packet_data_end		= False
+					elif packet_data_start is True and packet_data_end is False: # In middle of packet transfare
+						packet_data.append(shift_buffer[1])
+					elif packet_data_start is False and packet_data_end is True:  # Error
+						packet_data_end 	= False
+						packet_data 		= []
+						self.RXData 		= []
+						self.DataArrived 	= True # Relese sync uart read
+					elif packet_data_start is False and packet_data_end is False:  # Error
+						pass
 			except Exception as e:
-				print ("({classname})# [ERROR] (RecievePacketsWorker) {0} {1}".format(str(e), str(len(self.RawData)), classname=self.ClassName))
+				print ("({classname})# [ERROR] (RecievePacketsWorker) {0} {1}".format(str(e), self.RXData, classname=self.ClassName))
 				if "device disconnected?" in str(e):
 					# Device disconnected
 					self.DeviceConnected 				= True
 					self.RecievePacketsWorkerRunning 	= False
 					self.Disconnect()
-				self.RawData = ""
-				self.RXData  = ""
-				self.PacketEnds[0] 	= False
-				self.PacketEnds[1] 	= False
+				self.RXData  		= ""
 				self.DataArrived 	= True
 				
 		self.ExitRecievePacketsWorker = True
