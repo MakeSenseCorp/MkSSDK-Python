@@ -76,7 +76,9 @@ class Connector (MkSAbstractConnector.AbstractConnector):
 						"path": interface
 					})
 
-		print ("({classname})# Changes ({0})".format(changes, classname=self.ClassName))
+		if len(changes) > 0:
+			print ("({classname})# Changes ({0})".format(changes, classname=self.ClassName))
+		
 		return changes
 	
 	def OnAdapterDisconnected(self, path):

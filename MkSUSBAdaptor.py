@@ -82,14 +82,15 @@ class Adaptor ():
 		self.SendRequest = True
 		# Now the device pause all async (if supporting) tasks
 		time.sleep(0.1)
-		self.SerialAdapter.write(str(data) + '\n')
-		print ("({classname})# TX {0}".format(":".join("{:02x}".format(ord(c)) for c in data),classname=self.ClassName))
-		tick_timer = 0
-		while self.DataArrived == False and self.DeviceConnected == True and tick_timer < 30:
-			time.sleep(0.1)
-			tick_timer += 1
-		print ("({classname})# RX {0}".format(self.RXData,classname=self.ClassName))
-		self.SendRequest = False
+		if self.SerialAdapter is not None:
+			self.SerialAdapter.write(str(data) + '\n')
+			print ("({classname})# TX {0}".format(":".join("{:02x}".format(ord(c)) for c in data),classname=self.ClassName))
+			tick_timer = 0
+			while self.DataArrived == False and self.DeviceConnected == True and tick_timer < 30:
+				time.sleep(0.1)
+				tick_timer += 1
+			print ("({classname})# RX {0}".format(self.RXData,classname=self.ClassName))
+			self.SendRequest = False
 		return self.RXData
 
 	def RecievePacketsWorker (self):
