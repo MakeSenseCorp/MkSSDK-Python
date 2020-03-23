@@ -19,6 +19,7 @@ class Connector (MkSAbstractConnector.AbstractConnector):
 		self.UARTInterfaces 			= []
 		# Events
 		self.AdaptorDisconnectedEvent 	= None
+		self.AdaptorAsyncDataEvent 		= None
 
 	def FindUARTDevices(self):
 		dev = os.listdir("/dev/")
@@ -90,7 +91,11 @@ class Connector (MkSAbstractConnector.AbstractConnector):
 			self.Adapters.remove(adaptor)
 
 	def OnAdapterDataArrived(self, path, data):
-		pass
+		if len(data) > 3:
+			if self.AdaptorAsyncDataEvent is not None:
+				self.AdaptorAsyncDataEvent(path, data)
+		else:
+			print ("({classname})# (OnAdapterDataArrived) Data length not meet the required ({0})".format(len(data), classname=self.ClassName))
 	
 	def Disconnect(self):
 		self.IsConnected = False
