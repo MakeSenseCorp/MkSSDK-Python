@@ -240,7 +240,7 @@ class SlaveNode(MkSAbstractNode.AbstractNode):
 			self.MasterSocket.send(packet)
 
 	def EmitOnNodeChange(self, data):
-		print ("({classname})# Emit onNodeChange event ...".format(classname=self.ClassName))
+		# print ("({classname})# Emit onNodeChange event ...".format(classname=self.ClassName))
 		self.DeviceChangeListLock.acquire()
 		for item in self.OnDeviceChangeList:
 			payload 	= item["payload"]

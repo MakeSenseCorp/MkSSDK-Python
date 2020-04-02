@@ -136,7 +136,7 @@ class Adaptor ():
 					elif packet_data_start is False and packet_data_end is False:  # Error
 						pass
 			except Exception as e:
-				print ("({classname})# [ERROR] (RecievePacketsWorker) {0} {1}".format(str(e), self.RXData, classname=self.ClassName))
+				print ("({classname})# [ERROR] (RecievePacketsWorker) ({2}) {0} {1}".format(str(e), self.RXData, self.DevicePath, classname=self.ClassName))
 				if "device disconnected?" in str(e):
 					# Device disconnected
 					self.DeviceConnected 				= True
