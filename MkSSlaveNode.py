@@ -304,6 +304,7 @@ class SlaveNode(MkSAbstractNode.AbstractNode):
 				self.MasterNodesList.remove(node)
 				# If master terminated we need to close node.
 				self.SetState("CONNECT_MASTER")
+				self.MasterSocket = None
 				if self.OnMasterDisconnectedCallback is not None:
 					self.OnMasterDisconnectedCallback()
 	
