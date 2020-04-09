@@ -302,6 +302,8 @@ class SlaveNode(MkSAbstractNode.AbstractNode):
 		for node in self.MasterNodesList:
 			if sock == node.Socket:
 				self.MasterNodesList.remove(node)
+				# Need to close listener port because we are going to get this port again
+				self.ServerSocket.close()
 				# If master terminated we need to close node.
 				self.SetState("CONNECT_MASTER")
 				self.MasterSocket = None
