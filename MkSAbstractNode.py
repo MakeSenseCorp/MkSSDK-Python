@@ -653,6 +653,7 @@ class AbstractNode():
 					<link rel="stylesheet" href="/static/lib/bootstrap/css/bootstrap-slider.css" crossorigin="anonymous">
 					<link rel="stylesheet" href="/static/lib/fontawesome-5.11.2/css/all.min.css">
 					<link rel="stylesheet" href="/static/lib/bootstrap4-editable/css/bootstrap-editable.css">
+					<link rel="stylesheet" href="/static/lib/chartjs/2.9.3/Chart.min.css">
 				'''
 
 				script = '''
@@ -663,6 +664,7 @@ class AbstractNode():
 					<script src="/static/lib/nodes/js/feather_4_19/feather.min.js"></script>
 					<script src="/static/lib/nodes/map/feather_4_19/feather.min.js.map"></script>
 					<script src="/static/lib/bootstrap4-editable/js/bootstrap-editable.min.js"></script>
+					<script src="/static/lib/chartjs/2.9.3/Chart.min.js"></script>
 					
 					<script src="mksdk-js/MkSAPI.js"></script>
 					<script src="mksdk-js/MkSCommon.js"></script>
@@ -675,6 +677,7 @@ class AbstractNode():
 					<link rel="stylesheet" href="static/lib/bootstrap/css/bootstrap-slider.css" crossorigin="anonymous">
 					<link rel="stylesheet" href="static/lib/fontawesome-5.11.2/css/all.min.css">
 					<link rel="stylesheet" href="static/lib/bootstrap4-editable/css/bootstrap-editable.css">
+					<link rel="stylesheet" href="static/lib/chartjs/2.9.3/Chart.min.css">
 				'''
 
 				script = '''
@@ -685,6 +688,7 @@ class AbstractNode():
 					<script src="static/lib/nodes/js/feather_4_19/feather.min.js"></script>
 					<script src="static/lib/nodes/map/feather_4_19/feather.min.js.map"></script>
 					<script src="static/lib/bootstrap4-editable/js/bootstrap-editable.min.js"></script>
+					<script src="static/lib/chartjs/2.9.3/Chart.min.js"></script>
 					
 					<script src="static/mksdk-js/MkSCommon.js"></script>
 					<script src="static/mksdk-js/MkSAPI.js"></script>

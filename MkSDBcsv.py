@@ -78,5 +78,40 @@ class Database():
 		})
 		self.QueueLock.release()
 
-	def ReadDB(self, key, day):
-		pass
+	def ReadDB(self, date_path):
+		print(date_path)
+		path = os.path.join("csv_db", date_path) + ".csv"
+		file = MkSFile.File()
+		return file.Load(path)
+	
+	def SplitDataByHourSegment(self, date, data):
+		rows = data.split("\n")
+		
+		start_dt = datetime(int(date["year"]), int(date["month"]), int(date["day"]), 0, 0)
+		start_ts = time.mktime(start_dt.timetuple())
+		next_ts = start_ts + (60*60)
+		sensors_count = len(rows[0].split(",")) - 1
+		
+		sensor_prev_data 	= []
+		sensor_change 		= []
+		for idx in range(sensors_count):
+			sensor_prev_data.append(0)
+			sensor_change.append(0)
+
+		hours_list = []
+		for item in rows[:-1]:
+			cols = item.split(",")
+			if len(cols) > 1:
+				if next_ts < float(cols[0]):
+					hours_list.append(sensor_change)
+					next_ts += (60*60)
+					sensor_change = [0]*sensors_count
+				
+				for idx in range(sensors_count):
+					if float(cols[idx+1]) != sensor_prev_data[idx]:
+						sensor_change[idx] += 1
+						sensor_prev_data[idx] = float(cols[idx+1])
+			else:
+				return None, 0
+		return hours_list, sensors_count
+
