@@ -79,12 +79,11 @@ class Database():
 		self.QueueLock.release()
 
 	def ReadDB(self, date_path):
-		print(date_path)
 		path = os.path.join("csv_db", date_path) + ".csv"
 		file = MkSFile.File()
 		return file.Load(path)
 	
-	def SplitDataByHourSegment(self, date, data):
+	def SplitDataByHourSegment(self, date, data, graph_type):
 		rows = data.split("\n")
 		
 		start_dt = datetime(int(date["year"]), int(date["month"]), int(date["day"]), 0, 0)
@@ -94,6 +93,7 @@ class Database():
 		
 		sensor_prev_data 	= []
 		sensor_change 		= []
+		avg_count 			= 0
 		for idx in range(sensors_count):
 			sensor_prev_data.append(0)
 			sensor_change.append(0)
@@ -103,14 +103,28 @@ class Database():
 			cols = item.split(",")
 			if len(cols) > 1:
 				if next_ts < float(cols[0]):
+					for idx in range(sensors_count):
+						if graph_type[idx] == "avg":
+							if avg_count > 1:
+								sensor_change[idx] /= float(avg_count)
+							else:
+								sensor_change[idx] = 0
+						elif graph_type[idx] == "change":
+							pass
+				
 					hours_list.append(sensor_change)
 					next_ts += (60*60)
 					sensor_change = [0]*sensors_count
+					avg_count = 0
 				
+				avg_count += 1
 				for idx in range(sensors_count):
-					if float(cols[idx+1]) != sensor_prev_data[idx]:
-						sensor_change[idx] += 1
-						sensor_prev_data[idx] = float(cols[idx+1])
+					if graph_type[idx] == "avg":
+						sensor_change[idx] += float(cols[idx+1])
+					elif graph_type[idx] == "change":
+						if float(cols[idx+1]) != sensor_prev_data[idx]:
+							sensor_change[idx] += 1
+							sensor_prev_data[idx] = float(cols[idx+1])
 			else:
 				return None, 0
 		return hours_list, sensors_count
