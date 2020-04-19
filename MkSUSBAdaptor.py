@@ -84,12 +84,12 @@ class Adaptor ():
 		time.sleep(0.1)
 		if self.SerialAdapter is not None:
 			self.SerialAdapter.write(str(data) + '\n')
-			print ("({classname})# TX ({0}) {1}".format(self.DevicePath, ":".join("{:02x}".format(ord(c)) for c in data),classname=self.ClassName))
+			# print ("({classname})# TX ({0}) {1}".format(self.DevicePath, ":".join("{:02x}".format(ord(c)) for c in data),classname=self.ClassName))
 			tick_timer = 0
 			while self.DataArrived == False and self.DeviceConnected == True and tick_timer < 30:
 				time.sleep(0.1)
 				tick_timer += 1
-			print ("({classname})# RX ({0}) {1}".format(self.DevicePath, self.RXData,classname=self.ClassName))
+			# print ("({classname})# RX ({0}) {1}".format(self.DevicePath, self.RXData,classname=self.ClassName))
 			self.SendRequest = False
 		return self.RXData
 
@@ -120,7 +120,7 @@ class Adaptor ():
 								self.DataArrived = True
 						elif direction == 3:
 							# ":".join("{:02x}".format(ord(c)) for c in self.RXData)
-							print ("({classname})# ASYNC ({0}) {1}".format(self.DevicePath, self.RXData,classname=self.ClassName))
+							# print ("({classname})# ASYNC ({0}) {1}".format(self.DevicePath, self.RXData,classname=self.ClassName))
 							if len(self.RXData) > 2:
 								if self.OnSerialAsyncDataCallback is not None:
 									self.OnSerialAsyncDataCallback(self.DevicePath, self.RXData)
