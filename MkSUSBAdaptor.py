@@ -53,7 +53,7 @@ class Adaptor ():
 			return False
 			
 		if self.SerialAdapter != None:
-			print ("({classname})# CONNECTED {0}".format(self.DevicePath,classname=self.ClassName))
+			print ("({classname})# Open connection {0}".format(self.DevicePath,classname=self.ClassName))
 			self.RecievePacketsWorkerRunning 	= True
 			self.DeviceConnected 				= True
 			self.ExitRecievePacketsWorker		= False
@@ -69,7 +69,7 @@ class Adaptor ():
 			time.sleep(0.1)
 		if self.SerialAdapter != None:
 			self.SerialAdapter.close()
-		print ("({classname})# DISCONNECTED {0}".format(self.DevicePath,classname=self.ClassName))
+		print ("({classname})# Close connection {0}".format(self.DevicePath,classname=self.ClassName))
 		if self.OnSerialConnectionClosedCallback is not None:
 			self.OnSerialConnectionClosedCallback(self.DevicePath)
 

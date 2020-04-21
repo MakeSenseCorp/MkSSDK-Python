@@ -1,25 +1,47 @@
 #!/usr/bin/python
 import os
+import sys
 import time
 import struct
 import json
+import Queue
+if sys.version_info[0] < 3:
+	import thread
+else:
+	import _thread
+import threading
 
 from mksdk import MkSUSBAdaptor
 from mksdk import MkSProtocol
-
 from mksdk import MkSAbstractConnector
 
 class Connector (MkSAbstractConnector.AbstractConnector):
 	def __init__ (self):
 		MkSAbstractConnector.AbstractConnector.__init__(self)
-		self.ClassName 					= "Connector"
-		self.NodeType 					= 0
-		self.Adapters					= []
-		self.Protocol 					= MkSProtocol.Protocol()
-		self.UARTInterfaces 			= []
+		self.ClassName 						= "Connector"
+		self.NodeType 						= 0
+		self.Adapters						= []
+		self.Protocol 						= MkSProtocol.Protocol()
+		self.UARTInterfaces 				= []
+		self.RecievePacketsWorkerRunning	= False
 		# Events
-		self.AdaptorDisconnectedEvent 	= None
-		self.AdaptorAsyncDataEvent 		= None
+		self.AdaptorDisconnectedEvent 		= None
+		self.AdaptorAsyncDataEvent 			= None
+		# Data arrived queue
+		self.QueueLock      	    		= threading.Lock()
+		self.Packets      					= Queue.Queue()
+
+		thread.start_new_thread(self.RecievePacketsWorker, ())
+	
+	def RecievePacketsWorker (self):
+		self.RecievePacketsWorkerRunning = True
+		while self.RecievePacketsWorkerRunning == True:
+			try:
+				item = self.Packets.get(block=True,timeout=None)
+				if self.AdaptorAsyncDataEvent is not None:
+					self.AdaptorAsyncDataEvent(item["path"], item["data"])
+			except Exception as e:
+				print ("({classname})# [ERROR] (RecievePacketsWorker) {0}".format(str(e), classname=self.ClassName))
 
 	def FindUARTDevices(self):
 		dev = os.listdir("/dev/")
@@ -48,7 +70,10 @@ class Connector (MkSAbstractConnector.AbstractConnector):
 		self.NodeType = device_type
 		self.UARTInterfaces = self.FindUARTDevices()
 		for dev_path in self.UARTInterfaces:
-			self.__Connect(dev_path)
+			# Try for 3 times
+			for i in range(3):
+				if self.__Connect(dev_path) is True:
+					break
 		return self.Adapters
 	
 	def FindAdaptor(self, path):
@@ -92,16 +117,23 @@ class Connector (MkSAbstractConnector.AbstractConnector):
 
 	def OnAdapterDataArrived(self, path, data):
 		if len(data) > 3:
-			if self.AdaptorAsyncDataEvent is not None:
-				self.AdaptorAsyncDataEvent(path, data)
+			self.QueueLock.acquire()			
+			self.Packets.put( {
+				'path': path,
+				'data': data
+			})
+			self.QueueLock.release()
 		else:
 			print ("({classname})# (OnAdapterDataArrived) Data length not meet the required ({0})".format(len(data), classname=self.ClassName))
 	
 	def Disconnect(self):
 		self.IsConnected = False
-		for adaptor in self.Adapters:
-			adaptor["dev"].Disconnect()
-		print ("Connector ... [DISCONNECTED]")
+		self.RecievePacketsWorkerRunning = False
+		while len(self.Adapters) > 0:
+			for adaptor in self.Adapters:
+				print ("({classname})# Adaptor close [{0}]".format(adaptor["path"], classname=self.ClassName))
+				adaptor["dev"].Disconnect()
+		
 
 	def IsValidDevice(self):
 		return self.IsConnected
@@ -113,5 +145,3 @@ class Connector (MkSAbstractConnector.AbstractConnector):
 
 	def Send(self, packet):
 		pass
-		#rxPacket = self.Adaptor.Send(packet)
-		#return rxPacket
