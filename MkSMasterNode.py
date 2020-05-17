@@ -182,6 +182,7 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 
 	def WebSocketConnectedCallback (self):
 		self.SetState("WORKING")
+		self.GatewayConnectedEvent()
 		if self.GatewayConnectedCallback is not None:
 			self.GatewayConnectedCallback()
 	
