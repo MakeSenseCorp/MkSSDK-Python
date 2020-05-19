@@ -11,10 +11,7 @@ import threading
 import socket
 import subprocess
 from subprocess import call
-import urllib2
 import urllib
-
-from flask import Flask, render_template, jsonify, Response, request
 import logging
 
 import MkSGlobals
@@ -24,12 +21,13 @@ from mksdk import MkSAbstractNode
 from mksdk import MkSShellExecutor
 
 class StandaloneNode(MkSAbstractNode.AbstractNode):
-	def __init__(self):
+	def __init__(self, port):
 		MkSAbstractNode.AbstractNode.__init__(self)
 		self.ClassName 							= "Standalone Node"
 		# Members
 		self.HostName							= socket.gethostname()
 		self.IsMaster 							= False
+		self.LocalPort 							= port
 		# Node connection to WS information
 		self.GatewayIP 							= ""
 		self.ApiPort 							= "8080"
@@ -51,10 +49,6 @@ class StandaloneNode(MkSAbstractNode.AbstractNode):
 			'WORKING': 							self.StateWork
 		}
 		# Handlers
-		self.NodeRequestHandlers['get_port'] 		= self.GetPortRequestHandler
-		self.NodeRequestHandlers['get_local_nodes'] = self.GetLocalNodesRequestHandler
-		self.NodeRequestHandlers['get_master_info'] = self.GetMasterInfoRequestHandler
-		self.NodeRequestHandlers['upload_file'] 	= self.UploadFileHandler
 		# Callbacks
 		self.GatewayDataArrivedCallback 		= None
 		self.GatewayConnectedCallback 			= None
@@ -63,26 +57,20 @@ class StandaloneNode(MkSAbstractNode.AbstractNode):
 		self.OnCustomCommandResponseCallback	= None
 		# Flags
 		self.IsListenerEnabled 					= False
-		self.PipeStdoutRun						= False
 		self.SetState("INIT")
 
-	#
-	# ###### STANDALONE NODE INITIATE ->
-	#
+		self.Logger = logging.getLogger('guardian')
+		self.Logger.setLevel(logging.DEBUG)
+		hndl = logging.FileHandler(os.path.join('..','..','logs','guardian.log'))
+		formatter = logging.Formatter('%(asctime)s - %(message)s')
+		hndl.setFormatter(formatter)
+		self.Logger.addHandler(hndl)
 
 	def Initiate(self):
 		self.LoadNodesOnMasterStart()
 
-	#
-	# ###### STANDALONE NODE INITIATE <-
-	#
-
-	#
-	# ###### STANDALONE NODE STATES ->
-	#
-
 	def StateIdle (self):
-		print ("({classname})# Note, in IDLE state ...".format(classname=self.ClassName))
+		self.LogMSG("({classname})# Note, in IDLE state ...".format(classname=self.ClassName))
 		time.sleep(1)
 	
 	def StateInit (self):
@@ -127,11 +115,11 @@ class StandaloneNode(MkSAbstractNode.AbstractNode):
 			self.AccessTick += 1
 	
 	def StateInitLocalServer(self):
-		self.ServerAdderss = ('', 16999)
+		self.ServerAdderss = ('', self.LocalPort)
 		status = self.TryStartListener()
 		if status is True:
 			self.IsListenerEnabled = True
-			self.SetState("INIT_GATEWAY")
+			self.SetState("WORKING")
 		time.sleep(1)
 
 	def StateWork (self):
@@ -139,14 +127,6 @@ class StandaloneNode(MkSAbstractNode.AbstractNode):
 			self.SystemLoaded = True # Update node that system done loading.
 			if self.NodeSystemLoadedCallback is not None:
 				self.NodeSystemLoadedCallback()
-	
-	#
-	# ###### STANDALONE NODE STATES <-
-	#
-	
-	#
-	# ###### STANDALONE NODE GATAWAY CALLBACKS ->
-	#
 
 	def WebSocketConnectedCallback (self):
 		self.SetState("WORKING")
@@ -175,9 +155,7 @@ class StandaloneNode(MkSAbstractNode.AbstractNode):
 			command 	= self.BasicProtocol.GetCommandFromJson(packet)
 
 			packet["additional"]["client_type"] = "global_ws"
-
-			print ("({classname})# [{direction}] {source} -> {dest} [{cmd}]".format(
-						classname=self.ClassName,
+			self.LogMSG("({classname})# WS [{direction}] {source} -> {dest} [{cmd}]".format(classname=self.ClassName,
 						direction=direction,
 						source=source,
 						dest=destination,
@@ -203,18 +181,17 @@ class StandaloneNode(MkSAbstractNode.AbstractNode):
 						if self.GatewayDataArrivedCallback is not None:
 							self.GatewayDataArrivedCallback(None, packet)
 				else:
-					print ("({classname})# [Websocket INBOUND] ERROR - Not support {0} request type.".format(messageType, classname=self.ClassName))
+					self.LogMSG("({classname})# [Websocket INBOUND] ERROR - Not support {0} request type.".format(messageType, classname=self.ClassName))
 			else:
-				print ("({classname})# Not mine ... Sending to slave ...".format(classname=self.ClassName))
+				self.LogMSG("({classname})# Not mine ... Sending to slave ...".format(classname=self.ClassName))
 		except Exception as e:
-			print("({classname})# WebSocket Error - Data arrived issue\nPACKET#\n{0}\n(EXEPTION)# {error}".format(
-						packet,
+			self.LogMSG("({classname})# WebSocket Error - Data arrived issue\nPACKET#\n{0}\n(EXEPTION)# {error}".format(packet,
 						classname=self.ClassName,
 						error=str(e)))
 		self.NetworkAccessTickLock.release()
 	
 	def WebSocketErrorCallback (self):
-		print ("({classname})# ERROR - Gateway socket error".format(classname=self.ClassName))
+		self.LogMSG("({classname})# ERROR - Gateway socket error".format(classname=self.ClassName))
 		# TODO - Send callback "OnWSError"
 		self.NetworkAccessTickLock.acquire()
 		try:
@@ -222,28 +199,15 @@ class StandaloneNode(MkSAbstractNode.AbstractNode):
 		finally:
 			self.NetworkAccessTickLock.release()
 		self.SetState("ACCESS_WAIT_GATEWAY")
-	
-	#
-	# ###### STANDALONE NODE GATAWAY CALLBACKS <-
-	#
 
 	def GetNodeInfoRequestHandler(self, sock, packet):
 		payload = self.NodeInfo
-		payload["is_master"] 	= True
+		payload["is_master"] 	= False
 		payload["master_uuid"] 	= ""
 		return self.Network.BasicProtocol.BuildResponse(packet, payload)
-
-	#
-	# ##################################################################################################
-	#
 
 	def SendRequest(self, uuid, msg_type, command, payload, additional):
 		# Generate request
 		message = self.Network.BasicProtocol.BuildRequest(msg_type, uuid, self.UUID, command, payload, additional)
-		# TODO - Check if we need to send it via Gateway
 		# Send message
 		self.Network.SendWebSocket(message)
-	
-	#
-	# ##################################################################################################
-	#

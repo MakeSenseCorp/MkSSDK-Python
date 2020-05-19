@@ -59,6 +59,8 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 		self.Pipes 								= []
 		self.IsMaster 							= True
 		self.InstalledApps 						= None
+		self.EnableLog							= False
+		self.DebugMode							= True
 		# Node connection to WS information
 		self.GatewayIP 							= ""
 		self.ApiPort 							= "8080"
@@ -94,6 +96,14 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 		self.IsListenerEnabled 					= False
 		self.PipeStdoutRun						= False
 		self.SetState("INIT")
+
+		if self.EnableLog is True:
+			self.Logger = logging.getLogger('master')
+			self.Logger.setLevel(logging.DEBUG)
+			hndl = logging.FileHandler(os.path.join('..','..','logs','master.log'))
+			formatter = logging.Formatter('%(asctime)s - %(message)s')
+			hndl.setFormatter(formatter)
+			self.Logger.addHandler(hndl)
 
 	#
 	# ###### MASTER NODE INITIATE ->
@@ -209,7 +219,7 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 
 			packet["additional"]["client_type"] = "global_ws"
 
-			print ("({classname})# [{direction}] {source} -> {dest} [{cmd}]".format(
+			print ("({classname})# WS [{direction}] {source} -> {dest} [{cmd}]".format(
 						classname=self.ClassName,
 						direction=direction,
 						source=source,
@@ -279,7 +289,7 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 
 	def GetNodeInfoRequestHandler(self, sock, packet):
 		payload = self.NodeInfo
-		payload["is_master"] 	= True
+		payload["is_master"] 	= self.IsMaster
 		payload["master_uuid"] 	= ""
 		return self.Network.BasicProtocol.BuildResponse(packet, payload)
 	
