@@ -436,6 +436,16 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 	def UploadFileHandler(self, sock, packet):
 		return self.Network.BasicProtocol.BuildResponse(packet, { })
 
+	def GetNodeStatusRequestHandler(self, sock, packet):
+		payload = {
+			"status":"online"
+		}
+		return self.Network.BasicProtocol.BuildResponse(packet, payload)
+	
+	def GetNodeStatusResponseHandler(self, sock, packet):
+		if self.OnApplicationResponseCallback is not None:
+			self.OnApplicationResponseCallback(sock, packet)
+	
 	#
 	# ##################################################################################################
 	#

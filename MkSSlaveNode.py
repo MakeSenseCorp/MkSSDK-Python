@@ -329,7 +329,9 @@ class SlaveNode(MkSAbstractNode.AbstractNode):
 		pass
 	
 	def GetNodeStatusResponseHandler(self, sock, packet):
-		pass
+		if self.OnApplicationResponseCallback is not None:
+			self.OnApplicationResponseCallback(sock, packet)
+	
 	# ############
 
 	"""

@@ -211,3 +211,7 @@ class StandaloneNode(MkSAbstractNode.AbstractNode):
 		message = self.Network.BasicProtocol.BuildRequest(msg_type, uuid, self.UUID, command, payload, additional)
 		# Send message
 		self.Network.SendWebSocket(message)
+
+	def GetNodeStatusResponseHandler(self, sock, packet):
+		if self.OnApplicationResponseCallback is not None:
+			self.OnApplicationResponseCallback(sock, packet)

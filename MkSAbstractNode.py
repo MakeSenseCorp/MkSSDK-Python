@@ -17,12 +17,21 @@ from geventwebsocket import WebSocketServer, WebSocketApplication, Resource
 from collections import OrderedDict
 #from flask_cors import CORS
 import logging
+import hashlib
 
 import MkSGlobals
 from mksdk import MkSFile
 from mksdk import MkSDevice
 from mksdk import MkSUtils
 from mksdk import MkSBasicNetworkProtocol
+
+class MkSSecurity():
+	def __init__(self):
+		pass
+	
+	def GetMD5Hash(self, content):
+		return hashlib.md5(content).hexdigest()
+		# For Python 3+ hashlib.md5("whatever your string is".encode('utf-8')).hexdigest()
 
 class EndpointAction(object):
 	def __init__(self, page, args):
@@ -162,6 +171,7 @@ class AbstractNode():
 	def __init__(self):
 		self.ClassName								= ""
 		self.File 									= MkSFile.File()
+		self.Security								= MkSSecurity()
 		self.Connector 								= None
 		self.Network								= None
 		self.LocalWSManager							= WSManager
@@ -233,6 +243,7 @@ class AbstractNode():
 		self.OpenSocketsCounter						= 0
 		self.IsLocalSocketRunning					= False
 		self.IsListenerEnabled 						= False
+		self.OpenConnections 						= {} # Connections created for node/node communication (w/o gateway)
 		# Initialization methods
 		self.MyLocalIP 								= ""
 		self.NetworkCards 							= MkSUtils.GetIPList()
@@ -259,7 +270,7 @@ class AbstractNode():
 		self.UI 									= None
 		self.LocalWebPort							= ""
 		self.BasicProtocol 							= MkSBasicNetworkProtocol.BasicNetworkProtocol()
-		#print(self.NetworkCards)
+		print(self.NetworkCards)
 
 		self.Services[101] = {
 			'uuid': "",
@@ -285,7 +296,46 @@ class AbstractNode():
 		args = parser.parse_args()
 
 		if args.pwd is not None:
-			os.chdir(args.pwd)
+			os.chdir(args.pwd)	
+	
+	def ConnectRawSocket(self, ip, port):
+		sock, status = self.ConnectNodeSocket((ip, port))
+		if status is True:
+			# Append to listening socket list
+			node = self.AppendConnection(sock, ip, port)
+			key = self.Security.GetMD5Hash("{0}_{1}".format(ip,str(port)))
+			self.OpenConnections[key] = sock
+			self.LogMSG("({classname})# New RAW connection {0}:{1} HASH:{2}".format(ip,port,key,classname=self.ClassName))
+		
+		return status
+	
+	def DisconnectRawSocket(self, ip, port):
+		key = self.Security.GetMD5Hash("{0}_{1}".format(ip,str(port)))
+		if key in self.OpenConnections:
+			self.OpenConnections[key].close()
+			del self.OpenConnections[key]
+
+	def SendMessageOverRawSocket(self, ip, port, message):
+		key = self.Security.GetMD5Hash("{0}_{1}".format(ip,str(port)))
+		if key in self.OpenConnections:
+			try:
+				self.OpenConnections[key].send(message)
+				return True
+			except Exception as e:
+				del self.OpenConnections[key]
+				return False
+		return False
+
+	def ConnectOverLocalNetwork(self, uuid):
+		pass
+
+	def DisconnectverLocalNetwork(self, uuid):
+		pass
+
+	def SendMessageOverLocalNetwork(self, uuid, msg_type, command, payload, additional):
+		# Generate request
+		message = self.BasicProtocol.BuildRequest(msg_type, uuid, self.UUID, command, payload, additional)
+		packet  = self.BasicProtocol.AppendMagic(message)
 
 	# Overload
 	def GatewayConnectedEvent(self):
@@ -744,6 +794,11 @@ class AbstractNode():
 			for network in self.NetworkCards:
 				if network["iface"] in dataConfig["network"]["iface"]:
 					self.MyLocalIP = network["ip"]
+					self.LogMSG("({classname})# Local IP found ... {0}".format(self.MyLocalIP,classname=self.ClassName))
+					break
+			
+			if self.MyLocalIP == "":
+				self.LogMSG("({classname})# ERROR - Local IP not found".format(classname=self.ClassName))
 
 			self.NodeInfo 			= dataSystem["node"]["info"]
 			self.ServiceDepened 	= dataSystem["node"]["service"]["depend"]
@@ -948,7 +1003,7 @@ class AbstractNode():
 			else:
 				pass
 		except Exception as e:
-			self.LogMSG("({classname})# ERROR - Wrong configuration format\n(EXEPTION)# {error}\n{data}".format(error=str(e),data=data,classname=self.ClassName))
+			self.LogMSG("({classname})# ERROR - [LocalWSDataArrivedHandler]\n(EXEPTION)# {error}\n{data}".format(error=str(e),data=data,classname=self.ClassName))
 
 	def DataSocketInputHandler(self, sock, data):
 		try:
@@ -977,7 +1032,7 @@ class AbstractNode():
 				if direction in "request":
 					if command in self.NodeRequestHandlers.keys():
 						message = self.NodeRequestHandlers[command](sock, packet)
-						if message == "":
+						if message == "" or message is None:
 							return
 						packet  = self.BasicProtocol.AppendMagic(message)
 						sock.send(packet)
@@ -1004,7 +1059,7 @@ class AbstractNode():
 					self.Network.SendWebSocket(data)
 
 		except Exception as e:
-			self.LogMSG("({classname})# ERROR - Wrong configuration format\n(EXEPTION)# {error}\n{data}".format(error=str(e),data=data,classname=self.ClassName))
+			self.LogMSG("({classname})# ERROR - [DataSocketInputHandler]\n(EXEPTION)# {error}\n{data}".format(error=str(e),data=data,classname=self.ClassName))
 
 	def ConnectNodeSocket(self, ip_addr_port):
 		sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
