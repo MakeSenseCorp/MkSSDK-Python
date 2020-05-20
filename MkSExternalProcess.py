@@ -113,7 +113,6 @@ class ExternalProcess():
 		self.Status 	= True
 		self.UserData 	= user_data
 		proc = subprocess.Popen(process, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, cwd=working_dir)
-		print ("[ExternalProcess]# Process started", process)
 		self.Pipe = LocalPipe(proc)
 		thread.start_new_thread(self.Worker, ())
 	

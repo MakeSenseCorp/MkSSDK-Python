@@ -245,6 +245,7 @@ class AbstractNode():
 		self.IsListenerEnabled 						= False
 		self.OpenConnections 						= {} # Connections created for node/node communication (w/o gateway)
 		# Initialization methods
+		self.MyPID 									= os.getpid()
 		self.MyLocalIP 								= ""
 		self.NetworkCards 							= MkSUtils.GetIPList()
 		# Handlers
