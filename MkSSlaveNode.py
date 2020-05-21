@@ -20,24 +20,25 @@ from mksdk import MkSAbstractNode
 class SlaveNode(MkSAbstractNode.AbstractNode):
 	def __init__(self):
 		MkSAbstractNode.AbstractNode.__init__(self)
-		self.ClassName						= "Slave Node"
-		self.MasterNodesList				= [] # For future use (slave to slave communication)
-		self.SlaveListenerPort 				= 0
-		self.MasterSocket					= None
-		self.MasterInfo 					= None
-		self.MasterUUID 					= ""
+		self.ClassName							= "Slave Node"
+		self.MasterNodesList					= [] # For future use (slave to slave communication)
+		self.SlaveListenerPort 					= 0
+		self.MasterSocket						= None
+		self.MasterInfo 						= None
+		self.MasterUUID 						= ""
+		self.IsLocalUIEnabled					= False
 		# Sates
-		self.States 						= {
-			'IDLE': 						self.StateIdle,
-			'INIT':							self.StateInit,
-			'CONNECT_MASTER':				self.StateConnectMaster,
-			'FIND_PORT_MANUALY':			self.StateFindPortManualy,
-			'GET_MASTER_INFO':				self.StateGetMasterInfo,
-			'GET_PORT': 					self.StateGetPort,
-			'WAIT_FOR_PORT':				self.StateWaitForPort,
-			'START_LISTENER':				self.StateStartListener,
-			'WORKING':						self.StateWorking,
-			'EXIT':							self.StateExit
+		self.States 							= {
+			'IDLE': 							self.StateIdle,
+			'INIT':								self.StateInit,
+			'CONNECT_MASTER':					self.StateConnectMaster,
+			'FIND_PORT_MANUALY':				self.StateFindPortManualy,
+			'GET_MASTER_INFO':					self.StateGetMasterInfo,
+			'GET_PORT': 						self.StateGetPort,
+			'WAIT_FOR_PORT':					self.StateWaitForPort,
+			'START_LISTENER':					self.StateStartListener,
+			'WORKING':							self.StateWorking,
+			'EXIT':								self.StateExit
 		}
 		# Handlers
 		self.NodeResponseHandlers['get_port'] 			= self.GetPortResponseHandler
@@ -172,7 +173,8 @@ class SlaveNode(MkSAbstractNode.AbstractNode):
 		status = self.TryStartListener()
 		if status is True:
 			self.IsListenerEnabled = True
-			self.LocalWSManager.RunServer()
+			if self.IsLocalUIEnabled is True:
+				self.LocalWSManager.RunServer()
 			self.SetState("WORKING")
 	
 	def StateWorking(self):

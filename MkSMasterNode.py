@@ -59,6 +59,7 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 		self.Pipes 								= []
 		self.IsMaster 							= True
 		self.InstalledApps 						= None
+		self.IsLocalUIEnabled					= False
 		# Debug & Logging
 		self.EnableLog							= True
 		self.DebugMode							= True

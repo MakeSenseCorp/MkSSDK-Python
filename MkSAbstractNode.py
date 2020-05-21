@@ -10,12 +10,6 @@ import threading
 import time
 import socket, select
 import argparse
-
-from flask import Flask, render_template, jsonify, Response, request
-from flask_socketio import SocketIO, emit
-from geventwebsocket import WebSocketServer, WebSocketApplication, Resource
-from collections import OrderedDict
-#from flask_cors import CORS
 import logging
 
 import MkSGlobals
@@ -24,124 +18,6 @@ from mksdk import MkSDevice
 from mksdk import MkSUtils
 from mksdk import MkSBasicNetworkProtocol
 from mksdk import MkSSecurity
-
-class EndpointAction(object):
-	def __init__(self, page, args):
-		self.Page = page + ".html"
-		self.DataToJS = args
-
-	def __call__(self, *args):
-		return render_template(self.Page, data=self.DataToJS), 200, {
-			'Cache-Control': 'no-cache, no-store, must-revalidate',
-			'Pragma': 'no-cache',
-			'Expires': '0',
-			'Cache-Control': 'public, max-age=0'
-		}
-
-class WebInterface():
-	def __init__(self, name, port):
-		self.ClassName 	= "WebInterface"
-		self.App 		= Flask(name)
-		self.Port 		= port
-
-		#self.App.config['SEND_FILE_MAX_AGE_DEFAULT'] = 0
-
-		#CORS(self.App)
-		#self.Log = logging.getLogger('werkzeug')
-		#self.Log.disabled = True
-		#self.App.logger.disabled = True
-
-	def WebInterfaceWorker_Thread(self):
-		print ("({classname})# Starting local webface on port ({port}) ...".format(classname=self.ClassName, port=str(self.Port)))
-		self.App.run(host='0.0.0.0', port=self.Port)
-
-	def Run(self):
-		thread.start_new_thread(self.WebInterfaceWorker_Thread, ())
-
-	def AddEndpoint(self, endpoint=None, endpoint_name=None, handler=None, args=None, method=['GET']):
-		if handler is None:
-			self.App.add_url_rule(endpoint, endpoint_name, EndpointAction(endpoint_name, args))
-		else:
-			self.App.add_url_rule(endpoint, endpoint_name, handler, methods=method)
-
-class MkSLocalWebsocketServer():
-	def __init__(self):
-		self.ClassName 				= "LocalWebsocketServer"
-		self.ApplicationSockets 	= {}
-		self.ServerRunning 			= False
-		# Events
-		self.OnDataArrivedEvent 	= None
-		self.OnWSDisconnected 		= None
-	
-	def AppendSocket(self, ws_id, ws):
-		print ("({classname})# Append new connection ({0})".format(ws_id, classname=self.ClassName))
-		self.ApplicationSockets[ws_id] = ws
-	
-	def RemoveSocket(self, ws_id):
-		print ("({classname})# Remove connection ({0})".format(ws_id, classname=self.ClassName))
-		del self.ApplicationSockets[ws_id]
-		if self.OnWSDisconnected is not None:
-			self.OnWSDisconnected(ws_id)
-	
-	def WSDataArrived(self, ws, data):
-		# TODO - Append webface type
-		packet	= json.loads(data)
-		if ("HANDSHAKE" == packet['header']['message_type']):
-			return
-		
-		packet["additional"]["ws_id"] 	= id(ws)
-		packet["additional"]["pipe"]  	= "LOCAL_WS"
-		packet["stamping"] 				= ['local_ws']
-		data = json.dumps(packet)
-
-		if self.OnDataArrivedEvent is not None:
-			self.OnDataArrivedEvent(ws, data)
-	
-	def Send(self, ws_id, data):
-		if ws_id in self.ApplicationSockets:
-			self.ApplicationSockets[ws_id].send(data)
-		else:
-			print ("({classname})# ERROR - This socket ({0}) does not exist. (Might be closed)".format(ws_id, classname=self.ClassName))
-	
-	def IsServerRunnig(self):
-		return self.ServerRunning
-
-	def Worker(self):
-		try:
-			server = WebSocketServer(('', 1982), Resource(OrderedDict([('/', NodeWSApplication)])))
-
-			self.ServerRunning = True
-			print ("({classname})# Staring local WS server ...".format(classname=self.ClassName))
-			server.serve_forever()
-		except Exception as e:
-			print ("({classname})# [ERROR] Stoping local WS server ... {0}".format(str(e), classname=self.ClassName))
-			self.ServerRunning = False
-	
-	def RunServer(self):
-		if self.ServerRunning is False:
-			thread.start_new_thread(self.Worker, ())
-
-WSManager = MkSLocalWebsocketServer()
-
-class NodeWSApplication(WebSocketApplication):
-	def __init__(self, *args, **kwargs):
-		self.ClassName = "NodeWSApplication"
-		super(NodeWSApplication, self).__init__(*args, **kwargs)
-	
-	def on_open(self):
-		print ("({classname})# CONNECTION OPENED".format(classname=self.ClassName))
-		WSManager.AppendSocket(id(self.ws), self.ws)
-
-	def on_message(self, message):
-		#print ("({classname})# MESSAGE RECIEVED {0} {1}".format(id(self.ws),message,classname=self.ClassName))
-		if message is not None:
-			WSManager.WSDataArrived(self.ws, message)
-		else:
-			print ("({classname})# ERROR - Message is not valid".format(classname=self.ClassName))
-
-	def on_close(self, reason):
-		print ("({classname})# CONNECTION CLOSED".format(classname=self.ClassName))
-		WSManager.RemoveSocket(id(self.ws))
 
 class LocalNode():
 	def __init__(self, ip, port, uuid, node_type, sock):
@@ -166,7 +42,7 @@ class AbstractNode():
 		self.Security								= MkSSecurity.Security()
 		self.Connector 								= None
 		self.Network								= None
-		self.LocalWSManager							= WSManager
+		self.LocalWSManager							= None
 		self.MKSPath								= ""
 		# Device information
 		self.Type 									= 0
@@ -186,6 +62,7 @@ class AbstractNode():
 		self.IsHardwareBased 						= False
 		self.IsNodeWSServiceEnabled 				= False # Based on HTTP requests and web sockets
 		self.IsNodeLocalServerEnabled 				= False # Based on regular sockets
+		self.IsLocalUIEnabled						= False
 		self.Ticker 								= 0
 		self.Pwd									= os.getcwd()
 		self.IsMaster 								= False
@@ -227,6 +104,7 @@ class AbstractNode():
 		## Unused
 		self.DeviceConnectedCallback 				= None
 		# Network
+		self.MasterSocket							= None
 		self.ServerSocket 							= None # Local server listener
 		self.ServerAdderss							= None # Local server listener
 		self.RecievingSockets						= []
@@ -434,6 +312,8 @@ class AbstractNode():
 		payload	= self.BasicProtocol.GetPayloadFromJson(packet)
 		self.LogMSG("({classname})# Close server socket request ... {0}".format(payload, classname=self.ClassName))
 		self.RemoveConnection(sock)
+		if self.MasterSocket == sock:
+			self.MasterSocket = None
 
 	def FindNodeResponseHandler(self, sock, packet):
 		payload 	= self.BasicProtocol.GetPayloadFromJson(packet)
@@ -840,28 +720,30 @@ class AbstractNode():
 		return True
 	
 	def InitiateLocalServer(self, port):
-		self.UI 			= WebInterface("Context", port)
-		self.LocalWebPort	= port
-		# Data for the pages.
-		jsonUIData 	= {
-			'ip': str(self.MyLocalIP),
-			'port': str(port),
-			'uuid': str(self.UUID)
-		}
-		data = json.dumps(jsonUIData)
-		# UI Pages
-		self.UI.AddEndpoint("/", 			"index", 		None, 		data)
-		self.UI.AddEndpoint("/nodes", 		"nodes", 		None, 		data)
-		self.UI.AddEndpoint("/config", 		"config", 		None, 		data)
-		self.UI.AddEndpoint("/app", 		"app", 			None, 		data)
-		self.UI.AddEndpoint("/mobile", 		"mobile", 		None, 		data)
-		self.UI.AddEndpoint("/mobile/app", 	"mobile/app", 	None, 		data)
-		# UI RestAPI
-		self.UI.AddEndpoint("/test/<key>", 						"test", 						self.TestWithKeyHandler)
-		self.UI.AddEndpoint("/get/socket_list/<key>", 			"get_socket_list", 				self.GetConnectedSocketsListHandler)
+		if self.IsLocalUIEnabled is True:
+			self.UI 			= WebInterface("Context", port)
+			self.LocalWebPort	= port
+			# Data for the pages.
+			jsonUIData 	= {
+				'ip': str(self.MyLocalIP),
+				'port': str(port),
+				'uuid': str(self.UUID)
+			}
+			data = json.dumps(jsonUIData)
+			# UI Pages
+			self.UI.AddEndpoint("/", 			"index", 		None, 		data)
+			self.UI.AddEndpoint("/nodes", 		"nodes", 		None, 		data)
+			self.UI.AddEndpoint("/config", 		"config", 		None, 		data)
+			self.UI.AddEndpoint("/app", 		"app", 			None, 		data)
+			self.UI.AddEndpoint("/mobile", 		"mobile", 		None, 		data)
+			self.UI.AddEndpoint("/mobile/app", 	"mobile/app", 	None, 		data)
+			# UI RestAPI
+			self.UI.AddEndpoint("/test/<key>", 						"test", 						self.TestWithKeyHandler)
+			self.UI.AddEndpoint("/get/socket_list/<key>", 			"get_socket_list", 				self.GetConnectedSocketsListHandler)
 
 	def AppendFaceRestTable(self, endpoint=None, endpoint_name=None, handler=None, args=None, method=['GET']):
-		self.UI.AddEndpoint(endpoint, endpoint_name, handler, args, method)
+		if self.IsLocalUIEnabled is True:
+			self.UI.AddEndpoint(endpoint, endpoint_name, handler, args, method)
 
 	# TODO - REFACTORING
 	def TestWithKeyHandler(self, key):
@@ -938,21 +820,23 @@ class AbstractNode():
 			self.ServerSocket.listen(32)
 			self.IsLocalSocketRunning = True
 
-			# Run preloader for UI interface
-			if self.UI is None:
-				self.LogMSG("({classname})# Executing UI preloader (Only valid for local UI aka Webface)".format(classname=self.ClassName))
-				self.PreUILoaderHandler()
+			if self.IsLocalUIEnabled is True:
+				# Run preloader for UI interface
+				if self.UI is None:
+					self.LogMSG("({classname})# Executing UI preloader (Only valid for local UI aka Webface)".format(classname=self.ClassName))
+					self.PreUILoaderHandler()
 
 			# Let know registered method about local server start.
 			if self.OnLocalServerListenerStartedCallback is not None:
 				self.OnLocalServerListenerStartedCallback(self.ServerSocket, self.MyLocalIP, self.ServerAdderss[1])
 
 			# Run UI thread
-			if self.UI is None:
-				self.LogMSG("({classname})# Local UI(Webface) is not set ... (NULL)".format(classname=self.ClassName))
-			else:
-				self.LogMSG("({classname})# Running local UI(Webface)".format(classname=self.ClassName))
-				self.UI.Run()
+			if self.IsLocalUIEnabled is True:
+				if self.UI is None:
+					self.LogMSG("({classname})# Local UI(Webface) is not set ... (NULL)".format(classname=self.ClassName))
+				else:
+					self.LogMSG("({classname})# Running local UI(Webface)".format(classname=self.ClassName))
+					self.UI.Run()
 
 			return True
 		except Exception as e:
@@ -1288,8 +1172,14 @@ class AbstractNode():
 	def Run (self, callback):
 		# Will be called each half a second.
 		self.WorkingCallback = callback
-		self.LocalWSManager.OnDataArrivedEvent  = self.LocalWSDataArrivedHandler
-		self.LocalWSManager.OnWSDisconnected 	= self.LocalWSDisconnectedHandler
+		if self.IsLocalUIEnabled is True:
+			# Import Local WebSocket objects
+			from mksdk import MkSLocalWebServer
+			from mksdk import MkSLocalWS
+			self.LocalWSManager = MkSLocalWS.WSManager
+			# Register callbacks
+			self.LocalWSManager.OnDataArrivedEvent  = self.LocalWSDataArrivedHandler
+			self.LocalWSManager.OnWSDisconnected 	= self.LocalWSDisconnectedHandler
 		self.ExitEvent.clear()
 		self.ExitLocalServerEvent.clear()
 		# Initial state is connect to Gateway.
@@ -1316,11 +1206,12 @@ class AbstractNode():
 				#TODO - Services section must be in differebt thread
 				self.ServicesManager()
 				self.WorkingCallback()
-				# This check is for client nodes
-				if (self.Type not in [1, 2]):
-					if self.LocalWSManager.IsServerRunnig() is False and self.MasterSocket is None:
-						self.LogMSG("({classname})# Exiting main thread ... ({0}, {1}) ...".format(self.LocalWSManager.IsServerRunnig(), self.MasterSocket, classname=self.ClassName))
-						self.Exit()
+				if self.IsLocalUIEnabled is True:
+					# This check is for client nodes
+					if (self.Type not in [1, 2]):
+						if self.LocalWSManager.IsServerRunnig() is False and self.MasterSocket is None:
+							self.LogMSG("({classname})# Exiting main thread ... ({0}, {1}) ...".format(self.LocalWSManager.IsServerRunnig(), self.MasterSocket, classname=self.ClassName))
+							self.Exit()
 
 			self.Ticker += 1
 			time.sleep(0.5)

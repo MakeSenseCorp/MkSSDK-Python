@@ -28,6 +28,7 @@ class StandaloneNode(MkSAbstractNode.AbstractNode):
 		self.HostName							= socket.gethostname()
 		self.IsMaster 							= False
 		self.LocalPort 							= port
+		self.IsLocalUIEnabled					= False
 		# Node connection to WS information
 		self.GatewayIP 							= ""
 		self.ApiPort 							= "8080"
