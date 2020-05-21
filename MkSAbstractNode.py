@@ -273,6 +273,10 @@ class AbstractNode():
 	def EmitOnNodeChange(self, payload):
 		pass
 
+	# Overload
+	def LocalServerTerminated(self):
+		pass
+
 	def GetOnlineDevicesHandler(self, sock, packet):
 		self.LogMSG("({classname})# Online network device list ...".format(classname=self.ClassName))
 		payload = self.BasicProtocol.GetPayloadFromJson(packet)
@@ -1044,6 +1048,7 @@ class AbstractNode():
 		# Clean all resorses before exit.
 		self.RemoveConnection(self.ServerSocket)
 		self.CleanAllSockets()
+		self.LocalServerTerminated()
 		self.IsListenerEnabled = False
 		self.LogMSG("({classname})# [NodeLocalNetworkConectionListener] Exit Local Server Thread ... ({0}/{1})".format(len(self.RecievingSockets),len(self.SendingSockets),classname=self.ClassName))
 		self.ExitLocalServerEvent.set()

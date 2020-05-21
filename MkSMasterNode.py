@@ -112,8 +112,6 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 	#
 
 	def Initiate(self):
-		self.LoadNodesOnMasterStart()
-
 		print("TODO - (MkSMasterNode.MasterNode) Who stops PipeStdoutListener_Thread thread?")
 		thread.start_new_thread(self.PipeStdoutListener_Thread, ())
 
@@ -184,6 +182,9 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 			self.SystemLoaded = True # Update node that system done loading.
 			if self.NodeSystemLoadedCallback is not None:
 				self.NodeSystemLoadedCallback()
+			
+		if 0 == self.Ticker % 60:
+			self.SendGatewayPing()
 	
 	#
 	# ###### MASTER NODE STATES <-
@@ -380,6 +381,19 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 			# No available ports
 			return self.Network.BasicProtocol.BuildResponse(packet, { 'port': 0 })
 	
+	def LocalServerTerminated(self):
+		for slave in self.LocalSlaveList:
+			payload = 	{ 
+							'node': { 	
+								'ip':	str(slave.IP), 
+								'port':	slave.Port, 
+								'uuid':	slave.UUID, 
+								'type':	slave.Type
+							} 
+						}
+			message = self.Network.BasicProtocol.BuildRequest("MASTER", "GATEWAY", self.UUID, "node_disconnected", payload, {})
+			self.Network.SendWebSocket(message)
+
 	def NodeDisconnectHandler(self, sock):		
 		for slave in self.LocalSlaveList:
 			if slave.Socket == sock:
@@ -449,6 +463,10 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 		if self.OnApplicationResponseCallback is not None:
 			self.OnApplicationResponseCallback(sock, packet)
 	
+	def SendGatewayPing(self):
+		# Send request
+		message = self.BasicProtocol.BuildRequest("DIRECT", "GATEWAY", self.UUID, "ping", self.NodeInfo, {})
+		self.Network.SendWebSocket(message)
 	#
 	# ##################################################################################################
 	#
@@ -476,48 +494,7 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 						}
 			message = self.Network.BasicProtocol.BuildRequest("MASTER", "GATEWAY", self.UUID, "node_connected", payload, {})
 			self.Network.SendWebSocket(message)
-	
-	def LoadNodesOnMasterStart(self):
-		jsonInstalledNodesStr 	= ""
-		jsonInstalledAppsStr 	= ""
-
-		if MkSGlobals.OS_TYPE == "win32":
-			jsonInstalledNodesStr = self.File.Load("G:\\workspace\\Development\\Git\\makesense\\misc\\configure\\" + MkSGlobals.OS_TYPE + "\\installed_nodes.json")
-		elif MkSGlobals.OS_TYPE in ["linux", "linux2"]:
-			jsonInstalledNodesStr = self.File.Load("../../configure/installed_nodes.json")
-
-		if (jsonInstalledNodesStr is not "" and jsonInstalledNodesStr is not None):
-			# Load installed nodes.
-			jsonData = json.loads(jsonInstalledNodesStr)
-			for item in jsonData["installed"]:
-				if 1 == item["type"]:
-					node = MkSAbstractNode.LocalNode("", 16999, item["uuid"], item["type"], None)
-					node.Status = "Running"
-				else:
-					node = MkSAbstractNode.LocalNode("", 0, item["uuid"], item["type"], None)
-				self.InstalledNodes.append(node)
-
-		if MkSGlobals.OS_TYPE == "win32":
-			jsonInstalledAppsStr = self.File.Load("G:\\workspace\\Development\\Git\\makesense\\misc\\configure\\" + MkSGlobals.OS_TYPE + "\\installed_apps.json")
-		elif MkSGlobals.OS_TYPE in ["linux", "linux2"]:
-			jsonInstalledAppsStr = self.File.Load("../../configure/installed_apps.json")
-
-		if (jsonInstalledAppsStr is not "" and jsonInstalledAppsStr is not None):
-			# Load installed applications
-			self.InstalledApps = json.loads(jsonInstalledAppsStr)
-
-		#self.InitiateLocalServer(8080)
-		# UI RestAPI
-		#self.UI.AddEndpoint("/get/node_list/<key>", 				"get_node_list", 				self.GetNodeListHandler)
-		#self.UI.AddEndpoint("/get/node_list_by_type/<key>", 		"get_node_list_by_type", 		self.GetNodeListByTypeHandler, 			method=['POST'])
-		#self.UI.AddEndpoint("/set/node_action/<key>", 				"set_node_action", 				self.SetNodeActionHandler, 				method=['POST'])
-		#self.UI.AddEndpoint("/get/node_shell_cmd/<key>", 			"get_node_shell_cmd", 			self.GetNodeShellCommandHandler, 		method=['POST'])
-		#self.UI.AddEndpoint("/get/node_config_info/<key>", 		"get_node_config_info", 		self.GetNodeConfigInfoHandler)
-		#self.UI.AddEndpoint("/get/app_list/<key>", 				"get_app_list", 				self.GetApplicationListHandler)
-		#self.UI.AddEndpoint("/get/app_html/<key>", 				"get_app_html",					self.GetApplicationHTMLHandler, 		method=['POST'])
-		#self.UI.AddEndpoint("/get/app_js/<key>", 					"get_app_js", 					self.GetApplicationJavaScriptHandler, 	method=['POST'])
-		#self.UI.AddEndpoint("/generic/node_get_request/<key>", 	"generic_node_get_request", 	self.GenericNodeGETRequestHandler, 		method=['POST'])
-	
+		
 	def GetSlaveNode(self, uuid):
 		for item in self.LocalSlaveList:
 			if item.UUID == uuid:

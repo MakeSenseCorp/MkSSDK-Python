@@ -68,7 +68,7 @@ class StandaloneNode(MkSAbstractNode.AbstractNode):
 		self.Logger.addHandler(hndl)
 
 	def Initiate(self):
-		self.LoadNodesOnMasterStart()
+		pass
 
 	def StateIdle (self):
 		self.LogMSG("({classname})# Note, in IDLE state ...".format(classname=self.ClassName))
