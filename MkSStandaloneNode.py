@@ -80,6 +80,7 @@ class StandaloneNode(MkSAbstractNode.AbstractNode):
 		if self.IsNodeWSServiceEnabled is True:
 			# Create Network instance
 			self.Network = MkSNetMachine.Network(self.ApiUrl, self.WsUrl)
+			self.Network.SetLogger(self.Logger)
 			self.Network.SetDeviceType(self.Type)
 			self.Network.SetDeviceUUID(self.UUID)
 			# Register to events

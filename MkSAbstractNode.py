@@ -17,21 +17,13 @@ from geventwebsocket import WebSocketServer, WebSocketApplication, Resource
 from collections import OrderedDict
 #from flask_cors import CORS
 import logging
-import hashlib
 
 import MkSGlobals
 from mksdk import MkSFile
 from mksdk import MkSDevice
 from mksdk import MkSUtils
 from mksdk import MkSBasicNetworkProtocol
-
-class MkSSecurity():
-	def __init__(self):
-		pass
-	
-	def GetMD5Hash(self, content):
-		return hashlib.md5(content).hexdigest()
-		# For Python 3+ hashlib.md5("whatever your string is".encode('utf-8')).hexdigest()
+from mksdk import MkSSecurity
 
 class EndpointAction(object):
 	def __init__(self, page, args):
@@ -171,7 +163,7 @@ class AbstractNode():
 	def __init__(self):
 		self.ClassName								= ""
 		self.File 									= MkSFile.File()
-		self.Security								= MkSSecurity()
+		self.Security								= MkSSecurity.Security()
 		self.Connector 								= None
 		self.Network								= None
 		self.LocalWSManager							= WSManager
@@ -257,7 +249,8 @@ class AbstractNode():
 			'unregister_on_node_change':			self.UnregisterOnNodeChangeHandler,
 			'find_node':							self.FindNodeRequestHandler,
 			'master_append_node':					self.MasterAppendNodeRequestHandler,
-			'master_remove_node':					self.MasterRemoveNodeRequestHandler
+			'master_remove_node':					self.MasterRemoveNodeRequestHandler,
+			'close_local_socket':					self.CloseLocalSocketRequestHandler
 		}
 		self.NodeResponseHandlers					= {
 			'get_node_info': 						self.GetNodeInfoResponseHandler,
@@ -436,6 +429,11 @@ class AbstractNode():
 			self.Services[payload["type"]]["uuid"] 		= ""
 			self.Services[payload["type"]]["enabled"] 	= 0
 		self.GetNodeInfoResponseHandler(sock, packet)
+	
+	def CloseLocalSocketRequestHandler(self, sock, packet):
+		payload	= self.BasicProtocol.GetPayloadFromJson(packet)
+		self.LogMSG("({classname})# Close server socket request ... {0}".format(payload, classname=self.ClassName))
+		self.RemoveConnection(sock)
 
 	def FindNodeResponseHandler(self, sock, packet):
 		payload 	= self.BasicProtocol.GetPayloadFromJson(packet)
@@ -1147,6 +1145,7 @@ class AbstractNode():
 								else:
 									self.LogMSG("({classname})# [NodeLocalNetworkConectionListener] Data Invalid ...".format(classname=self.ClassName))
 							else:
+								self.LogMSG("({classname})# [NodeLocalNetworkConectionListener] Socket closed ...".format(classname=self.ClassName))
 								self.NodeDisconnectHandler(sock)
 								# Raise event for user
 								if self.OnTerminateConnectionCallback is not None:
@@ -1159,8 +1158,10 @@ class AbstractNode():
 				self.LogMSG("({classname})# ERROR - Local socket listener\n(EXEPTION)# {error}".format(error=str(e),classname=self.ClassName))
 
 		# Clean all resorses before exit.
+		self.RemoveConnection(self.ServerSocket)
 		self.CleanAllSockets()
-		self.LogMSG("({classname})# [NodeLocalNetworkConectionListener] Exit execution thread ...".format(classname=self.ClassName))
+		self.IsListenerEnabled = False
+		self.LogMSG("({classname})# [NodeLocalNetworkConectionListener] Exit Local Server Thread ... ({0}/{1})".format(len(self.RecievingSockets),len(self.SendingSockets),classname=self.ClassName))
 		self.ExitLocalServerEvent.set()
 
 	def ConnectNode(self, ip, port):
@@ -1209,13 +1210,28 @@ class AbstractNode():
 		return len(ips)
 
 	def CleanAllSockets(self):
-		for conn in self.Connections:
-			self.RemoveConnection(conn.Socket)
+		while len(self.Connections) > 0:
+			message = self.BasicProtocol.BuildRequest("DIRECT", self.Connections[0].UUID, self.UUID, "close_local_socket", {
+				"uuid": self.Connections[0].UUID
+			}, {})
+			packet  = self.BasicProtocol.AppendMagic(message)
+
+			try:
+				self.Connections[0].Socket.send(packet)
+				time.sleep(0.5)
+			except Exception as e:
+				self.LogMSG("({classname})# ERROR - Failed to close socket ({0})".format(self.Connections[0].UUID,classname=self.ClassName))
+			self.RemoveConnection(self.Connections[0].Socket)
+		
+		while len(self.Connections) > 0:
+			self.RemoveConnection(self.Connections[0].Socket)
 		
 		if len(self.Connections) > 0:
-			self.LogMSG("({classname})# [FindMasters] Still live socket exist".format(classname=self.ClassName))
-			for conn in self.Connections:
-				self.RemoveConnection(conn.Socket)
+			self.LogMSG("({classname})# [CleanAllSockets] Still live socket exist".format(classname=self.ClassName))
+			while len(self.Connections) > 0:
+				self.RemoveConnection(self.Connections[0].Socket)
+		
+		self.LogMSG("({classname})# [CleanAllSockets] All sockets where released".format(classname=self.ClassName))
 	
 	def LogMSG(self, msg):
 		if self.Logger is None:
@@ -1309,8 +1325,8 @@ class AbstractNode():
 			self.Ticker += 1
 			time.sleep(0.5)
 		
-		self.LogMSG("({classname})# Exit Node ...".format(classname=self.ClassName))
-		self.ExitEvent.set()
+		self.LogMSG("({classname})# Start Exiting Node ...".format(classname=self.ClassName))
+		# self.ExitEvent.set()
 		if self.IsNodeWSServiceEnabled is True:
 			if self.Network is not None:
 				self.Network.Disconnect()
@@ -1319,8 +1335,8 @@ class AbstractNode():
 			self.Connector.Disconnect()
 		
 		# TODO - Don't think we need this event.
-		self.ExitEvent.wait()
-		if self.IsLocalSocketRunning is True:
+		# self.ExitEvent.wait()
+		if self.IsListenerEnabled is True:
 			self.ExitLocalServerEvent.wait()
 	
 	def Stop (self):

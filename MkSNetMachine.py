@@ -27,11 +27,15 @@ class Network ():
 		self.DeviceUUID   	= ""
 		self.Type 		  	= 0
 		self.State 			= "DISCONN"
+		self.Logger 		= None
 
 		self.OnConnectionCallback 		= None
 		self.OnDataArrivedCallback 		= None
 		self.OnErrorCallback 			= None
 		self.OnConnectionClosedCallback = None
+
+	def SetLogger(self, logger):
+		self.Logger = logger
 
 	def GetNetworkState(self):
 		return self.State
@@ -82,7 +86,8 @@ class Network ():
 	def WSConnection_OnError_Handler (self, ws, error):
 		if self.OnErrorCallback is not None:
 			self.OnErrorCallback()
-		print ("(MkSNetwork)# " + error)
+		self.Logger.info("({classname})# {0}".format(error,classname=self.ClassName))
+		print ("({classname})# {0}".format(error,classname=self.ClassName))
 
 	def WSConnection_OnClose_Handler (self, ws):
 		self.State = "DISCONN"
@@ -95,7 +100,8 @@ class Network ():
 			self.OnConnectionCallback()
 
 	def NodeWebfaceSocket_Thread (self):
-		print("(MkSNetwork)# Connect Gateway ({url})...".format(url=self.WSServerUri))
+		self.Logger.info("({classname})# Connect Gateway ({url})...".format(url=self.WSServerUri,classname=self.ClassName))
+		print("({classname})# Connect Gateway ({url})...".format(url=self.WSServerUri,classname=self.ClassName))
 		self.WSConnection.keep_running = True
 		self.WSConnection.run_forever()
 
@@ -142,11 +148,11 @@ class Network ():
 	def SendWebSocket(self, packet):
 		try:
 			if packet is not "" and packet is not None:
-				print ("({classname})# Node -> Gateway".format(
-						classname=self.ClassName))
+				self.Logger.info("({classname})# Node -> Gateway".format(classname=self.ClassName))
 				self.WSConnection.send(packet)
 			else:
-				print ("(MkSNetwork)# Sending packet to Gateway FAILED")
+				self.Logger.info("({classname})# Sending packet to Gateway FAILED".format(classname=self.ClassName))
+				print ("({classname})# Sending packet to Gateway FAILED".format(classname=self.ClassName))
 		except:
 			return False
 		
