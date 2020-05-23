@@ -101,7 +101,8 @@ class SlaveNode(MkSAbstractNode.AbstractNode):
 			if self.MasterSocket is None:
 				pass
 			else:
-				self.MasterSocket.send(packet)
+				self.AppendTXRequest(self.MasterSocket, packet)
+				#self.MasterSocket.send(packet)
 		else:
 			self.SetState("CONNECT_MASTER")
 
@@ -131,7 +132,8 @@ class SlaveNode(MkSAbstractNode.AbstractNode):
 				if self.MasterSocket is None:
 					pass
 				else:
-					self.MasterSocket.send(packet)
+					self.AppendTXRequest(self.MasterSocket, packet)
+					#self.MasterSocket.send(packet)
 				self.MasterInformationTries += 1
 
 	def StateGetPort(self):
@@ -142,7 +144,8 @@ class SlaveNode(MkSAbstractNode.AbstractNode):
 		if self.MasterSocket is None:
 			pass
 		else:
-			self.MasterSocket.send(packet)
+			self.AppendTXRequest(self.MasterSocket, packet)
+			#self.MasterSocket.send(packet)
 		self.SetState("WAIT_FOR_PORT")
 	
 	def StateFindPortManualy(self):
@@ -239,7 +242,8 @@ class SlaveNode(MkSAbstractNode.AbstractNode):
 			pass
 			# TODO - Send over local websocket
 		else:
-			self.MasterSocket.send(packet)
+			self.AppendTXRequest(self.MasterSocket, packet)
+			#self.MasterSocket.send(packet)
 
 	def EmitOnNodeChange(self, data):
 		# print ("({classname})# Emit onNodeChange event ...".format(classname=self.ClassName))
@@ -256,7 +260,8 @@ class SlaveNode(MkSAbstractNode.AbstractNode):
 				if self.MasterSocket is None:
 					pass
 				else:
-					self.MasterSocket.send(packet)
+					self.AppendTXRequest(self.MasterSocket, packet)
+					#self.MasterSocket.send(packet)
 			# Webface
 			elif item_type == 2:
 				if payload["pipe"] == "GATEWAY":
@@ -270,7 +275,8 @@ class SlaveNode(MkSAbstractNode.AbstractNode):
 					if self.MasterSocket is None:
 						pass
 					else:
-						self.MasterSocket.send(packet)
+						self.AppendTXRequest(self.MasterSocket, packet)
+						#self.MasterSocket.send(packet)
 				elif payload["pipe"] == "LOCAL_WS":
 					ws_id = payload["ws_id"]
 					message = self.BasicProtocol.BuildRequest("DIRECT", "WEBFACE", self.UUID, "on_node_change", data, {
@@ -288,7 +294,8 @@ class SlaveNode(MkSAbstractNode.AbstractNode):
 			pass
 		else:
 			print ("({classname})# Sending ping request ...".format(classname=self.ClassName))
-			self.MasterSocket.send(packet)
+			self.AppendTXRequest(self.MasterSocket, packet)
+			#self.MasterSocket.send(packet)
 	
 	def PreUILoaderHandler(self):
 		print ("({classname})# PreUILoaderHandler ...".format(classname=self.ClassName))
@@ -299,7 +306,7 @@ class SlaveNode(MkSAbstractNode.AbstractNode):
 		self.UI.AddEndpoint("/get/node_config/<key>",		"get_node_config",	self.GetNodeConfigHandler)
 	
 	def NodeDisconnectHandler(self, sock):
-		print ("({classname})# NodeDisconnectHandler ...".format(classname=self.ClassName))
+		print ("({classname})# [NodeDisconnectHandler]".format(classname=self.ClassName))
 		# Check if disconneced connection is a master.
 		for node in self.MasterNodesList:
 			if sock == node.Socket:
@@ -360,7 +367,8 @@ class SlaveNode(MkSAbstractNode.AbstractNode):
 		if self.MasterSocket is None:
 			pass
 		else:
-			self.MasterSocket.send(msg)
+			self.AppendTXRequest(self.MasterSocket, packet)
+			#self.MasterSocket.send(msg)
 	
 	def GetListOfNodeFromGateway(self):
 		print ("[SlaveNode] GetListOfNodeFromGateway")
@@ -368,7 +376,8 @@ class SlaveNode(MkSAbstractNode.AbstractNode):
 		if self.MasterSocket is None:
 			pass
 		else:
-			self.MasterSocket.send(payload)
+			self.AppendTXRequest(self.MasterSocket, packet)
+			#self.MasterSocket.send(payload)
 	
 	# TODO - NO master change.
 	def GetNodeInfo(self, uuid):
@@ -377,7 +386,8 @@ class SlaveNode(MkSAbstractNode.AbstractNode):
 		if self.MasterSocket is None:
 			pass
 		else:
-			self.MasterSocket.send(payload)
+			self.AppendTXRequest(self.MasterSocket, packet)
+			#self.MasterSocket.send(payload)
 
 	def CleanMasterList(self):
 		for node in self.MasterNodesList:
@@ -396,12 +406,13 @@ class SlaveNode(MkSAbstractNode.AbstractNode):
 	def NodeMasterAvailable(self, sock):
 		print ("NodeMasterAvailable")
 		# Append new master to the list
-		conn = self.GetConnection(sock)
+		conn = self.GetNodeBySock(sock)
 		# TODO - Check if we don't have this connection already
 		self.MasterNodesList.append(conn)
 		# Get Master slave nodes.
 		packet = self.CommandsGetLocalNodes()
-		sock.send(packet)
+		self.AppendTXRequest(sock, packet)
+		#sock.send(packet)
 
 	def GetLocalNodeResponseHandler(self, sock, packet):
 		pass
@@ -423,5 +434,6 @@ class SlaveNode(MkSAbstractNode.AbstractNode):
 		if self.OnExitCallback is not None:
 			self.OnExitCallback()
 			packet = self.Commands.ExitResponse("OK")
-			sock.send(packet)
+			self.AppendTXRequest(sock, packet)
+			#sock.send(packet)
 			

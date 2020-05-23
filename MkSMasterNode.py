@@ -9,10 +9,7 @@ else:
 	import _thread
 import threading
 import socket
-import subprocess
-from subprocess import call
-import urllib2
-import urllib
+import Queue
 
 from flask import Flask, render_template, jsonify, Response, request
 import logging
@@ -60,6 +57,13 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 		self.IsMaster 							= True
 		self.InstalledApps 						= None
 		self.IsLocalUIEnabled					= False
+		# Queue
+		self.GatewayRXQueueLock      	    	= threading.Lock()
+		self.GatewayRXQueue						= Queue.Queue()
+		self.GatewayRXWorkerRunning 			= False
+		self.GatewayTXQueueLock      	    	= threading.Lock()
+		self.GatewayTXQueue						= Queue.Queue()
+		self.GatewayTXWorkerRunning 			= False
 		# Debug & Logging
 		self.EnableLog							= True
 		self.DebugMode							= True
@@ -106,22 +110,13 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 			formatter = logging.Formatter('%(asctime)s - %(message)s')
 			hndl.setFormatter(formatter)
 			self.Logger.addHandler(hndl)
-
-	#
-	# ###### MASTER NODE INITIATE ->
-	#
+		
+		thread.start_new_thread(self.GatewayRXQueueWorker, ())
+		thread.start_new_thread(self.GatewayTXQueueWorker, ())
 
 	def Initiate(self):
 		print("TODO - (MkSMasterNode.MasterNode) Who stops PipeStdoutListener_Thread thread?")
 		thread.start_new_thread(self.PipeStdoutListener_Thread, ())
-
-	#
-	# ###### MASTER NODE INITIATE <-
-	#
-
-	#
-	# ###### MASTER NODE STATES ->
-	#
 
 	def StateIdle (self):
 		self.LogMSG("(Master Node)# Note, in IDLE state ...")
@@ -185,14 +180,6 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 			
 		if 0 == self.Ticker % 60:
 			self.SendGatewayPing()
-	
-	#
-	# ###### MASTER NODE STATES <-
-	#
-	
-	#
-	# ###### MASTER NODE GATAWAY CALLBACKS ->
-	#
 
 	def WebSocketConnectedCallback (self):
 		self.SetState("WORKING")
@@ -204,77 +191,82 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 		if self.GatewayConnectionClosedCallback is not None:
 			self.GatewayConnectionClosedCallback()
 		self.NetworkAccessTickLock.acquire()
-		try:
-			self.AccessTick = 0
-		finally:
-			self.NetworkAccessTickLock.release()
+		self.AccessTick = 0
+		self.NetworkAccessTickLock.release()
 		self.SetState("ACCESS_GATEWAY")
 
 	# TODO - Must be dealt with different thread (we must have thread poll)
 	def WebSocketDataArrivedCallback (self, packet):
-		self.NetworkAccessTickLock.acquire()
+		self.GatewayRXQueueLock.acquire()
 		try:
 			self.SetState("WORKING")
-			messageType = self.BasicProtocol.GetMessageTypeFromJson(packet)
-			direction 	= self.BasicProtocol.GetDirectionFromJson(packet)
-			destination = self.BasicProtocol.GetDestinationFromJson(packet)
-			source 		= self.BasicProtocol.GetSourceFromJson(packet)
-			command 	= self.BasicProtocol.GetCommandFromJson(packet)
-
-			packet["additional"]["client_type"] = "global_ws"
-
-			self.LogMSG("({classname})# WS [{direction}] {source} -> {dest} [{cmd}]".format(
-						classname=self.ClassName,
-						direction=direction,
-						source=source,
-						dest=destination,
-						cmd=command))
-			
-			if messageType == "BROADCAST":
-				pass
-		
-			if destination in source:
-				self.NetworkAccessTickLock.release()
-				return
-
-			# Is this packet for me?
-			if destination in self.UUID:
-				if messageType == "CUSTOM":
-					self.NetworkAccessTickLock.release()
-					return
-				elif messageType in ["DIRECT", "PRIVATE", "WEBFACE"]:
-					if command in self.NodeRequestHandlers.keys():
-						message = self.NodeRequestHandlers[command](None, packet)
-						self.Network.SendWebSocket(message)
-					else:
-						if self.GatewayDataArrivedCallback is not None:
-							self.GatewayDataArrivedCallback(None, packet)
-				else:
-					self.LogMSG("({classname})# [Websocket INBOUND] ERROR - Not support {0} request type.".format(messageType, classname=self.ClassName))
-			else:
-				self.LogMSG("(Master Node)# Not mine ... Sending to slave ... " + destination)
-				# Find who has this destination adderes.
-				self.HandleExternalRequest(packet)
+			self.GatewayRXQueue.put(packet)
 		except Exception as e:
 			self.LogMSG("({classname})# WebSocket Error - Data arrived issue\nPACKET#\n{0}\n(EXEPTION)# {error}".format(
 						packet,
 						classname=self.ClassName,
 						error=str(e)))
-		self.NetworkAccessTickLock.release()
+		self.GatewayRXQueueLock.release()
+	
+	def GatewayRXQueueWorker(self):
+		self.GatewayRXWorkerRunning = True
+		while self.GatewayRXWorkerRunning is True:
+			try:
+				packet 		= self.GatewayRXQueue.get(block=True,timeout=None)
+				messageType = self.BasicProtocol.GetMessageTypeFromJson(packet)
+				direction 	= self.BasicProtocol.GetDirectionFromJson(packet)
+				destination = self.BasicProtocol.GetDestinationFromJson(packet)
+				source 		= self.BasicProtocol.GetSourceFromJson(packet)
+				command 	= self.BasicProtocol.GetCommandFromJson(packet)
+
+				packet["additional"]["client_type"] = "global_ws"
+
+				self.LogMSG("({classname})# WS [{direction}] {source} -> {dest} [{cmd}]".format(
+							classname=self.ClassName,
+							direction=direction,
+							source=source,
+							dest=destination,
+							cmd=command))
+				
+				if messageType == "BROADCAST":
+					pass
+			
+				if destination in source:
+					return
+
+				# Is this packet for me?
+				if destination in self.UUID:
+					if messageType == "CUSTOM":
+						return
+					elif messageType in ["DIRECT", "PRIVATE", "WEBFACE"]:
+						if command in self.NodeRequestHandlers.keys():
+							message = self.NodeRequestHandlers[command](None, packet)
+							self.SendPacketGateway(message)
+						else:
+							if self.GatewayDataArrivedCallback is not None:
+								self.GatewayDataArrivedCallback(None, packet)
+					else:
+						self.LogMSG("({classname})# [Websocket INBOUND] ERROR - Not support {0} request type.".format(messageType, classname=self.ClassName))
+				else:
+					self.LogMSG("(Master Node)# Not mine ... Sending to slave ... " + destination)
+					# Find who has this destination adderes.
+					self.HandleExternalRequest(packet)
+			except Exception as e:
+				print ("({classname})# [ERROR] (GatewayRXQueueWorker) {0}".format(str(e), classname=self.ClassName))
+	
+	def GatewayTXQueueWorker(self):
+		self.GatewayTXWorkerRunning = True
+		while self.GatewayTXWorkerRunning is True:
+			packet = self.GatewayTXQueue.get(block=True,timeout=None)
+			self.Network.SendWebSocket(packet)
 	
 	def WebSocketErrorCallback (self):
 		self.LogMSG("(Master Node)# ERROR - Gateway socket error")
 		# TODO - Send callback "OnWSError"
 		self.NetworkAccessTickLock.acquire()
-		try:
-			self.AccessTick = 0
-		finally:
-			self.NetworkAccessTickLock.release()
+		self.AccessTick = 0
+		self.NetworkAccessTickLock.release()
 		self.SetState("ACCESS_WAIT_GATEWAY")
-	
-	#
-	# ###### MASTER NODE GATAWAY CALLBACKS <-
-	#
 
 	# Master as proxy server.
 	def HandleExternalRequest(self, packet):
@@ -319,7 +311,7 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 
 		# Do we have available port.
 		if self.PortsForClients:
-			node = self.GetConnection(sock)
+			node = self.GetNodeBySock(sock)
 			existingSlave = None
 			for slave in self.LocalSlaveList:
 				if slave.UUID == node.UUID:
@@ -355,14 +347,16 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 								} 
 							}
 				message = self.Network.BasicProtocol.BuildRequest("MASTER", "GATEWAY", self.UUID, "node_connected", payload, {})
-				self.Network.SendWebSocket(message)
+				self.SendPacketGateway(message)
 
 				# Send message (master_append_node) to all nodes.
-				for client in self.Connections:
-					if client.Socket != self.ServerSocket:
-						message = self.Network.BasicProtocol.BuildMessage("response", "DIRECT", client.UUID, self.UUID, "master_append_node", node_info, {})
+				for key in self.OpenConnections:
+					node = self.OpenConnections[key]
+					if node.Socket != self.ServerSocket:
+						message = self.Network.BasicProtocol.BuildMessage("response", "DIRECT", node.UUID, self.UUID, "master_append_node", node_info, {})
 						message = self.Network.BasicProtocol.AppendMagic(message)
-						client.Socket.send(message)
+						self.SendNodePacket(node.IP, node.Port, message)
+						#node.Socket.send(message)
 				
 				# Store UUID if it is a service
 				if nodetype == 101:
@@ -392,9 +386,10 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 							} 
 						}
 			message = self.Network.BasicProtocol.BuildRequest("MASTER", "GATEWAY", self.UUID, "node_disconnected", payload, {})
-			self.Network.SendWebSocket(message)
+			self.SendPacketGateway(message)
 
-	def NodeDisconnectHandler(self, sock):		
+	def NodeDisconnectHandler(self, sock):
+		print ("({classname})# [NodeDisconnectHandler]".format(classname=self.ClassName))
 		for slave in self.LocalSlaveList:
 			if slave.Socket == sock:
 				self.PortsForClients.append(slave.Port - 10000)
@@ -421,16 +416,17 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 								} 
 							}
 				message = self.Network.BasicProtocol.BuildRequest("MASTER", "GATEWAY", self.UUID, "node_disconnected", payload, {})
-				self.Network.SendWebSocket(message)
+				self.SendPacketGateway(message)
 
 				# Send message (master_remove_node) to all nodes.
-				for client in self.Connections:
-					if client.Socket == self.ServerSocket or client.Socket == sock:
+				for key in self.OpenConnections:
+					node = self.OpenConnections[key]
+					if node.Socket == self.ServerSocket or node.Socket == sock:
 						pass
 					else:
-						message = self.Network.BasicProtocol.BuildMessage("response", "DIRECT", client.UUID, self.UUID, "master_remove_node", slave.Info, {})
+						message = self.Network.BasicProtocol.BuildMessage("response", "DIRECT", node.UUID, self.UUID, "master_remove_node", slave.Info, {})
 						message = self.Network.BasicProtocol.AppendMagic(message)
-						client.Socket.send(message)
+						self.SendNodePacket(node.IP, node.Port, message)
 
 				self.LocalSlaveList.remove(slave)
 				continue
@@ -466,17 +462,25 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 	def SendGatewayPing(self):
 		# Send request
 		message = self.BasicProtocol.BuildRequest("DIRECT", "GATEWAY", self.UUID, "ping", self.NodeInfo, {})
-		self.Network.SendWebSocket(message)
-	#
-	# ##################################################################################################
-	#
+		self.SendPacketGateway(message)
+
+	def SendPacketGateway(self, packet):
+		self.GatewayTXQueueLock.acquire()
+		try:
+			self.GatewayTXQueue.put(packet)
+		except Exception as e:
+			self.LogMSG("({classname})# ERROR - [SendPacketGateway]\nPACKET#\n{0}\n(EXEPTION)# {error}".format(
+						packet,
+						classname=self.ClassName,
+						error=str(e)))
+		self.GatewayTXQueueLock.release()
 
 	def SendRequest(self, uuid, msg_type, command, payload, additional):
 		# Generate request
 		message = self.Network.BasicProtocol.BuildRequest(msg_type, uuid, self.UUID, command, payload, additional)
 		# TODO - Check if we need to send it via Gateway
 		# Send message
-		self.Network.SendWebSocket(message)
+		self.SendPacketGateway(message)
 
 	def GatewayConnectedEvent(self):
 		self.LogMSG("(Master Node)# Connection to Gateway established ...")
@@ -493,17 +497,13 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 							} 
 						}
 			message = self.Network.BasicProtocol.BuildRequest("MASTER", "GATEWAY", self.UUID, "node_connected", payload, {})
-			self.Network.SendWebSocket(message)
+			self.SendPacketGateway(message)
 		
 	def GetSlaveNode(self, uuid):
 		for item in self.LocalSlaveList:
 			if item.UUID == uuid:
 				return item
 		return None
-	
-	#
-	# ##################################################################################################
-	#
 
 	#
 	# ################################ Under Refactoring ###############################################
