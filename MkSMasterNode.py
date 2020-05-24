@@ -208,6 +208,14 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 						error=str(e)))
 		self.GatewayRXQueueLock.release()
 	
+	def WebSocketErrorCallback (self):
+		self.LogMSG("(Master Node)# ERROR - Gateway socket error")
+		# TODO - Send callback "OnWSError"
+		self.NetworkAccessTickLock.acquire()
+		self.AccessTick = 0
+		self.NetworkAccessTickLock.release()
+		self.SetState("ACCESS_WAIT_GATEWAY")
+	
 	def GatewayRXQueueWorker(self):
 		self.GatewayRXWorkerRunning = True
 		while self.GatewayRXWorkerRunning is True:
@@ -244,7 +252,8 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 							self.SendPacketGateway(message)
 						else:
 							if self.GatewayDataArrivedCallback is not None:
-								self.GatewayDataArrivedCallback(None, packet)
+								message = self.GatewayDataArrivedCallback(None, packet)
+								self.SendPacketGateway(message)
 					else:
 						self.LogMSG("({classname})# [Websocket INBOUND] ERROR - Not support {0} request type.".format(messageType, classname=self.ClassName))
 				else:
@@ -260,14 +269,6 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 			packet = self.GatewayTXQueue.get(block=True,timeout=None)
 			self.Network.SendWebSocket(packet)
 	
-	def WebSocketErrorCallback (self):
-		self.LogMSG("(Master Node)# ERROR - Gateway socket error")
-		# TODO - Send callback "OnWSError"
-		self.NetworkAccessTickLock.acquire()
-		self.AccessTick = 0
-		self.NetworkAccessTickLock.release()
-		self.SetState("ACCESS_WAIT_GATEWAY")
-
 	# Master as proxy server.
 	def HandleExternalRequest(self, packet):
 		self.LogMSG("({classname})# External request (PROXY)".format(classname=self.ClassName))
@@ -322,7 +323,7 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 				port = 10000 + self.PortsForClients.pop()
 				# Update node
 				node.Type = nodetype
-				node.Port = port
+				node.ListenerPort = port
 				node.UUID = uuid
 				node.SetNodeName(name)
 				node.Info = node_info
@@ -330,9 +331,9 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 				# Update installed node list (UI will be updated)
 				for item in self.InstalledNodes:
 					if item.UUID == node.UUID:
-						item.IP 	= node.IP
-						item.Port 	= node.Port
-						item.Status = "Running"
+						item.IP 			= node.IP
+						item.ListenerPort 	= node.ListenerPort
+						item.Status 		= "Running"
 
 				self.LocalSlaveList.append(node)
 				# TODO - What will happen when slave node will try to get port when we are not connected to AWS?
@@ -370,7 +371,7 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 				return self.Network.BasicProtocol.BuildResponse(packet, { 'port': port })
 			else:
 				# Already assigned port (resending)
-				return self.Network.BasicProtocol.BuildResponse(packet, { 'port': node.Port })
+				return self.Network.BasicProtocol.BuildResponse(packet, { 'port': node.ListenerPort })
 		else:
 			# No available ports
 			return self.Network.BasicProtocol.BuildResponse(packet, { 'port': 0 })
@@ -380,7 +381,7 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 			payload = 	{ 
 							'node': { 	
 								'ip':	str(slave.IP), 
-								'port':	slave.Port, 
+								'port':	slave.ListenerPort, 
 								'uuid':	slave.UUID, 
 								'type':	slave.Type
 							} 
@@ -392,7 +393,7 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 		print ("({classname})# [NodeDisconnectHandler]".format(classname=self.ClassName))
 		for slave in self.LocalSlaveList:
 			if slave.Socket == sock:
-				self.PortsForClients.append(slave.Port - 10000)
+				self.PortsForClients.append(slave.ListenerPort - 10000)
 
 				self.LogMSG("({classname})# Slave ({name}) {uuid} has disconnected".format(
 						classname=self.ClassName,
@@ -403,14 +404,14 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 				for item in self.InstalledNodes:
 					if item.UUID == slave.UUID:
 						item.IP 	= ""
-						item.Port 	= 0
+						item.ListenerPort 	= 0
 						item.Status = "Stopped"
 				
 				# Send message to Gateway
 				payload = 	{ 
 								'node': { 	
 									'ip':	str(slave.IP), 
-									'port':	slave.Port, 
+									'port':	slave.ListenerPort, 
 									'uuid':	slave.UUID, 
 									'type':	slave.Type
 								} 
@@ -437,7 +438,7 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 			for node in self.LocalSlaveList:
 				nodes.append({
 					'ip': str(node.IP),
-					'port': str(node.Port),
+					'port': str(node.ListenerPort),
 					'uuid': node.UUID,
 					'type': str(node.Type)
 				})

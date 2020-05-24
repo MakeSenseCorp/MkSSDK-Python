@@ -178,7 +178,7 @@ class StandaloneNode(MkSAbstractNode.AbstractNode):
 				elif messageType in ["DIRECT", "PRIVATE", "WEBFACE"]:
 					if command in self.NodeRequestHandlers.keys():
 						message = self.NodeRequestHandlers[command](None, packet)
-						self.Network.SendWebSocket(message)
+						self.SendPacketGateway(message)
 					else:
 						if self.GatewayDataArrivedCallback is not None:
 							self.GatewayDataArrivedCallback(None, packet)
@@ -212,7 +212,7 @@ class StandaloneNode(MkSAbstractNode.AbstractNode):
 		# Generate request
 		message = self.Network.BasicProtocol.BuildRequest(msg_type, uuid, self.UUID, command, payload, additional)
 		# Send message
-		self.Network.SendWebSocket(message)
+		self.SendPacketGateway(message)
 
 	def GetNodeStatusResponseHandler(self, sock, packet):
 		if self.OnApplicationResponseCallback is not None:

@@ -190,7 +190,7 @@ class SlaveNode(MkSAbstractNode.AbstractNode):
 			self.SendGatewayPing()
 
 	def StateExit(self):
-		self.Exit()
+		self.Exit("Exit state initiated")
 
 	#
 	# ###### SLAVE NODE STATES <-

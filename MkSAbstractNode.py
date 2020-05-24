@@ -23,18 +23,19 @@ from mksdk import MkSSecurity
 import hashlib
 class LocalNode():
 	def __init__(self, ip, port, uuid, node_type, sock):
-		self.IP 		= ip
-		self.Port 		= port
-		self.UUID 		= uuid
-		self.Socket 	= sock
-		self.Type 		= node_type
-		self.Name 		= ""
-		self.LocalType 	= "UNKNOWN"
-		self.Status 	= "Stopped"
-		self.Obj 		= None
-		self.Info 		= None
-		self.Timestamp  = 0
-		self.HASH 		= ""
+		self.IP 			= ip
+		self.Port 			= port
+		self.ListenerPort	= 0			# This port will be assigned by Master
+		self.UUID 			= uuid
+		self.Socket 		= sock
+		self.Type 			= node_type
+		self.Name 			= ""
+		self.LocalType 		= "UNKNOWN"
+		self.Status 		= "Stopped"
+		self.Obj 			= None
+		self.Info 			= None
+		self.Timestamp  	= 0
+		self.HASH 			= ""		# MD5 hash of ip and port
 	
 	def SetNodeName(self, name):
 		self.Name = name
@@ -650,12 +651,12 @@ class AbstractNode():
 
 		if (strSystemJson is None or len(strSystemJson) == 0):
 			self.LogMSG("({classname})# ERROR - Cannot find system.json file.".format(classname=self.ClassName))
-			self.Exit()
+			self.Exit("ERROR - Cannot find system.json file")
 			return False
 
 		if (strMachineJson is None or len(strMachineJson) == 0):
 			self.LogMSG("({classname})# ERROR - Cannot find config.json file.".format(classname=self.ClassName))
-			self.Exit()
+			self.Exit("ERROR - Cannot find config.json file")
 			return False
 		
 		try:
@@ -704,7 +705,7 @@ class AbstractNode():
 			self.BasicProtocol.SetKey(self.Key)
 		except Exception as e:
 			self.LogMSG("({classname})# ERROR - Wrong configuration format\n(EXEPTION)# {error}".format(error=str(e),classname=self.ClassName))
-			self.Exit()
+			self.Exit("ERROR - Wrong configuration format")
 			return False
 		
 		print("# TODO - Do we need this DeviceInfo?")
@@ -885,7 +886,8 @@ class AbstractNode():
 				# This massage is external (MOSTLY MASTER)
 				try:
 					if self.Network is not None:
-						self.Network.SendWebSocket(data)
+						self.LogMSG("({classname})# This massage is external (MOSTLY MASTER)".format(classname=self.ClassName))
+						self.SendPacketGateway(data)
 				except Exception as e:
 					self.LogMSG("({classname})# ERROR - [#5]\n(EXEPTION)# {error}".format(error=str(e),classname=self.ClassName))
 		except Exception as e:
@@ -922,6 +924,7 @@ class AbstractNode():
 		while self.LocalServerRXWorkerRunning is True:
 			try:
 				item = self.LocalServerRXQueue.get(block=True,timeout=None)
+
 				self.RXHandlerMethod[item["type"]](item["data"])
 			except Exception as e:
 				self.LogMSG("({classname})# ERROR - [LocalServerRXQueueWorker]\nPACKET#\n{0}\n(EXEPTION)# {error}".format(
@@ -948,6 +951,7 @@ class AbstractNode():
 		while self.LocalServerTXWorkerRunning is True:
 			try:
 				item = self.LocalServerTXQueue.get(block=True,timeout=None)
+				self.LogMSG("({classname})# [LocalServerTXQueueWorker] - Queue size {0}".format(self.LocalServerTXQueue.qsize(),classname=self.ClassName))
 				if item["sock"] is not None:
 					self.LogMSG("({classname})# [LocalServerTXQueueWorker] - SEND".format(classname=self.ClassName))
 					item["sock"].send(item["packet"])
@@ -1056,6 +1060,12 @@ class AbstractNode():
 			except Exception as e:
 				self.LogMSG("({classname})# ERROR - Local socket listener\n(EXEPTION)# {error}".format(error=str(e),classname=self.ClassName))
 
+		# Stop TX/RX Queue Workers
+		self.LogMSG("({classname})# [NodeLocalNetworkConectionListener] Stop TX/RX Queue Workers".format(classname=self.ClassName))
+		self.LocalServerTXWorkerRunning = False
+		self.LocalServerRXWorkerRunning = False
+		time.sleep(1)
+		self.LogMSG("({classname})# [NodeLocalNetworkConectionListener] Clean all coinnection to this server".format(classname=self.ClassName))
 		# Clean all resorses before exit.
 		self.RemoveConnectionBySock(self.ServerSocket)
 		self.CleanAllSockets()
@@ -1076,6 +1086,8 @@ class AbstractNode():
 		# Append to list of all connections.
 		node = LocalNode(ip, port, "", "", sock)
 		hash_key = node.GetHash()
+		key = self.Security.GetMD5Hash("{0}_{1}".format(ip,str(port)))
+		self.LogMSG("({classname})# [AppendConnection] {0} {1} {2} {3}".format(ip,str(port),hash_key,key,classname=self.ClassName))
 		self.OpenConnections[hash_key] 	= node
 		self.SockToHASHMap[sock] 		= hash_key
 		# Increment socket counter.
@@ -1088,23 +1100,26 @@ class AbstractNode():
 	'''
 	def RemoveConnectionByHASH(self, hash_key):
 		self.LogMSG("({classname})# [RemoveConnectionByHASH]".format(classname=self.ClassName))
-		node = self.OpenConnections[hash_key]
-		if node is None:
-			return False
-		
-		# Remove socket from list.
-		if node.Socket in self.RecievingSockets:
-			self.RecievingSockets.remove(node.Socket)
-		# Close connection.
-		if node.Socket is not None:
-			del self.SockToHASHMap[node.Socket]
-			# Send close request before closing. (TODO)
-			node.Socket.close()
-		# Remove LocalNode from the list.
-		del self.OpenConnections[hash_key]
-		# Deduce socket counter.
-		self.OpenSocketsCounter -= self.OpenSocketsCounter
-		return True
+		if hash_key in self.OpenConnections:
+			node = self.OpenConnections[hash_key]
+			if node is None:
+				return False
+			
+			self.LogMSG("({classname})# [RemoveConnectionByHASH] {0}, {1}, {2}".format(node.UUID,node.IP,node.Port,classname=self.ClassName))
+			# Remove socket from list.
+			if node.Socket in self.RecievingSockets:
+				self.RecievingSockets.remove(node.Socket)
+			# Close connection.
+			if node.Socket is not None:
+				del self.SockToHASHMap[node.Socket]
+				# Send close request before closing. (TODO)
+				node.Socket.close()
+			# Remove LocalNode from the list.
+			del self.OpenConnections[hash_key]
+			# Deduce socket counter.
+			self.OpenSocketsCounter -= self.OpenSocketsCounter
+			return True
+		return False
 	
 	''' 
 		Description: 	Remove socket connection and close socket.
@@ -1207,12 +1222,14 @@ class AbstractNode():
 		self.LogMSG("({classname})# [DisconnectNode]".format(classname=self.ClassName))
 		try:
 			hash_key = self.Security.GetMD5Hash("{0}_{1}".format(ip,str(port)))
-			node = self.OpenConnections[hash_key]
-			self.NodeDisconnectHandler(node.Socket)
-			# Raise event for user
-			if self.OnTerminateConnectionCallback is not None:
-				self.OnTerminateConnectionCallback(node.Socket)
-			self.RemoveConnectionByHASH(hash_key)
+			if hash_key in self.OpenConnections:
+				node = self.OpenConnections[hash_key]
+				if node is not None:
+					self.NodeDisconnectHandler(node.Socket)
+					# Raise event for user
+					if self.OnTerminateConnectionCallback is not None:
+						self.OnTerminateConnectionCallback(node.Socket)
+					self.RemoveConnectionByHASH(hash_key)
 		except:
 			return False
 		return True
@@ -1276,10 +1293,14 @@ class AbstractNode():
 		Return: 		None.
 	'''
 	def CleanAllSockets(self):
+		self.LogMSG("({classname})# [CleanAllSockets]".format(classname=self.ClassName))
 		while len(self.OpenConnections) > 0:
 			node = self.OpenConnections.values()[0]
-			self.DisconnectNode(node.IP, node.Port)
-		
+			self.LogMSG("({classname})# [CleanAllSockets] {0}, {1}, {2}, {3}, {4}".format(len(self.OpenConnections),node.HASH,node.UUID,node.IP,node.Port,classname=self.ClassName))
+			status = self.DisconnectNode(node.IP, node.Port)
+			if status is False:
+				del self.OpenConnections.values()[0]
+
 		self.LogMSG("({classname})# [CleanAllSockets] All sockets where released ({0})".format(len(self.OpenConnections),classname=self.ClassName))
 	
 	def LogMSG(self, msg):
@@ -1371,9 +1392,10 @@ class AbstractNode():
 				if self.IsLocalUIEnabled is True:
 					# This check is for client nodes
 					if (self.Type not in [1, 2]):
-						if self.LocalWSManager.IsServerRunnig() is False and self.MasterSocket is None:
-							self.LogMSG("({classname})# Exiting main thread ... ({0}, {1}) ...".format(self.LocalWSManager.IsServerRunnig(), self.MasterSocket, classname=self.ClassName))
-							self.Exit()
+						if self.LocalWSManager is not None:
+							if self.LocalWSManager.IsServerRunnig() is False and self.MasterSocket is None:
+								self.LogMSG("({classname})# Exiting main thread ... ({0}, {1}) ...".format(self.LocalWSManager.IsServerRunnig(), self.MasterSocket, classname=self.ClassName))
+								self.Exit("Exiting main thread")
 
 			self.Ticker += 1
 			time.sleep(0.5)
@@ -1392,13 +1414,13 @@ class AbstractNode():
 		if self.IsListenerEnabled is True:
 			self.ExitLocalServerEvent.wait()
 	
-	def Stop (self):
-		self.LogMSG("({classname})# Stop Node ...".format(classname=self.ClassName))
+	def Stop (self, reason):
+		self.LogMSG("({classname})# Stop Node ... ({0})".format(reason,classname=self.ClassName))
 		self.IsMainNodeRunnig 		= False
 		self.IsLocalSocketRunning 	= False
 	
 	def Pause (self):
 		pass
 	
-	def Exit (self):
-		self.Stop()
+	def Exit (self, reason):
+		self.Stop(reason)

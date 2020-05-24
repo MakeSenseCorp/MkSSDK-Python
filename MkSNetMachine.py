@@ -108,6 +108,7 @@ class Network ():
 	def Disconnect(self):
 		self.WSConnection.keep_running = False
 		time.sleep(1)
+		self.Logger.info("({classname})# Close WebSocket Connection ...".format(classname=self.ClassName))
 
 	def AccessGateway (self, key, payload):
 		# Set user key, commub=nication with applications will be based on key.
