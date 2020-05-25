@@ -86,7 +86,7 @@ class Network ():
 	def WSConnection_OnError_Handler (self, ws, error):
 		if self.OnErrorCallback is not None:
 			self.OnErrorCallback()
-		self.Logger.info("({classname})# {0}".format(error,classname=self.ClassName))
+		self.Logger.Log("({classname})# {0}".format(error,classname=self.ClassName))
 		print ("({classname})# {0}".format(error,classname=self.ClassName))
 
 	def WSConnection_OnClose_Handler (self, ws):
@@ -100,15 +100,16 @@ class Network ():
 			self.OnConnectionCallback()
 
 	def NodeWebfaceSocket_Thread (self):
-		self.Logger.info("({classname})# Connect Gateway ({url})...".format(url=self.WSServerUri,classname=self.ClassName))
+		self.Logger.Log("({classname})# Connect Gateway ({url})...".format(url=self.WSServerUri,classname=self.ClassName))
 		print("({classname})# Connect Gateway ({url})...".format(url=self.WSServerUri,classname=self.ClassName))
 		self.WSConnection.keep_running = True
 		self.WSConnection.run_forever()
+		self.Logger.Log("({classname})# Gateway Disconnected ({url})...".format(url=self.WSServerUri,classname=self.ClassName))
 
 	def Disconnect(self):
+		self.Logger.Log("({classname})# Close WebSocket Connection ...".format(classname=self.ClassName))
 		self.WSConnection.keep_running = False
 		time.sleep(1)
-		self.Logger.info("({classname})# Close WebSocket Connection ...".format(classname=self.ClassName))
 
 	def AccessGateway (self, key, payload):
 		# Set user key, commub=nication with applications will be based on key.
@@ -149,12 +150,13 @@ class Network ():
 	def SendWebSocket(self, packet):
 		try:
 			if packet is not "" and packet is not None:
-				self.Logger.info("({classname})# Node -> Gateway".format(classname=self.ClassName))
+				self.Logger.Log("({classname})# Node -> Gateway - Packet\n{0}".format(packet,classname=self.ClassName))
 				self.WSConnection.send(packet)
 			else:
-				self.Logger.info("({classname})# Sending packet to Gateway FAILED".format(classname=self.ClassName))
+				self.Logger.Log("({classname})# Sending packet to Gateway FAILED".format(classname=self.ClassName))
 				print ("({classname})# Sending packet to Gateway FAILED".format(classname=self.ClassName))
 		except:
+			self.Logger.Log("({classname})# [EXCEPTION] Sending packet to Gateway FAILED".format(classname=self.ClassName))
 			return False
 		
 		return True

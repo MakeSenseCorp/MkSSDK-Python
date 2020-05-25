@@ -16,6 +16,7 @@ import logging
 import MkSGlobals
 from mksdk import MkSFile
 from mksdk import MkSAbstractNode
+from mksdk import MkSLogger
 
 class SlaveNode(MkSAbstractNode.AbstractNode):
 	def __init__(self):
@@ -66,6 +67,18 @@ class SlaveNode(MkSAbstractNode.AbstractNode):
 		self.MasterConnectionTries 					= 0
 		self.MasterInformationTries 				= 0
 		self.MasterTickTimeout 						= 1
+		self.EnableLog								= True
+		self.Logger = MkSLogger.Logger("2021")
+	
+	def EnableLogs(self, name):
+		pass
+		#if self.EnableLog is True:
+		#	self.Logger = logging.getLogger(name)
+		#	self.Logger.setLevel(logging.DEBUG)
+		#	hndl = logging.FileHandler(os.path.join('..','..','logs','{0}.log'.format(name)))
+		#	formatter = logging.Formatter('%(asctime)s - %(message)s')
+		#	hndl.setFormatter(formatter)
+		#	self.Logger.addHandler(hndl)
 
 	#
 	# ###### SLAVE NODE INITIATE ->
@@ -90,6 +103,7 @@ class SlaveNode(MkSAbstractNode.AbstractNode):
 		self.MasterConnectionTries	= 0
 		self.MasterInformationTries	= 0	
 
+		self.EnableLogs(str(self.Type))
 		print ("({classname})# Trying to connect Master ({tries}) ...".format(classname=self.ClassName, tries=self.MasterConnectionTries))
 		self.MasterConnectionTries += 1
 		if self.ConnectMaster() is True:

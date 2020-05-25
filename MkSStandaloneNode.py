@@ -19,6 +19,7 @@ from mksdk import MkSFile
 from mksdk import MkSNetMachine
 from mksdk import MkSAbstractNode
 from mksdk import MkSShellExecutor
+from mksdk import MkSLogger
 
 class StandaloneNode(MkSAbstractNode.AbstractNode):
 	def __init__(self, port):
@@ -60,12 +61,14 @@ class StandaloneNode(MkSAbstractNode.AbstractNode):
 		self.IsListenerEnabled 					= False
 		self.SetState("INIT")
 
-		self.Logger = logging.getLogger('guardian')
-		self.Logger.setLevel(logging.DEBUG)
-		hndl = logging.FileHandler(os.path.join('..','..','logs','guardian.log'))
-		formatter = logging.Formatter('%(asctime)s - %(message)s')
-		hndl.setFormatter(formatter)
-		self.Logger.addHandler(hndl)
+		#self.Logger = logging.getLogger('guardian')
+		#self.Logger.setLevel(logging.DEBUG)
+		#hndl = logging.FileHandler(os.path.join('..','..','logs','guardian.log'))
+		#formatter = logging.Formatter('%(asctime)s - %(message)s')
+		#hndl.setFormatter(formatter)
+		#self.Logger.addHandler(hndl)
+
+		self.Logger = MkSLogger.Logger("guardian")
 
 	def Initiate(self):
 		pass

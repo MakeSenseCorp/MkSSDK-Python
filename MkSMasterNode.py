@@ -19,6 +19,7 @@ from mksdk import MkSFile
 from mksdk import MkSNetMachine
 from mksdk import MkSAbstractNode
 from mksdk import MkSShellExecutor
+from mksdk import MkSLogger
 
 # TODO - Remove this class from here.
 class LocalPipe():
@@ -65,8 +66,8 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 		self.GatewayTXQueue						= Queue.Queue()
 		self.GatewayTXWorkerRunning 			= False
 		# Debug & Logging
-		self.EnableLog							= True
 		self.DebugMode							= True
+		self.Logger								= MkSLogger.Logger("master")
 		# Node connection to WS information
 		self.GatewayIP 							= ""
 		self.ApiPort 							= "8080"
@@ -103,14 +104,9 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 		self.PipeStdoutRun						= False
 		self.SetState("INIT")
 
-		if self.EnableLog is True:
-			self.Logger = logging.getLogger('master')
-			self.Logger.setLevel(logging.DEBUG)
-			hndl = logging.FileHandler(os.path.join('..','..','logs','master.log'))
-			formatter = logging.Formatter('%(asctime)s - %(message)s')
-			hndl.setFormatter(formatter)
-			self.Logger.addHandler(hndl)
-		
+		self.Logger.EnablePrint()
+		self.Logger.EnableLogger()
+
 		thread.start_new_thread(self.GatewayRXQueueWorker, ())
 		thread.start_new_thread(self.GatewayTXQueueWorker, ())
 
@@ -119,7 +115,7 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 		thread.start_new_thread(self.PipeStdoutListener_Thread, ())
 
 	def StateIdle (self):
-		self.LogMSG("(Master Node)# Note, in IDLE state ...")
+		self.Logger.Log("(Master Node)# Note, in IDLE state ...")
 		time.sleep(1)
 	
 	def StateInit (self):
@@ -202,14 +198,14 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 			self.SetState("WORKING")
 			self.GatewayRXQueue.put(packet)
 		except Exception as e:
-			self.LogMSG("({classname})# WebSocket Error - Data arrived issue\nPACKET#\n{0}\n(EXEPTION)# {error}".format(
+			self.Logger.Log("({classname})# WebSocket Error - Data arrived issue\nPACKET#\n{0}\n(EXEPTION)# {error}".format(
 						packet,
 						classname=self.ClassName,
 						error=str(e)))
 		self.GatewayRXQueueLock.release()
 	
 	def WebSocketErrorCallback (self):
-		self.LogMSG("(Master Node)# ERROR - Gateway socket error")
+		self.Logger.Log("(Master Node)# ERROR - Gateway socket error")
 		# TODO - Send callback "OnWSError"
 		self.NetworkAccessTickLock.acquire()
 		self.AccessTick = 0
@@ -229,7 +225,7 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 
 				packet["additional"]["client_type"] = "global_ws"
 
-				self.LogMSG("({classname})# WS [{direction}] {source} -> {dest} [{cmd}]".format(
+				self.Logger.Log("({classname})# WS [{direction}] {source} -> {dest} [{cmd}]".format(
 							classname=self.ClassName,
 							direction=direction,
 							source=source,
@@ -255,9 +251,9 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 								message = self.GatewayDataArrivedCallback(None, packet)
 								self.SendPacketGateway(message)
 					else:
-						self.LogMSG("({classname})# [Websocket INBOUND] ERROR - Not support {0} request type.".format(messageType, classname=self.ClassName))
+						self.Logger.Log("({classname})# [Websocket INBOUND] ERROR - Not support {0} request type.".format(messageType, classname=self.ClassName))
 				else:
-					self.LogMSG("(Master Node)# Not mine ... Sending to slave ... " + destination)
+					self.Logger.Log("(Master Node)# Not mine ... Sending to slave ... " + destination)
 					# Find who has this destination adderes.
 					self.HandleExternalRequest(packet)
 			except Exception as e:
@@ -271,7 +267,7 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 	
 	# Master as proxy server.
 	def HandleExternalRequest(self, packet):
-		self.LogMSG("({classname})# External request (PROXY)".format(classname=self.ClassName))
+		self.Logger.Log("({classname})# External request (PROXY)".format(classname=self.ClassName))
 		destination = self.Network.BasicProtocol.GetDestinationFromJson(packet)
 		node 		= self.GetSlaveNode(destination)
 		
@@ -280,7 +276,7 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 			message = self.BasicProtocol.AppendMagic(message)
 			node.Socket.send(message)
 		else:
-			self.LogMSG("[MasterNode] HandleInternalReqest NODE NOT FOUND")
+			self.Logger.Log("[MasterNode] HandleInternalReqest NODE NOT FOUND")
 			# Need to look at other masters list.
 			pass
 
@@ -304,7 +300,7 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 		uuid 		= node_info['uuid']
 		name 		= node_info['name']
 
-		self.LogMSG("({classname})# {uuid} {name} {nodetype}".format(
+		self.Logger.Log("({classname})# {uuid} {name} {nodetype}".format(
 						classname=self.ClassName,
 						uuid=uuid,
 						name=name,
@@ -395,7 +391,7 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 			if slave.Socket == sock:
 				self.PortsForClients.append(slave.ListenerPort - 10000)
 
-				self.LogMSG("({classname})# Slave ({name}) {uuid} has disconnected".format(
+				self.Logger.Log("({classname})# Slave ({name}) {uuid} has disconnected".format(
 						classname=self.ClassName,
 						name=slave.Name,
 						uuid=slave.UUID))
@@ -470,7 +466,7 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 		try:
 			self.GatewayTXQueue.put(packet)
 		except Exception as e:
-			self.LogMSG("({classname})# ERROR - [SendPacketGateway]\nPACKET#\n{0}\n(EXEPTION)# {error}".format(
+			self.Logger.Log("({classname})# ERROR - [SendPacketGateway]\nPACKET#\n{0}\n(EXEPTION)# {error}".format(
 						packet,
 						classname=self.ClassName,
 						error=str(e)))
@@ -484,7 +480,7 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 		self.SendPacketGateway(message)
 
 	def GatewayConnectedEvent(self):
-		self.LogMSG("(Master Node)# Connection to Gateway established ...")
+		self.Logger.Log("(Master Node)# Connection to Gateway established ...")
 		# Send registration of all slaves to Gateway.
 		for slave in self.LocalSlaveList:
 			# Send message to Gateway
