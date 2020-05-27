@@ -195,8 +195,8 @@ class AbstractNode():
 			"node_data_arrived":	self.NodeDataArrived_RXHandlerMethod,
 			"node_disconnected":	self.NodeDisconnected_RXHandlerMethod,
 		}
-		thread.start_new_thread(self.LocalServerRXQueueWorker, ())
-		thread.start_new_thread(self.LocalServerTXQueueWorker, ())
+		#thread.start_new_thread(self.LocalServerRXQueueWorker, ())
+		#thread.start_new_thread(self.LocalServerTXQueueWorker, ())
 
 	# Overload
 	def GatewayConnectedEvent(self):
@@ -929,7 +929,6 @@ class AbstractNode():
 		while self.LocalServerRXWorkerRunning is True:
 			try:
 				item = self.LocalServerRXQueue.get(block=True,timeout=None)
-
 				self.RXHandlerMethod[item["type"]](item["data"])
 			except Exception as e:
 				self.Logger.Log("({classname})# ERROR - [LocalServerRXQueueWorker]\nPACKET#\n{0}\n(EXEPTION)# {error}".format(
@@ -940,10 +939,13 @@ class AbstractNode():
 	def AppendRXQueue(self, type, data):
 		self.LocalServerRXQueueLock.acquire()
 		try:
-			self.LocalServerRXQueue.put({
-				"type": type,
-				"data": data
-			})
+			#self.LocalServerRXQueue.put({
+			#	"type": type,
+			#	"data": data
+			#})
+			self.Logger.Log("({classname})# [RecieveLocalSocket] - ENTER".format(classname=self.ClassName))
+			self.RXHandlerMethod[type](data)
+			self.Logger.Log("({classname})# [RecieveLocalSocket] - EXIT".format(classname=self.ClassName))
 		except Exception as e:
 			self.Logger.Log("({classname})# ERROR - [AppendRXQueue]\nPACKET#\n{0}\n(EXEPTION)# {error}".format(
 						data,
@@ -956,10 +958,11 @@ class AbstractNode():
 		while self.LocalServerTXWorkerRunning is True:
 			try:
 				item = self.LocalServerTXQueue.get(block=True,timeout=None)
-				self.Logger.Log("({classname})# [LocalServerTXQueueWorker] - Queue size {0}".format(self.LocalServerTXQueue.qsize(),classname=self.ClassName))
+				self.Logger.Log("({classname})# [LocalServerTXQueueWorker] - ENTER".format(classname=self.ClassName))
 				if item["sock"] is not None:
 					self.Logger.Log("({classname})# [LocalServerTXQueueWorker] - SEND".format(classname=self.ClassName))
 					item["sock"].send(item["packet"])
+				self.Logger.Log("({classname})# [LocalServerTXQueueWorker] - EXIT".format(classname=self.ClassName))
 			except Exception as e:
 				self.Logger.Log("({classname})# ERROR - [LocalServerTXQueueWorker]\nPACKET#\n{0}\n(EXEPTION)# {error}".format(
 						item,
@@ -970,10 +973,13 @@ class AbstractNode():
 		#self.Logger.Log("({classname})# [AppendTXRequest] {0}".format(packet,classname=self.ClassName))
 		self.LocalServerTXQueueLock.acquire()
 		try:
-			self.LocalServerTXQueue.put({
-				"sock": sock,
-				"packet": packet
-			})
+			#self.LocalServerTXQueue.put({
+			#	"sock": sock,
+			#	"packet": packet
+			#})
+			self.Logger.Log("({classname})# [SendLocalSocket] - ENTER".format(classname=self.ClassName))
+			sock.send(packet)
+			self.Logger.Log("({classname})# [SendLocalSocket] - EXIT".format(classname=self.ClassName))
 		except Exception as e:
 			self.Logger.Log("({classname})# ERROR - [AppendTXRequest]\nPACKET#\n{0}\n(EXEPTION)# {error}".format(
 						packet,
@@ -1015,13 +1021,9 @@ class AbstractNode():
 
 		while self.IsLocalSocketRunning is True:
 			try:
-				#self.Logger.Log("({classname})# [NodeLocalNetworkConectionListener]".format(classname=self.ClassName))
+				self.Logger.Log("({classname})# [NodeLocalNetworkConectionListener]".format(classname=self.ClassName))
 				readable, writable, exceptional = select.select(self.RecievingSockets, self.SendingSockets, self.RecievingSockets, 0.5)
-				#self.Logger.Log("({classname})# [NodeLocalNetworkConectionListener] Heartbeat [{0},{1},{2}]".format(
-				#	len(readable),
-				#	len(writable),
-				#	len(writable),
-				#	classname=self.ClassName))
+				self.Logger.Log("({classname})# [NodeLocalNetworkConectionListener] Heartbeat".format(classname=self.ClassName))
 				# Socket management.
 				for sock in readable:
 					#self.Logger.Log("({classname})# [NodeLocalNetworkConectionListener] Readable".format(classname=self.ClassName))
@@ -1323,7 +1325,8 @@ class AbstractNode():
 		self.Logger.Log("({classname})# [CleanAllSockets] All sockets where released ({0})".format(len(self.OpenConnections),classname=self.ClassName))
 	
 	def LogMSG(self, msg):
-		print(msg)
+		if self.Logger is not None:
+			self.Logger.Log(msg)
 
 		#if self.Logger is None:
 		#	print(msg)

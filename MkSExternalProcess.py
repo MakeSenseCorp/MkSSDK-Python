@@ -112,9 +112,10 @@ class ExternalProcess():
 		self.ExitEvent 	= True
 		self.Status 	= True
 		self.UserData 	= user_data
-		proc = subprocess.Popen(process, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, cwd=working_dir)
-		self.Pipe = LocalPipe(proc)
-		thread.start_new_thread(self.Worker, ())
+		DEVNULL = open(os.devnull, 'w')
+		proc = subprocess.Popen(process, shell=True, stdout=DEVNULL, stderr=DEVNULL, cwd=working_dir)
+		# self.Pipe = LocalPipe(proc)
+		# thread.start_new_thread(self.Worker, ())
 	
 	def KillProcess(self):
 		self.ExitEvent = False

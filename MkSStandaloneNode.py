@@ -59,16 +59,11 @@ class StandaloneNode(MkSAbstractNode.AbstractNode):
 		self.OnCustomCommandResponseCallback	= None
 		# Flags
 		self.IsListenerEnabled 					= False
-		self.SetState("INIT")
-
-		#self.Logger = logging.getLogger('guardian')
-		#self.Logger.setLevel(logging.DEBUG)
-		#hndl = logging.FileHandler(os.path.join('..','..','logs','guardian.log'))
-		#formatter = logging.Formatter('%(asctime)s - %(message)s')
-		#hndl.setFormatter(formatter)
-		#self.Logger.addHandler(hndl)
-
-		self.Logger = MkSLogger.Logger("guardian")
+	
+	def EnableLogs(self, name):
+		self.Logger = MkSLogger.Logger(name)
+		self.Logger.EnablePrint()
+		self.Logger.EnableLogger()
 
 	def Initiate(self):
 		pass
