@@ -67,7 +67,6 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 		self.GatewayTXWorkerRunning 			= False
 		# Debug & Logging
 		self.DebugMode							= True
-		self.Logger								= MkSLogger.Logger("master")
 		# Node connection to WS information
 		self.GatewayIP 							= ""
 		self.ApiPort 							= "8080"
@@ -102,17 +101,20 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 		# Flags
 		self.IsListenerEnabled 					= False
 		self.PipeStdoutRun						= False
-		self.SetState("INIT")
 
-		self.Logger.EnablePrint()
-		self.Logger.EnableLogger()
+		#self.SetState("INIT")
 
 		thread.start_new_thread(self.GatewayRXQueueWorker, ())
 		thread.start_new_thread(self.GatewayTXQueueWorker, ())
+	
+	def EnableLogs(self, name):
+		self.Logger = MkSLogger.Logger(name)
+		self.Logger.EnablePrint()
+		self.Logger.EnableLogger()
 
-	def Initiate(self):
-		print("TODO - (MkSMasterNode.MasterNode) Who stops PipeStdoutListener_Thread thread?")
-		thread.start_new_thread(self.PipeStdoutListener_Thread, ())
+	#def Initiate(self):
+	#	print("TODO - (MkSMasterNode.MasterNode) Who stops PipeStdoutListener_Thread thread?")
+	#	thread.start_new_thread(self.PipeStdoutListener_Thread, ())
 
 	def StateIdle (self):
 		self.Logger.Log("(Master Node)# Note, in IDLE state ...")

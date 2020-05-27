@@ -68,32 +68,14 @@ class SlaveNode(MkSAbstractNode.AbstractNode):
 		self.MasterInformationTries 				= 0
 		self.MasterTickTimeout 						= 1
 		self.EnableLog								= True
-		self.Logger = MkSLogger.Logger("2021")
-	
+		
 	def EnableLogs(self, name):
-		pass
-		#if self.EnableLog is True:
-		#	self.Logger = logging.getLogger(name)
-		#	self.Logger.setLevel(logging.DEBUG)
-		#	hndl = logging.FileHandler(os.path.join('..','..','logs','{0}.log'.format(name)))
-		#	formatter = logging.Formatter('%(asctime)s - %(message)s')
-		#	hndl.setFormatter(formatter)
-		#	self.Logger.addHandler(hndl)
+		self.Logger = MkSLogger.Logger(name)
+		self.Logger.EnablePrint()
+		self.Logger.EnableLogger()
 
-	#
-	# ###### SLAVE NODE INITIATE ->
-	#
-
-	def Initiate(self):
-		self.SetState("INIT")
-
-	#
-	# ###### SLAVE NODE INITIATE <-
-	#
-
-	#
-	# ###### SLAVE NODE STATES ->
-	#
+	#def Initiate(self):
+	#	self.SetState("INIT")
 
 	def StateIdle(self):
 		print ("({classname})# Note, in IDLE state ...".format(classname=self.ClassName))
@@ -103,7 +85,6 @@ class SlaveNode(MkSAbstractNode.AbstractNode):
 		self.MasterConnectionTries	= 0
 		self.MasterInformationTries	= 0	
 
-		self.EnableLogs(str(self.Type))
 		print ("({classname})# Trying to connect Master ({tries}) ...".format(classname=self.ClassName, tries=self.MasterConnectionTries))
 		self.MasterConnectionTries += 1
 		if self.ConnectMaster() is True:
@@ -206,14 +187,6 @@ class SlaveNode(MkSAbstractNode.AbstractNode):
 	def StateExit(self):
 		self.Exit("Exit state initiated")
 
-	#
-	# ###### SLAVE NODE STATES <-
-	#
-
-	#
-	# ###### SLAVE NODE GATAWAY CALLBACKS ->
-	#
-
 	def GetNodeInfoRequestHandler(self, sock, packet):
 		print ("({classname})# Node Info Request ...".format(classname=self.ClassName))
 		payload = self.NodeInfo
@@ -243,10 +216,6 @@ class SlaveNode(MkSAbstractNode.AbstractNode):
 		if source in self.MasterUUID:
 			self.SlaveListenerPort = payload["port"]
 			self.SetState("START_LISTENER")
-
-	#
-	# ###### SLAVE NODE GATAWAY CALLBACKS <-
-	#
 
 	def SendRequest(self, uuid, msg_type, command, payload, additional):
 		# Generate request
@@ -335,10 +304,6 @@ class SlaveNode(MkSAbstractNode.AbstractNode):
 	
 	def GetMasters(self):
 		return self.MasterNodesList
-	
-	#
-	# ############################################################################################
-	#
 	
 	def GetNodeInfoHandler(self, sock, packet):
 		if self.OnGetNodeInfoCallback is not None:

@@ -266,16 +266,18 @@ class AbstractNode():
 	def LocalServerTerminated(self):
 		pass
 
+	# Overload
+	def MasterAppendNodeRequestHandler(self, sock, packet):
+		pass
+
+	# Overload
+	def MasterRemoveNodeRequestHandler(self, sock, packet):
+		pass
+
 	def GetOnlineDevicesHandler(self, sock, packet):
 		self.Logger.Log("({classname})# Online network device list ...".format(classname=self.ClassName))
 		payload = self.BasicProtocol.GetPayloadFromJson(packet)
 		self.NetworkOnlineDevicesList = payload["online_devices"]
-
-	def MasterAppendNodeRequestHandler(self, sock, packet):
-		pass
-
-	def MasterRemoveNodeRequestHandler(self, sock, packet):
-		pass
 
 	def MasterAppendNodeResponseHandler(self, sock, packet):
 		payload 	= self.BasicProtocol.GetPayloadFromJson(packet)
@@ -337,6 +339,7 @@ class AbstractNode():
 			return ""
 	
 	def SetState (self, state):
+		self.Logger.Log("({classname})# Change state [{0}]".format(state,classname=self.ClassName))
 		self.State = state
 	
 	def GetState (self):
@@ -644,24 +647,28 @@ class AbstractNode():
 
 	def LoadSystemConfig(self):
 		self.MKSPath = os.path.join(os.environ['HOME'],"mks")
-		self.Logger.Log("({classname})# MakeSense HOME folder '{0}'".format(self.MKSPath, classname=self.ClassName))
 		# Information about the node located here.
 		strSystemJson 		= self.File.Load("system.json") # Located in node context
 		strMachineJson 		= self.File.Load(os.path.join(self.MKSPath,"config.json"))
 
 		if (strSystemJson is None or len(strSystemJson) == 0):
-			self.Logger.Log("({classname})# ERROR - Cannot find system.json file.".format(classname=self.ClassName))
+			#self.Logger.Log("({classname})# ERROR - Cannot find system.json file.".format(classname=self.ClassName))
 			self.Exit("ERROR - Cannot find system.json file")
 			return False
 
 		if (strMachineJson is None or len(strMachineJson) == 0):
-			self.Logger.Log("({classname})# ERROR - Cannot find config.json file.".format(classname=self.ClassName))
+			#self.Logger.Log("({classname})# ERROR - Cannot find config.json file.".format(classname=self.ClassName))
 			self.Exit("ERROR - Cannot find config.json file")
 			return False
 		
 		try:
 			dataSystem 				= json.loads(strSystemJson)
 			dataConfig 				= json.loads(strMachineJson)
+			self.NodeInfo 			= dataSystem["node"]["info"]
+			self.ServiceDepened 	= dataSystem["node"]["service"]["depend"]
+		
+			self.EnableLogs(str(self.NodeInfo["type"]))
+			self.Logger.Log("({classname})# MakeSense HOME folder '{0}'".format(self.MKSPath, classname=self.ClassName))
 
 			for network in self.NetworkCards:
 				if network["iface"] in dataConfig["network"]["iface"]:
@@ -672,8 +679,6 @@ class AbstractNode():
 			if self.MyLocalIP == "":
 				self.Logger.Log("({classname})# ERROR - Local IP not found".format(classname=self.ClassName))
 
-			self.NodeInfo 			= dataSystem["node"]["info"]
-			self.ServiceDepened 	= dataSystem["node"]["service"]["depend"]
 			# Node connection to WS information
 			self.Key 				= dataConfig["network"]["key"]
 			self.GatewayIP			= dataConfig["network"]["gateway"]
@@ -1010,16 +1015,16 @@ class AbstractNode():
 
 		while self.IsLocalSocketRunning is True:
 			try:
-				self.Logger.Log("({classname})# [NodeLocalNetworkConectionListener]".format(classname=self.ClassName))
+				#self.Logger.Log("({classname})# [NodeLocalNetworkConectionListener]".format(classname=self.ClassName))
 				readable, writable, exceptional = select.select(self.RecievingSockets, self.SendingSockets, self.RecievingSockets, 0.5)
-				self.Logger.Log("({classname})# [NodeLocalNetworkConectionListener] Heartbeat [{0},{1},{2}]".format(
-					len(readable),
-					len(writable),
-					len(writable),
-					classname=self.ClassName))
+				#self.Logger.Log("({classname})# [NodeLocalNetworkConectionListener] Heartbeat [{0},{1},{2}]".format(
+				#	len(readable),
+				#	len(writable),
+				#	len(writable),
+				#	classname=self.ClassName))
 				# Socket management.
 				for sock in readable:
-					self.Logger.Log("({classname})# [NodeLocalNetworkConectionListener] Readable".format(classname=self.ClassName))
+					#self.Logger.Log("({classname})# [NodeLocalNetworkConectionListener] Readable".format(classname=self.ClassName))
 					if sock is self.ServerSocket and True == self.IsListenerEnabled:
 						conn, addr = sock.accept()
 						#conn.setblocking(0)
@@ -1030,35 +1035,34 @@ class AbstractNode():
 					else:
 						try:
 							if sock is not None:
-								self.Logger.Log("({classname})# [NodeLocalNetworkConectionListener] RECV ->".format(classname=self.ClassName))
+								#self.Logger.Log("({classname})# [NodeLocalNetworkConectionListener] RECV ->".format(classname=self.ClassName))
 								data = sock.recv(2048)
 								dataLen = len(data)
 								while dataLen == 2048:
 									chunk = sock.recv(2048)
 									data += chunk
 									dataLen = len(chunk)
-								self.Logger.Log("({classname})# [NodeLocalNetworkConectionListener] RECV <- ({0})".format(dataLen,classname=self.ClassName))
+								#self.Logger.Log("({classname})# [NodeLocalNetworkConectionListener] RECV <- ({0})".format(dataLen,classname=self.ClassName))
 								if data:
 									# Each makesense packet should start from magic number "MKS"
 									if "MKSS" in data[:4]:
-										self.Logger.Log("({classname})# D#1".format(classname=self.ClassName))
+										#self.Logger.Log("({classname})# D#1".format(classname=self.ClassName))
 										# One packet can hold multiple MKS messages.
 										multiData = data.split("MKSS:")
-										self.Logger.Log("({classname})# D#2".format(classname=self.ClassName))
+										#self.Logger.Log("({classname})# D#2".format(classname=self.ClassName))
 										for packet in multiData[1:]:
-											self.Logger.Log("({classname})# D#3".format(classname=self.ClassName))
+											#self.Logger.Log("({classname})# D#3".format(classname=self.ClassName))
 											# TODO - Must handled in different thread
 											if "MKSE" in packet:
-												self.Logger.Log("({classname})# D#4".format(classname=self.ClassName))
+												#self.Logger.Log("({classname})# D#4".format(classname=self.ClassName))
 												self.AppendRXQueue("node_data_arrived", {
 													"sock": sock,
 													"packet": packet[:-5]
 												})
-												self.Logger.Log("({classname})# D#5".format(classname=self.ClassName))
+												#self.Logger.Log("({classname})# D#5".format(classname=self.ClassName))
 									else:
 										self.Logger.Log("({classname})# [NodeLocalNetworkConectionListener] Data Invalid ...".format(classname=self.ClassName))
-									
-									self.Logger.Log("({classname})# D#6".format(classname=self.ClassName))
+									#self.Logger.Log("({classname})# D#6".format(classname=self.ClassName))
 								else:
 									self.Logger.Log("({classname})# [NodeLocalNetworkConectionListener] Socket closed ...".format(classname=self.ClassName))
 									# Remove socket from list.
@@ -1382,14 +1386,14 @@ class AbstractNode():
 			self.LocalWSManager.OnWSDisconnected 	= self.LocalWSDisconnectedHandler
 		self.ExitEvent.clear()
 		self.ExitLocalServerEvent.clear()
-		# Initial state is connect to Gateway.
-		self.SetState("INIT")
 
 		# Read sytem configuration
-		self.Logger.Log("({classname})# Load system configuration ...".format(classname=self.ClassName))
 		if (self.LoadSystemConfig() is False):
-			self.Logger.Log("({classname})# Load system configuration ... FAILED".format(classname=self.ClassName))
+			print("({classname})# Load system configuration ... FAILED".format(classname=self.ClassName))
 			return
+		
+		self.Logger.Log("({classname})# System configuration loaded".format(classname=self.ClassName))
+		self.SetState("INIT")
 
 		# Start local node dervice thread
 		if self.IsNodeLocalServerEnabled is True:
