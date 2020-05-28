@@ -96,8 +96,7 @@ class SlaveNode(MkSAbstractNode.AbstractNode):
 			if self.MasterSocket is None:
 				pass
 			else:
-				self.AppendTXRequest(self.MasterSocket, packet)
-				#self.MasterSocket.send(packet)
+				self.Transceiver.Send({"sock":self.MasterSocket, "packet":packet})
 		else:
 			self.SetState("CONNECT_MASTER")
 
@@ -127,8 +126,7 @@ class SlaveNode(MkSAbstractNode.AbstractNode):
 				if self.MasterSocket is None:
 					pass
 				else:
-					self.AppendTXRequest(self.MasterSocket, packet)
-					#self.MasterSocket.send(packet)
+					self.Transceiver.Send({"sock":self.MasterSocket, "packet":packet})
 				self.MasterInformationTries += 1
 
 	def StateGetPort(self):
@@ -139,8 +137,7 @@ class SlaveNode(MkSAbstractNode.AbstractNode):
 		if self.MasterSocket is None:
 			pass
 		else:
-			self.AppendTXRequest(self.MasterSocket, packet)
-			#self.MasterSocket.send(packet)
+			self.Transceiver.Send({"sock":self.MasterSocket, "packet":packet})
 		self.SetState("WAIT_FOR_PORT")
 	
 	def StateFindPortManualy(self):
@@ -225,8 +222,7 @@ class SlaveNode(MkSAbstractNode.AbstractNode):
 			pass
 			# TODO - Send over local websocket
 		else:
-			self.AppendTXRequest(self.MasterSocket, packet)
-			#self.MasterSocket.send(packet)
+			self.Transceiver.Send({"sock":self.MasterSocket, "packet":packet})
 
 	def EmitOnNodeChange(self, data):
 		# print ("({classname})# Emit onNodeChange event ...".format(classname=self.ClassName))
@@ -243,8 +239,7 @@ class SlaveNode(MkSAbstractNode.AbstractNode):
 				if self.MasterSocket is None:
 					pass
 				else:
-					self.AppendTXRequest(self.MasterSocket, packet)
-					#self.MasterSocket.send(packet)
+					self.Transceiver.Send({"sock":self.MasterSocket, "packet":packet})
 			# Webface
 			elif item_type == 2:
 				if payload["pipe"] == "GATEWAY":
@@ -258,8 +253,7 @@ class SlaveNode(MkSAbstractNode.AbstractNode):
 					if self.MasterSocket is None:
 						pass
 					else:
-						self.AppendTXRequest(self.MasterSocket, packet)
-						#self.MasterSocket.send(packet)
+						self.Transceiver.Send({"sock":self.MasterSocket, "packet":packet})
 				elif payload["pipe"] == "LOCAL_WS":
 					ws_id = payload["ws_id"]
 					message = self.BasicProtocol.BuildRequest("DIRECT", "WEBFACE", self.UUID, "on_node_change", data, {
@@ -277,8 +271,7 @@ class SlaveNode(MkSAbstractNode.AbstractNode):
 			pass
 		else:
 			print ("({classname})# Sending ping request ...".format(classname=self.ClassName))
-			self.AppendTXRequest(self.MasterSocket, packet)
-			#self.MasterSocket.send(packet)
+			self.Transceiver.Send({"sock":self.MasterSocket, "packet":packet})
 	
 	def PreUILoaderHandler(self):
 		print ("({classname})# PreUILoaderHandler ...".format(classname=self.ClassName))
@@ -346,8 +339,7 @@ class SlaveNode(MkSAbstractNode.AbstractNode):
 		if self.MasterSocket is None:
 			pass
 		else:
-			self.AppendTXRequest(self.MasterSocket, packet)
-			#self.MasterSocket.send(msg)
+			self.Transceiver.Send({"sock":self.MasterSocket, "packet":packet})
 	
 	def GetListOfNodeFromGateway(self):
 		print ("[SlaveNode] GetListOfNodeFromGateway")
@@ -355,8 +347,7 @@ class SlaveNode(MkSAbstractNode.AbstractNode):
 		if self.MasterSocket is None:
 			pass
 		else:
-			self.AppendTXRequest(self.MasterSocket, packet)
-			#self.MasterSocket.send(payload)
+			self.Transceiver.Send({"sock":self.MasterSocket, "packet":packet})
 	
 	# TODO - NO master change.
 	def GetNodeInfo(self, uuid):
@@ -365,8 +356,7 @@ class SlaveNode(MkSAbstractNode.AbstractNode):
 		if self.MasterSocket is None:
 			pass
 		else:
-			self.AppendTXRequest(self.MasterSocket, packet)
-			#self.MasterSocket.send(payload)
+			self.Transceiver.Send({"sock":self.MasterSocket, "packet":packet})
 
 	def CleanMasterList(self):
 		for node in self.MasterNodesList:
@@ -390,7 +380,7 @@ class SlaveNode(MkSAbstractNode.AbstractNode):
 		self.MasterNodesList.append(conn)
 		# Get Master slave nodes.
 		packet = self.CommandsGetLocalNodes()
-		self.AppendTXRequest(sock, packet)
+		self.Transceiver.Send({"sock":sock, "packet":packet})
 		#sock.send(packet)
 
 	def GetLocalNodeResponseHandler(self, sock, packet):
@@ -413,6 +403,5 @@ class SlaveNode(MkSAbstractNode.AbstractNode):
 		if self.OnExitCallback is not None:
 			self.OnExitCallback()
 			packet = self.Commands.ExitResponse("OK")
-			self.AppendTXRequest(sock, packet)
-			#sock.send(packet)
+			self.Transceiver.Send({"sock":sock, "packet":packet})
 			

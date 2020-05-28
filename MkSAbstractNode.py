@@ -19,6 +19,7 @@ from mksdk import MkSDevice
 from mksdk import MkSUtils
 from mksdk import MkSBasicNetworkProtocol
 from mksdk import MkSSecurity
+from mksdk import MkSTransceiver
 
 import hashlib
 class LocalNode():
@@ -53,6 +54,7 @@ class AbstractNode():
 		self.ClassName								= ""
 		self.File 									= MkSFile.File()
 		self.Security								= MkSSecurity.Security()
+		self.Transceiver 							= MkSTransceiver.Manager(self.SocketTXCallback, self.SocketRXCallback)
 		self.Connector 								= None
 		self.Network								= None
 		self.LocalWSManager							= None
@@ -80,12 +82,6 @@ class AbstractNode():
 		self.Pwd									= os.getcwd()
 		self.IsMaster 								= False
 		# Queue
-		self.LocalServerRXQueueLock      	    	= threading.Lock()
-		self.LocalServerRXQueue						= Queue.Queue()
-		self.LocalServerRXWorkerRunning 			= False
-		self.LocalServerTXQueueLock      	    	= threading.Lock()
-		self.LocalServerTXQueue						= Queue.Queue()
-		self.LocalServerTXWorkerRunning 			= False
 		# State machine
 		self.State 									= 'IDLE' # Current state of node
 		self.States 								= None	 # States list
@@ -195,8 +191,6 @@ class AbstractNode():
 			"node_data_arrived":	self.NodeDataArrived_RXHandlerMethod,
 			"node_disconnected":	self.NodeDisconnected_RXHandlerMethod,
 		}
-		#thread.start_new_thread(self.LocalServerRXQueueWorker, ())
-		#thread.start_new_thread(self.LocalServerTXQueueWorker, ())
 
 	# Overload
 	def GatewayConnectedEvent(self):
@@ -858,7 +852,7 @@ class AbstractNode():
 							if message == "" or message is None:
 								return
 							packet = self.BasicProtocol.AppendMagic(message)
-							self.AppendTXRequest(sock, packet)
+							self.Transceiver.Send({"sock":sock, "packet":packet})
 						except Exception as e:
 							self.Logger.Log("({classname})# ERROR - [#1]\n(EXEPTION)# {error}".format(error=str(e),classname=self.ClassName))
 					else:
@@ -869,7 +863,7 @@ class AbstractNode():
 								if message == "" or message is None:
 									return
 								packet = self.BasicProtocol.AppendMagic(message)
-								self.AppendTXRequest(sock, packet)
+								self.Transceiver.Send({"sock":sock, "packet":packet})
 							except Exception as e:
 								self.Logger.Log("({classname})# ERROR - [#2]\n(EXEPTION)# {error}".format(error=str(e),classname=self.ClassName))
 				elif direction in "response":
@@ -924,68 +918,25 @@ class AbstractNode():
 			self.OnTerminateConnectionCallback(sock)
 		self.RemoveConnectionBySock(sock)
 	
-	def LocalServerRXQueueWorker(self):
-		self.LocalServerRXWorkerRunning = True
-		while self.LocalServerRXWorkerRunning is True:
-			try:
-				item = self.LocalServerRXQueue.get(block=True,timeout=None)
-				self.RXHandlerMethod[item["type"]](item["data"])
-			except Exception as e:
-				self.Logger.Log("({classname})# ERROR - [LocalServerRXQueueWorker]\nPACKET#\n{0}\n(EXEPTION)# {error}".format(
-						item,
-						classname=self.ClassName,
-						error=str(e)))
+	def SocketTXCallback(self, item):
+		try:
+			self.Logger.Log("({classname})# [SocketTXCallback]".format(classname=self.ClassName))
+			item["sock"].send(item["packet"])
+		except Exception as e:
+			self.Logger.Log("({classname})# ERROR - [SocketTXCallback]\nPACKET#\n{0}\n(EXEPTION)# {error}".format(
+				item["packet"],
+				classname=self.ClassName,
+				error=str(e)))
 	
-	def AppendRXQueue(self, type, data):
-		self.LocalServerRXQueueLock.acquire()
+	def SocketRXCallback(self, item):
 		try:
-			#self.LocalServerRXQueue.put({
-			#	"type": type,
-			#	"data": data
-			#})
-			self.Logger.Log("({classname})# [RecieveLocalSocket] - ENTER".format(classname=self.ClassName))
-			self.RXHandlerMethod[type](data)
-			self.Logger.Log("({classname})# [RecieveLocalSocket] - EXIT".format(classname=self.ClassName))
+			self.Logger.Log("({classname})# [SocketRXCallback]".format(classname=self.ClassName))
+			self.RXHandlerMethod[item["type"]](item["data"])
 		except Exception as e:
-			self.Logger.Log("({classname})# ERROR - [AppendRXQueue]\nPACKET#\n{0}\n(EXEPTION)# {error}".format(
-						data,
-						classname=self.ClassName,
-						error=str(e)))
-		self.LocalServerRXQueueLock.release()
-
-	def LocalServerTXQueueWorker(self):
-		self.LocalServerTXWorkerRunning = True
-		while self.LocalServerTXWorkerRunning is True:
-			try:
-				item = self.LocalServerTXQueue.get(block=True,timeout=None)
-				self.Logger.Log("({classname})# [LocalServerTXQueueWorker] - ENTER".format(classname=self.ClassName))
-				if item["sock"] is not None:
-					self.Logger.Log("({classname})# [LocalServerTXQueueWorker] - SEND".format(classname=self.ClassName))
-					item["sock"].send(item["packet"])
-				self.Logger.Log("({classname})# [LocalServerTXQueueWorker] - EXIT".format(classname=self.ClassName))
-			except Exception as e:
-				self.Logger.Log("({classname})# ERROR - [LocalServerTXQueueWorker]\nPACKET#\n{0}\n(EXEPTION)# {error}".format(
-						item,
-						classname=self.ClassName,
-						error=str(e)))
-
-	def AppendTXRequest(self, sock, packet):
-		#self.Logger.Log("({classname})# [AppendTXRequest] {0}".format(packet,classname=self.ClassName))
-		self.LocalServerTXQueueLock.acquire()
-		try:
-			#self.LocalServerTXQueue.put({
-			#	"sock": sock,
-			#	"packet": packet
-			#})
-			self.Logger.Log("({classname})# [SendLocalSocket] - ENTER".format(classname=self.ClassName))
-			sock.send(packet)
-			self.Logger.Log("({classname})# [SendLocalSocket] - EXIT".format(classname=self.ClassName))
-		except Exception as e:
-			self.Logger.Log("({classname})# ERROR - [AppendTXRequest]\nPACKET#\n{0}\n(EXEPTION)# {error}".format(
-						packet,
-						classname=self.ClassName,
-						error=str(e)))
-		self.LocalServerTXQueueLock.release()
+			self.Logger.Log("({classname})# ERROR - [SocketRXCallback]\nPACKET#\n{0}\n(EXEPTION)# {error}".format(
+				item,
+				classname=self.ClassName,
+				error=str(e)))
 
 	def NodeLocalNetworkConectionListener(self):
 		# AF_UNIX, AF_LOCAL   Local communication
@@ -1021,60 +972,59 @@ class AbstractNode():
 
 		while self.IsLocalSocketRunning is True:
 			try:
-				self.Logger.Log("({classname})# [NodeLocalNetworkConectionListener]".format(classname=self.ClassName))
 				readable, writable, exceptional = select.select(self.RecievingSockets, self.SendingSockets, self.RecievingSockets, 0.5)
-				self.Logger.Log("({classname})# [NodeLocalNetworkConectionListener] Heartbeat".format(classname=self.ClassName))
+				# self.Logger.Log("({classname})# [NodeLocalNetworkConectionListener] Heartbeat".format(classname=self.ClassName))
 				# Socket management.
 				for sock in readable:
-					#self.Logger.Log("({classname})# [NodeLocalNetworkConectionListener] Readable".format(classname=self.ClassName))
 					if sock is self.ServerSocket and True == self.IsListenerEnabled:
 						conn, addr = sock.accept()
 						#conn.setblocking(0)
-						self.AppendRXQueue("node_new_connection", {
-							"conn": conn,
-							"addr": addr
+						self.Transceiver.Receive({
+							"type": "node_new_connection",
+							"data": {
+								"conn": conn,
+								"addr": addr
+							}
 						})
 					else:
 						try:
 							if sock is not None:
-								#self.Logger.Log("({classname})# [NodeLocalNetworkConectionListener] RECV ->".format(classname=self.ClassName))
 								data = sock.recv(2048)
 								dataLen = len(data)
 								while dataLen == 2048:
 									chunk = sock.recv(2048)
 									data += chunk
 									dataLen = len(chunk)
-								#self.Logger.Log("({classname})# [NodeLocalNetworkConectionListener] RECV <- ({0})".format(dataLen,classname=self.ClassName))
 								if data:
 									# Each makesense packet should start from magic number "MKS"
 									if "MKSS" in data[:4]:
-										#self.Logger.Log("({classname})# D#1".format(classname=self.ClassName))
 										# One packet can hold multiple MKS messages.
 										multiData = data.split("MKSS:")
-										#self.Logger.Log("({classname})# D#2".format(classname=self.ClassName))
 										for packet in multiData[1:]:
-											#self.Logger.Log("({classname})# D#3".format(classname=self.ClassName))
 											# TODO - Must handled in different thread
 											if "MKSE" in packet:
-												#self.Logger.Log("({classname})# D#4".format(classname=self.ClassName))
-												self.AppendRXQueue("node_data_arrived", {
-													"sock": sock,
-													"packet": packet[:-5]
+												self.Transceiver.Receive({
+													"type": "node_data_arrived", 
+													"data": {
+														"sock": sock,
+														"packet": packet[:-5]
+													}
 												})
-												#self.Logger.Log("({classname})# D#5".format(classname=self.ClassName))
 									else:
 										self.Logger.Log("({classname})# [NodeLocalNetworkConectionListener] Data Invalid ...".format(classname=self.ClassName))
-									#self.Logger.Log("({classname})# D#6".format(classname=self.ClassName))
 								else:
 									self.Logger.Log("({classname})# [NodeLocalNetworkConectionListener] Socket closed ...".format(classname=self.ClassName))
 									# Remove socket from list.
 									self.RecievingSockets.remove(sock)
-									self.AppendRXQueue("node_disconnected", sock)
+									self.Transceiver.Receive({
+										"type": "node_disconnected",
+										"data": sock
+									})
 						except Exception as e:
 							self.Logger.Log("({classname})# ERROR - Local socket recieve\n(EXEPTION)# {error}\n{data}".format(error=str(e),data=data,classname=self.ClassName))
 							# Remove socket from list.
 							self.RecievingSockets.remove(sock)
-							self.AppendRXQueue("node_disconnected", sock)
+							self.Transceiver.Receive("node_disconnected", sock)
 						
 				for sock in exceptional:
 					self.Logger.Log("({classname})# [NodeLocalNetworkConectionListener] Socket Exceptional ...".format(classname=self.ClassName))
@@ -1222,7 +1172,7 @@ class AbstractNode():
 		if key in self.OpenConnections:
 			node = self.OpenConnections[key]
 			if node is not None:
-				self.AppendTXRequest(node.Socket, packet)
+				self.Transceiver.Send({"sock":node.Socket, "packet":packet})
 				return True
 		return False
 
