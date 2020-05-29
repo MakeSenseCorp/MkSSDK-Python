@@ -163,12 +163,13 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 			self.AccessTick += 1
 	
 	def StateInitLocalServer(self):
-		self.ServerAdderss = ('', 16999)
-		status = self.TryStartListener()
-		if status is True:
-			self.IsListenerEnabled = True
-			self.SetState("INIT_GATEWAY")
-		time.sleep(1)
+		self.SocketServer.Start(16999)
+		#self.ServerAdderss = ('', 16999)
+		#status = self.TryStartListener()
+		#if status is True:
+		#	self.IsListenerEnabled = True
+		#	self.SetState("INIT_GATEWAY")
+		#time.sleep(1)
 
 	def StateWork (self):
 		if self.SystemLoaded is False:
