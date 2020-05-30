@@ -367,10 +367,10 @@ class Manager():
     def Connect(self, ip, port):
 		self.Logger.Log("({classname})# [Connect]".format(classname=self.ClassName))
 		sock, status = self.ConnectSocket((ip, port))
+		conn = None
 		if True == status:
 			conn = self.AppendConnection(sock, ip, port)
-			#node.LocalType = "NODE"
-		return sock, status
+		return conn, status
 	
     ''' 
 		Description: 	Send message over socket via message queue.
@@ -386,6 +386,13 @@ class Manager():
 				self.Transceiver.Send({"sock":node.Socket, "packet":packet})
 				return True
 		return False
+
+    ''' 
+		Description: 	Send message over socket via message queue.
+		Return: 		Status.
+	'''
+    def Send(self, sock, packet):
+		self.Transceiver.Send({"sock":sock, "packet":packet})
 
     ''' 
 		Description: 	Disconnect connection over socket, add clean all databases.
@@ -429,6 +436,13 @@ class Manager():
 				del self.OpenConnections.values()[0]
 
 		self.Logger.Log("({classname})# [CleanAllSockets] All sockets where released ({0})".format(len(self.OpenConnections),classname=self.ClassName))
+
+    ''' 
+		Description: 	<N/A>
+		Return: 		<N/A>
+	''' 
+    def GetListenerStatus(self):
+		return self.LocalSocketWorkerRunning
 
     ''' 
 		Description: 	Start worker thread of server.

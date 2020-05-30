@@ -24,7 +24,6 @@ class SlaveNode(MkSAbstractNode.AbstractNode):
 		self.ClassName							= "Slave Node"
 		self.MasterNodesList					= [] # For future use (slave to slave communication)
 		self.SlaveListenerPort 					= 0
-		self.MasterSocket						= None
 		self.MasterInfo 						= None
 		self.MasterUUID 						= ""
 		self.IsLocalUIEnabled					= False
@@ -93,10 +92,10 @@ class SlaveNode(MkSAbstractNode.AbstractNode):
 			# Send request
 			message = self.BasicProtocol.BuildRequest("DIRECT", "MASTER", self.UUID, "get_node_info", {}, {})
 			packet  = self.BasicProtocol.AppendMagic(message)
-			if self.MasterSocket is None:
+			if self.LocalMasterConnection is None:
 				pass
 			else:
-				self.Transceiver.Send({"sock":self.MasterSocket, "packet":packet})
+				self.Transceiver.Send({"sock":self.LocalMasterConnection.Socket, "packet":packet})
 		else:
 			self.SetState("CONNECT_MASTER")
 
@@ -123,10 +122,10 @@ class SlaveNode(MkSAbstractNode.AbstractNode):
 				# Send request
 				message = self.BasicProtocol.BuildRequest("DIRECT", "MASTER", self.UUID, "get_node_info", {}, {})
 				packet  = self.BasicProtocol.AppendMagic(message)
-				if self.MasterSocket is None:
+				if self.LocalMasterConnection is None:
 					pass
 				else:
-					self.Transceiver.Send({"sock":self.MasterSocket, "packet":packet})
+					self.Transceiver.Send({"sock":self.LocalMasterConnection.Socket, "packet":packet})
 				self.MasterInformationTries += 1
 
 	def StateGetPort(self):
@@ -134,10 +133,10 @@ class SlaveNode(MkSAbstractNode.AbstractNode):
 		# Send request
 		message = self.BasicProtocol.BuildRequest("DIRECT", self.MasterUUID, self.UUID, "get_port", self.NodeInfo, {})
 		packet  = self.BasicProtocol.AppendMagic(message)
-		if self.MasterSocket is None:
+		if self.LocalMasterConnection is None:
 			pass
 		else:
-			self.Transceiver.Send({"sock":self.MasterSocket, "packet":packet})
+			self.Transceiver.Send({"sock":self.LocalMasterConnection.Socket, "packet":packet})
 		self.SetState("WAIT_FOR_PORT")
 	
 	def StateFindPortManualy(self):
@@ -218,11 +217,11 @@ class SlaveNode(MkSAbstractNode.AbstractNode):
 		# Generate request
 		message = self.BasicProtocol.BuildRequest(msg_type, uuid, self.UUID, command, payload, additional)
 		packet  = self.BasicProtocol.AppendMagic(message)
-		if self.MasterSocket is None:
+		if self.LocalMasterConnection is None:
 			pass
 			# TODO - Send over local websocket
 		else:
-			self.Transceiver.Send({"sock":self.MasterSocket, "packet":packet})
+			self.Transceiver.Send({"sock":self.LocalMasterConnection.Socket, "packet":packet})
 
 	def EmitOnNodeChange(self, data):
 		# print ("({classname})# Emit onNodeChange event ...".format(classname=self.ClassName))
@@ -236,10 +235,10 @@ class SlaveNode(MkSAbstractNode.AbstractNode):
 				uuid = payload["uuid"]
 				message = self.BasicProtocol.BuildRequest("DIRECT", uuid, self.UUID, "on_node_change", data, {})
 				packet  = self.BasicProtocol.AppendMagic(message)
-				if self.MasterSocket is None:
+				if self.LocalMasterConnection is None:
 					pass
 				else:
-					self.Transceiver.Send({"sock":self.MasterSocket, "packet":packet})
+					self.Transceiver.Send({"sock":self.LocalMasterConnection.Socket, "packet":packet})
 			# Webface
 			elif item_type == 2:
 				if payload["pipe"] == "GATEWAY":
@@ -250,10 +249,10 @@ class SlaveNode(MkSAbstractNode.AbstractNode):
 					})
 
 					packet  = self.BasicProtocol.AppendMagic(message)
-					if self.MasterSocket is None:
+					if self.LocalMasterConnection.Socket is None:
 						pass
 					else:
-						self.Transceiver.Send({"sock":self.MasterSocket, "packet":packet})
+						self.Transceiver.Send({"sock":self.LocalMasterConnection.Socket, "packet":packet})
 				elif payload["pipe"] == "LOCAL_WS":
 					ws_id = payload["ws_id"]
 					message = self.BasicProtocol.BuildRequest("DIRECT", "WEBFACE", self.UUID, "on_node_change", data, {
@@ -267,11 +266,11 @@ class SlaveNode(MkSAbstractNode.AbstractNode):
 		message = self.BasicProtocol.BuildRequest("DIRECT", "GATEWAY", self.UUID, "ping", self.NodeInfo, {})
 		packet  = self.BasicProtocol.AppendMagic(message)
 
-		if self.MasterSocket is None:
+		if self.LocalMasterConnection is None:
 			pass
 		else:
 			print ("({classname})# Sending ping request ...".format(classname=self.ClassName))
-			self.Transceiver.Send({"sock":self.MasterSocket, "packet":packet})
+			self.Transceiver.Send({"sock":self.LocalMasterConnection.Socket, "packet":packet})
 	
 	def PreUILoaderHandler(self):
 		print ("({classname})# PreUILoaderHandler ...".format(classname=self.ClassName))
@@ -291,7 +290,7 @@ class SlaveNode(MkSAbstractNode.AbstractNode):
 				self.ServerSocket.close()
 				# If master terminated we need to close node.
 				self.SetState("CONNECT_MASTER")
-				self.MasterSocket = None
+				self.LocalMasterConnection = None
 				if self.OnMasterDisconnectedCallback is not None:
 					self.OnMasterDisconnectedCallback()
 	
@@ -336,27 +335,27 @@ class SlaveNode(MkSAbstractNode.AbstractNode):
 	def SendSensorInfoChange(self, sensors):
 		json = self.Commands.GenerateJsonProxyRequest(self.UUID, "WEBFACE", "get_sensor_info", {})
 		msg  = self.Commands.ProxyResponse(json, sensors)
-		if self.MasterSocket is None:
+		if self.LocalMasterConnection is None:
 			pass
 		else:
-			self.Transceiver.Send({"sock":self.MasterSocket, "packet":packet})
+			self.Transceiver.Send({"sock":self.LocalMasterConnection.Socket, "packet":packet})
 	
 	def GetListOfNodeFromGateway(self):
 		print ("[SlaveNode] GetListOfNodeFromGateway")
 		payload = self.Commands.SendListOfNodesRequest("GATEWAY", self.UUID)
-		if self.MasterSocket is None:
+		if self.LocalMasterConnection is None:
 			pass
 		else:
-			self.Transceiver.Send({"sock":self.MasterSocket, "packet":packet})
+			self.Transceiver.Send({"sock":self.LocalMasterConnection.Socket, "packet":packet})
 	
 	# TODO - NO master change.
 	def GetNodeInfo(self, uuid):
 		print ("[SlaveNode] GetNodeInfo")
 		payload = self.Commands.NodeInfoRequest(uuid, self.UUID)
-		if self.MasterSocket is None:
+		if self.LocalMasterConnection is None:
 			pass
 		else:
-			self.Transceiver.Send({"sock":self.MasterSocket, "packet":packet})
+			self.Transceiver.Send({"sock":self.LocalMasterConnection.Socket, "packet":packet})
 
 	def CleanMasterList(self):
 		for node in self.MasterNodesList:

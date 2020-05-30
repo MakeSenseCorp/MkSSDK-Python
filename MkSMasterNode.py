@@ -79,13 +79,13 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 		self.NetworkAccessTickLock 				= threading.Lock()
 		# Sates
 		self.States 							= {
-			'IDLE': 							self.StateIdle,
-			'INIT':								self.StateInit,
-			'INIT_GATEWAY':						self.StateInitGateway,
-			'ACCESS_GATEWAY': 					self.StateAccessGetway,
-			'ACCESS_WAIT_GATEWAY':				self.StateAccessWaitGatway,
-			'INIT_LOCAL_SERVER':				self.StateInitLocalServer,
-			'WORKING': 							self.StateWork
+			'IDLE': 							self.State_Idle,
+			'INIT':								self.State_Init,
+			'INIT_GATEWAY':						self.State_InitGateway,
+			'ACCESS_GATEWAY': 					self.State_AccessGetway,
+			'ACCESS_WAIT_GATEWAY':				self.State_AccessWaitGatway,
+			'INIT_LOCAL_SERVER':				self.State_InitLocalServer,
+			'WORKING': 							self.State_Work
 		}
 		# Handlers
 		self.NodeRequestHandlers['get_port'] 		= self.GetPortRequestHandler
@@ -116,14 +116,26 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 	#	print("TODO - (MkSMasterNode.MasterNode) Who stops PipeStdoutListener_Thread thread?")
 	#	thread.start_new_thread(self.PipeStdoutListener_Thread, ())
 
-	def StateIdle (self):
+	''' 
+		Description: 	State [IDLE]
+		Return: 		None
+	'''	
+	def State_Idle (self):
 		self.Logger.Log("(Master Node)# Note, in IDLE state ...")
 		time.sleep(1)
-	
-	def StateInit (self):
+
+	''' 
+		Description: 	State [INIT]
+		Return: 		None
+	'''	
+	def State_Init (self):
 		self.SetState("INIT_LOCAL_SERVER")
-	
-	def StateInitGateway(self):
+
+	''' 
+		Description: 	State [INIT_GATEWAY]
+		Return: 		None
+	'''	
+	def State_InitGateway(self):
 		if self.IsNodeWSServiceEnabled is True:
 			# Create Network instance
 			self.Network = MkSNetMachine.Network(self.ApiUrl, self.WsUrl)
@@ -144,7 +156,11 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 			else:
 				self.SetState("WORKING")
 
-	def StateAccessGetway (self):
+	''' 
+		Description: 	State [ACCESS_GATEWAY]
+		Return: 		None
+	'''	
+	def State_AccessGetway (self):
 		if self.IsNodeWSServiceEnabled is True:
 			self.Network.AccessGateway(self.Key, json.dumps({
 				'node_name': str(self.Name),
@@ -154,24 +170,33 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 			self.SetState("ACCESS_WAIT_GATEWAY")
 		else:
 			self.SetState("WORKING")
-	
-	def StateAccessWaitGatway (self):
+
+	''' 
+		Description: 	State [ACCESS_WAIT_GATEWAY]
+		Return: 		None
+	'''		
+	def State_AccessWaitGatway (self):
 		if self.AccessTick > 10:
 			self.SetState("ACCESS_WAIT_GATEWAY")
 			self.AccessTick = 0
 		else:
 			self.AccessTick += 1
-	
-	def StateInitLocalServer(self):
-		self.SocketServer.Start(16999)
-		#self.ServerAdderss = ('', 16999)
-		#status = self.TryStartListener()
-		#if status is True:
-		#	self.IsListenerEnabled = True
-		#	self.SetState("INIT_GATEWAY")
-		#time.sleep(1)
 
-	def StateWork (self):
+	''' 
+		Description: 	State [INIT_LOCAL_SERVER]
+		Return: 		None
+	'''	
+	def State_InitLocalServer(self):
+		self.SocketServer.Start(16999)
+		if self.SocketServer.GetListenerStatus() is True:
+			self.SetState("INIT_GATEWAY")
+		time.sleep(1)
+
+	''' 
+		Description: 	State [WORKING]
+		Return: 		None
+	'''	
+	def State_Work (self):
 		if self.SystemLoaded is False:
 			self.SystemLoaded = True # Update node that system done loading.
 			if self.NodeSystemLoadedCallback is not None:

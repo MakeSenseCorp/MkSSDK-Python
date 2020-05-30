@@ -19,13 +19,13 @@ from mksdk import MkSDevice
 from mksdk import MkSUtils
 from mksdk import MkSBasicNetworkProtocol
 from mksdk import MkSSecurity
-from mksdk import MkSLocalSocketNodeMngr
+from mksdk import MkSLocalSocketMngr
 
 class AbstractNode():
 	def __init__(self):
 		self.ClassName								= ""
 		self.File 									= MkSFile.File()
-		self.SocketServer							= MkSLocalSocketNodeMngr.Menager()
+		self.SocketServer							= MkSLocalSocketMngr.Manager()
 		self.Connector 								= None
 		self.Network								= None
 		self.LocalWSManager							= None
@@ -95,7 +95,8 @@ class AbstractNode():
 		self.MyLocalIP 								= ""
 		self.NetworkCards 							= MkSUtils.GetIPList()
 		# Network
-		self.MasterSocket							= None
+		#self.MasterSocket							= None
+		self.LocalMasterConnection					= None
 		# Handlers
 		self.NodeRequestHandlers					= {
 			'get_node_info': 						self.GetNodeInfoRequestHandler,
@@ -232,6 +233,24 @@ class AbstractNode():
 		pass
 
 	''' 
+		Description:	Connect node (MASTER) over socket, add connection to connections list
+						and add node to masters list.
+		Return: 		Status (True/False).
+	'''
+	def ConnectMaster(self, ip):
+		connection, status = self.SocketServer.Connect((ip, 16999))
+		if status is True:
+			connection.Obj["name"] = "MASTER"
+			self.MasterNodesList.append(connection)
+			if self.OnMasterFoundCallback is not None:
+				self.OnMasterFoundCallback(connection)
+			# Save socket as master socket
+			self.LocalMasterConnection = connection
+			return True
+
+		return False
+
+	''' 
 		Description:	Search for MASTER nodes on local network.
 		Return: 		IP list of MASTER nodes.
 	'''
@@ -242,21 +261,7 @@ class AbstractNode():
 		# Find all master nodes on the network.
 		ips = MkSUtils.FindLocalMasterNodes()
 		for ip in ips:
-			if self.GetNode(ip, 16999) is None:
-				# Master not in list, can make connection
-				sock, status = self.ConnectNodeSocket((ip, 16999))
-				if True == status:
-					node = self.AppendConnection(sock, ip, 16999)
-					node.LocalType = "MASTER"
-					# Raise event
-					if self.OnMasterFoundCallback is not None:
-						self.OnMasterFoundCallback([sock, ip])
-					self.NodeMasterAvailable(sock)
-				else:
-					self.Logger.Log("({classname})# [FindMasters] Could not connect".format(classname=self.ClassName))
-			else:
-				if self.OnMasterFoundCallback is not None:
-					self.OnMasterFoundCallback([None, ip])
+			self.ConnectMaster(ip)
 		return len(ips)
 	
 	''' 
@@ -264,19 +269,8 @@ class AbstractNode():
 						and add node to masters list.
 		Return: 		Status (True/False).
 	'''
-	def ConnectMaster(self):
-		sock, status = self.ConnectNodeSocket((self.MyLocalIP, 16999))
-		if status is True:
-			node = self.AppendConnection(sock, self.MyLocalIP, 16999)
-			node.LocalType = "MASTER"
-			self.MasterNodesList.append(node)
-			if self.OnMasterFoundCallback is not None:
-				self.OnMasterFoundCallback([sock, self.MyLocalIP])
-			# Save socket as master socket
-			self.MasterSocket = sock
-			return True
-
-		return False
+	def ConnectLocalMaster(self):
+		return self.ConnectMaster(self.MyLocalIP)
 	
 	''' 
 		Description: 	Send message over socket via message queue.
@@ -292,108 +286,134 @@ class AbstractNode():
 		Return: 		SocketConnection.
 	'''
 	def GetNodeByUUID(self, uuid):
-		for key in self.OpenConnections:
-			node = self.OpenConnections[key]
-			if node.UUID == uuid:
-				return node
+		connection_map = self.SocketServer.GetConnections()
+		for key in self.connection_map:
+			conn = self.connection_map[key]
+			if conn.Obj["uuid"] == uuid:
+				return conn
 		return None
+
+	''' 
+		Description: 	<N/A>
+		Return: 		<N/A>
+	'''
+	def SendBroadcastBySocket(self, sock, command):
+		message = self.BasicProtocol.BuildRequest("BROADCAST", "", self.UUID, command, {}, {})
+		packet  = self.BasicProtocol.AppendMagic(message)
+		self.ServerSocket.Send(sock, packet)
+		return True
+
+	''' 
+		Description: 	<N/A>
+		Return: 		<N/A>
+	'''	
+	def SendBroadcastByUUID(self, uuid, command):
+		conn = self.GetNodeByUUID(uuid)
+		if conn is not None:
+			message = self.BasicProtocol.BuildRequest("BROADCAST", "", self.UUID, command, {}, {})
+			packet  = self.BasicProtocol.AppendMagic(message)
+			self.ServerSocket.Send(conn.Socket, packet)
+			return True
+		return False
 	
 	''' 
 		Description: 	Input handler binded to LocalSocketMngr callback.
 		Return: 		None.
 	'''
 	def DataSocketInputHandler(self, connection, data):
-		## Each makesense packet should start from magic number "MKS"
-		#if "MKSS" in data[:4]:
-		#	# One packet can hold multiple MKS messages.
-		#	multiData = data.split("MKSS:")
-		#	for packet in multiData[1:]:
-		#		# TODO - Must handled in different thread
-		#		if "MKSE" in packet:
-		#			packet[:-5]
-		#else:
-		#	self.Logger.Log("({classname})# [LocalSocketWorker] Data Invalid ...".format(classname=self.ClassName))
-		
 		try:
-			sock 		= connection.Socket
-			packet 		= json.loads(data)
-			messageType = self.BasicProtocol.GetMessageTypeFromJson(packet)
-			command 	= self.BasicProtocol.GetCommandFromJson(packet)
-			direction 	= self.BasicProtocol.GetDirectionFromJson(packet)
-			destination = self.BasicProtocol.GetDestinationFromJson(packet)
-			source 		= self.BasicProtocol.GetSourceFromJson(packet)
+			# Each makesense packet should start from magic number "MKS"
+			if "MKSS" in data[:4]:
+				# One packet can hold multiple MKS messages.
+				multiData = data.split("MKSS:")
+				for fragment in multiData[1:]:
+					if "MKSE" in fragment:
+						# Handling MKS packet
+						sock 		= connection.Socket
+						packet 		= json.loads(fragment[:-5])
+						messageType = self.BasicProtocol.GetMessageTypeFromJson(packet)
+						command 	= self.BasicProtocol.GetCommandFromJson(packet)
+						direction 	= self.BasicProtocol.GetDirectionFromJson(packet)
+						destination = self.BasicProtocol.GetDestinationFromJson(packet)
+						source 		= self.BasicProtocol.GetSourceFromJson(packet)
+						broadcast 	= False
 
-			packet["additional"]["client_type"] = "global_ws"
-			self.Logger.Log("({classname})# SOCK [{direction}] {source} -> {dest} [{cmd}]".format(classname=self.ClassName,
-						direction=direction,
-						source=source,
-						dest=destination,
-						cmd=command))
-			
-			if messageType == "BROADCAST":
-				pass
-
-			if destination in self.UUID and source in self.UUID:
-				return
-			
-			# Is this packet for me?
-			if destination in self.UUID or (destination in "MASTER" and 1 == self.Type):
-				if direction in "request":
-					if command in self.NodeRequestHandlers.keys():
-						try:
-							message = self.NodeRequestHandlers[command](sock, packet)
-							if message == "" or message is None:
+						packet["additional"]["client_type"] = "global_ws" # Why?
+						self.Logger.Log("({classname})# SOCK [{direction}] {source} -> {dest} [{cmd}]".format(classname=self.ClassName,
+									direction=direction,
+									source=source,
+									dest=destination,
+									cmd=command))
+						
+						if messageType == "BROADCAST":
+							broadcast = True
+						else:
+							if destination in self.UUID and source in self.UUID:
 								return
-							packet = self.BasicProtocol.AppendMagic(message)
-							self.Transceiver.Send({"sock":sock, "packet":packet})
-						except Exception as e:
-							self.Logger.Log("({classname})# ERROR - [#1]\n(EXEPTION)# {error}".format(error=str(e),classname=self.ClassName))
-					else:
-						# This command belongs to the application level
-						if self.OnApplicationRequestCallback is not None:
+						
+						# Is this packet for me or this packet for MASTER and I'm a Master or this message is BROADCAST?
+						if destination in self.UUID or (destination in "MASTER" and 1 == self.Type) or broadcast is True:
+							if direction in "request":
+								if command in self.NodeRequestHandlers.keys():
+									try:
+										message = self.NodeRequestHandlers[command](sock, packet)
+										if message == "" or message is None:
+											return
+										packet = self.BasicProtocol.AppendMagic(message)
+										self.ServerSocket.Send(sock, packet)
+									except Exception as e:
+										self.Logger.Log("({classname})# ERROR - [#1]\n(EXEPTION)# {error}".format(error=str(e),classname=self.ClassName))
+								else:
+									# This command belongs to the application level
+									if self.OnApplicationRequestCallback is not None:
+										try:
+											message = self.OnApplicationRequestCallback(sock, packet)
+											if message == "" or message is None:
+												return
+											packet = self.BasicProtocol.AppendMagic(message)
+											self.ServerSocket.Send(sock, packet)
+										except Exception as e:
+											self.Logger.Log("({classname})# ERROR - [#2]\n(EXEPTION)# {error}".format(error=str(e),classname=self.ClassName))
+							elif direction in "response":
+								if command in self.NodeResponseHandlers.keys():
+									try:
+										self.NodeResponseHandlers[command](sock, packet)
+									except Exception as e:
+										self.Logger.Log("({classname})# ERROR - [#3]\n(EXEPTION)# {error}".format(error=str(e),classname=self.ClassName))
+								else:
+									# This command belongs to the application level
+									if self.OnApplicationResponseCallback is not None:
+										try:
+											self.OnApplicationResponseCallback(sock, packet)
+										except Exception as e:
+											self.Logger.Log("({classname})# ERROR - [#4]\n(EXEPTION)# {error}".format(error=str(e),classname=self.ClassName))
+							else:
+								pass
+						else:
+							# This massage is external (MOSTLY MASTER)
 							try:
-								message = self.OnApplicationRequestCallback(sock, packet)
-								if message == "" or message is None:
-									return
-								packet = self.BasicProtocol.AppendMagic(message)
-								self.Transceiver.Send({"sock":sock, "packet":packet})
+								if self.Network is not None:
+									self.Logger.Log("({classname})# This massage is external (MOSTLY MASTER)".format(classname=self.ClassName))
+									self.SendPacketGateway(data)
 							except Exception as e:
-								self.Logger.Log("({classname})# ERROR - [#2]\n(EXEPTION)# {error}".format(error=str(e),classname=self.ClassName))
-				elif direction in "response":
-					if command in self.NodeResponseHandlers.keys():
-						try:
-							self.NodeResponseHandlers[command](sock, packet)
-						except Exception as e:
-							self.Logger.Log("({classname})# ERROR - [#3]\n(EXEPTION)# {error}".format(error=str(e),classname=self.ClassName))
+								self.Logger.Log("({classname})# ERROR - [#5]\n(EXEPTION)# {error}".format(error=str(e),classname=self.ClassName))
 					else:
-						# This command belongs to the application level
-						if self.OnApplicationResponseCallback is not None:
-							try:
-								self.OnApplicationResponseCallback(sock, packet)
-							except Exception as e:
-								self.Logger.Log("({classname})# ERROR - [#4]\n(EXEPTION)# {error}".format(error=str(e),classname=self.ClassName))
-				else:
-					pass
+						pass
 			else:
-				# This massage is external (MOSTLY MASTER)
-				try:
-					if self.Network is not None:
-						self.Logger.Log("({classname})# This massage is external (MOSTLY MASTER)".format(classname=self.ClassName))
-						self.SendPacketGateway(data)
-				except Exception as e:
-					self.Logger.Log("({classname})# ERROR - [#5]\n(EXEPTION)# {error}".format(error=str(e),classname=self.ClassName))
+				self.Logger.Log("({classname})# [DataSocketInputHandler] Data Invalid ...".format(classname=self.ClassName))
 		except Exception as e:
-			self.Logger.Log("({classname})# ERROR - [DataSocketInputHandler]\n(EXEPTION)# {error}\n{data}".format(error=str(e),data=data,classname=self.ClassName))
-
+			self.Logger.Log("({classname})# [DataSocketInputHandler] ERROR - {error}".format(error=str(e),classname=self.ClassName))
+	
 	''' 
-		Description: 	
+		Description: 	This handler cslled after socket created and appended
+						to the connections list with HASH and etc...
 		Return: 		
 	'''
 	def NewNodeConnectedHandler(self, connection):
 		# Raise event for user
 		if self.OnAceptNewConnectionCallback is not None:
 			self.OnAceptNewConnectionCallback(connection)
-
+		self.SendBroadcastBySocket(connection.Socket, "get_node_info")
 	''' 
 		Description: 	
 		Return: 		
@@ -411,10 +431,10 @@ class AbstractNode():
 		# Let know registered method about local server start.
 		if self.OnLocalServerListenerStartedCallback is not None:
 			self.OnLocalServerListenerStartedCallback(connection.Socket, connection.IP, connection.Port)
-		
-		#node.LocalType 	= "LISTENER"
-		#node.UUID 			= self.UUID
-		#node.Type 			= self.Type
+		# Update node information
+		connection.Obj["uuid"] 	= self.UUID
+		connection.Obj["type"] 	= self.Type
+		connection.Obj["name"] 	= "LISTENER"
 
 		#if self.IsLocalUIEnabled is True:
 		#	# Run preloader for UI interface
@@ -463,8 +483,8 @@ class AbstractNode():
 		payload	= self.BasicProtocol.GetPayloadFromJson(packet)
 		self.Logger.Log("({classname})# Close server socket request ... {0}".format(payload, classname=self.ClassName))
 		self.RemoveConnectionBySock(sock)
-		if self.MasterSocket == sock:
-			self.MasterSocket = None
+		#if self.MasterSocket == sock:
+		#	self.MasterSocket = None
 
 	def FindNodeResponseHandler(self, sock, packet):
 		payload 	= self.BasicProtocol.GetPayloadFromJson(packet)
@@ -1064,8 +1084,8 @@ class AbstractNode():
 					# This check is for client nodes
 					if (self.Type not in [1, 2]):
 						if self.LocalWSManager is not None:
-							if self.LocalWSManager.IsServerRunnig() is False and self.MasterSocket is None:
-								self.Logger.Log("({classname})# Exiting main thread ... ({0}, {1}) ...".format(self.LocalWSManager.IsServerRunnig(), self.MasterSocket, classname=self.ClassName))
+							if self.LocalWSManager.IsServerRunnig() is False and self.LocalMasterConnection is None:
+								self.Logger.Log("({classname})# Exiting main thread ... ({0}, {1}) ...".format(self.LocalWSManager.IsServerRunnig(), self.LocalMasterConnection.Socket, classname=self.ClassName))
 								self.Exit("Exiting main thread")
 
 			self.Ticker += 1
