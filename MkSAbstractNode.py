@@ -15,7 +15,6 @@ import Queue
 
 import MkSGlobals
 from mksdk import MkSFile
-from mksdk import MkSDevice
 from mksdk import MkSUtils
 from mksdk import MkSBasicNetworkProtocol
 from mksdk import MkSSecurity
@@ -30,6 +29,7 @@ class AbstractNode():
 		self.Network								= None
 		self.LocalWSManager							= None
 		self.MKSPath								= ""
+		self.HostName								= socket.gethostname()
 		# Device information
 		self.Type 									= 0
 		self.UUID 									= ""
@@ -37,7 +37,6 @@ class AbstractNode():
 		self.OSVersion 								= ""
 		self.BrandName 								= ""
 		self.Description							= ""
-		self.DeviceInfo 							= None
 		self.BoardType 								= ""
 		self.Name 									= "N/A"
 		# Misc
@@ -154,7 +153,7 @@ class AbstractNode():
 		self.SocketServer.NewConnectionEvent 		= self.NewNodeConnectedHandler
 		self.SocketServer.ConnectionRemovedEvent 	= self.NodeDisconnectedHandler
 		self.SocketServer.DataArrivedEvent			= self.DataSocketInputHandler
-		self.SocketServer.ServerStatrtedEvent		= self.LocalServerStartedHandler
+		self.SocketServer.ServerStartetedEvent		= self.LocalServerStartedHandler
 		
 	# Overload
 	def GatewayConnectedEvent(self):
@@ -240,7 +239,7 @@ class AbstractNode():
 	def ConnectMaster(self, ip):
 		connection, status = self.SocketServer.Connect((ip, 16999))
 		if status is True:
-			connection.Obj["name"] = "MASTER"
+			connection.Obj["local_type"] = "MASTER"
 			self.MasterNodesList.append(connection)
 			if self.OnMasterFoundCallback is not None:
 				self.OnMasterFoundCallback(connection)
@@ -280,7 +279,14 @@ class AbstractNode():
 		# Generate request
 		message = self.BasicProtocol.BuildRequest(msg_type, uuid, self.UUID, command, payload, additional)
 		packet  = self.BasicProtocol.AppendMagic(message)
-	
+
+	''' 
+		Description: 	Get local node.
+		Return: 		SocketConnection list.
+	'''	
+	def GetConnectedNodes(self):
+		return self.SocketServer.GetConnections()
+
 	''' 
 		Description: 	Get local node by UUID.
 		Return: 		SocketConnection.
@@ -300,7 +306,7 @@ class AbstractNode():
 	def SendBroadcastBySocket(self, sock, command):
 		message = self.BasicProtocol.BuildRequest("BROADCAST", "", self.UUID, command, {}, {})
 		packet  = self.BasicProtocol.AppendMagic(message)
-		self.ServerSocket.Send(sock, packet)
+		self.SocketServer.Send(sock, packet)
 		return True
 
 	''' 
@@ -312,7 +318,7 @@ class AbstractNode():
 		if conn is not None:
 			message = self.BasicProtocol.BuildRequest("BROADCAST", "", self.UUID, command, {}, {})
 			packet  = self.BasicProtocol.AppendMagic(message)
-			self.ServerSocket.Send(conn.Socket, packet)
+			self.SocketServer.Send(conn.Socket, packet)
 			return True
 		return False
 	
@@ -360,7 +366,7 @@ class AbstractNode():
 										if message == "" or message is None:
 											return
 										packet = self.BasicProtocol.AppendMagic(message)
-										self.ServerSocket.Send(sock, packet)
+										self.SocketServer.Send(sock, packet)
 									except Exception as e:
 										self.Logger.Log("({classname})# ERROR - [#1]\n(EXEPTION)# {error}".format(error=str(e),classname=self.ClassName))
 								else:
@@ -371,7 +377,7 @@ class AbstractNode():
 											if message == "" or message is None:
 												return
 											packet = self.BasicProtocol.AppendMagic(message)
-											self.ServerSocket.Send(sock, packet)
+											self.SocketServer.Send(sock, packet)
 										except Exception as e:
 											self.Logger.Log("({classname})# ERROR - [#2]\n(EXEPTION)# {error}".format(error=str(e),classname=self.ClassName))
 							elif direction in "response":
@@ -410,10 +416,21 @@ class AbstractNode():
 		Return: 		
 	'''
 	def NewNodeConnectedHandler(self, connection):
-		# Raise event for user
-		if self.OnAceptNewConnectionCallback is not None:
-			self.OnAceptNewConnectionCallback(connection)
-		self.SendBroadcastBySocket(connection.Socket, "get_node_info")
+		if self.SocketServer.ServerSocket != connection.Socket:
+			# Raise event for user
+			if self.OnAceptNewConnectionCallback is not None:
+				self.OnAceptNewConnectionCallback(connection)
+			self.SendBroadcastBySocket(connection.Socket, "get_node_info")
+		
+		# Initiate NODE information
+		connection.Obj["uuid"] 			= "N/A"
+		connection.Obj["type"] 			= 0
+		connection.Obj["local_type"] 	= "CLIENT"
+		connection.Obj["listener_port"] = 0
+		connection.Obj["pid"] 			= 0
+		connection.Obj["name"] 			= "N/A"
+		connection.Obj["status"] 		= 1
+	
 	''' 
 		Description: 	
 		Return: 		
@@ -432,9 +449,14 @@ class AbstractNode():
 		if self.OnLocalServerListenerStartedCallback is not None:
 			self.OnLocalServerListenerStartedCallback(connection.Socket, connection.IP, connection.Port)
 		# Update node information
-		connection.Obj["uuid"] 	= self.UUID
-		connection.Obj["type"] 	= self.Type
-		connection.Obj["name"] 	= "LISTENER"
+		connection.Obj["uuid"] 			= self.UUID
+		connection.Obj["type"] 			= self.Type
+		connection.Obj["local_type"] 	= "LISTENER"
+		connection.Obj["listener_port"] = 16999
+
+		connection.Obj["pid"] 			= 0
+		connection.Obj["name"] 			= "N/A"
+		connection.Obj["status"] 		= 1
 
 		#if self.IsLocalUIEnabled is True:
 		#	# Run preloader for UI interface
@@ -889,8 +911,6 @@ class AbstractNode():
 			self.Exit("ERROR - Wrong configuration format")
 			return False
 		
-		print("# TODO - Do we need this DeviceInfo?")
-		self.DeviceInfo = MkSDevice.Device(self.UUID, self.Type, self.OSType, self.OSVersion, self.BrandName)
 		return True
 	
 	def InitiateLocalServer(self, port):
@@ -918,46 +938,6 @@ class AbstractNode():
 	def AppendFaceRestTable(self, endpoint=None, endpoint_name=None, handler=None, args=None, method=['GET']):
 		if self.IsLocalUIEnabled is True:
 			self.UI.AddEndpoint(endpoint, endpoint_name, handler, args, method)
-
-	def TryStartListener(self):
-		try:
-			self.Logger.Log("({classname})# Start listener...".format(classname=self.ClassName))
-			self.ServerSocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-			self.ServerSocket.setblocking(0)
-
-			self.ServerSocket.bind(self.ServerAdderss)
-			# [socket, ip_address, port]
-			node = self.AppendConnection(self.ServerSocket, self.MyLocalIP, self.ServerAdderss[1])
-			node.LocalType 	= "LISTENER"
-			node.UUID 		= self.UUID
-			node.Type 		= self.Type
-
-			self.ServerSocket.listen(32)
-			self.IsLocalSocketRunning = True
-
-			if self.IsLocalUIEnabled is True:
-				# Run preloader for UI interface
-				if self.UI is None:
-					self.Logger.Log("({classname})# Executing UI preloader (Only valid for local UI aka Webface)".format(classname=self.ClassName))
-					self.PreUILoaderHandler()
-
-			# Let know registered method about local server start.
-			if self.OnLocalServerListenerStartedCallback is not None:
-				self.OnLocalServerListenerStartedCallback(self.ServerSocket, self.MyLocalIP, self.ServerAdderss[1])
-
-			# Run UI thread
-			if self.IsLocalUIEnabled is True:
-				if self.UI is None:
-					self.Logger.Log("({classname})# Local UI(Webface) is not set ... (NULL)".format(classname=self.ClassName))
-				else:
-					self.Logger.Log("({classname})# Running local UI(Webface)".format(classname=self.ClassName))
-					self.UI.Run()
-
-			return True
-		except Exception as e:
-			self.RemoveConnectionBySock(self.ServerSocket)
-			self.Logger.Log("({classname})# Failed to open listener, {0}\n[EXCEPTION] {1}".format(str(self.ServerAdderss[1]),e,classname=self.ClassName))
-			return False
 	
 	def LocalWSDisconnectedHandler(self, ws_id):
 		self.UnregisterLocalWS(ws_id)
@@ -1021,10 +1001,6 @@ class AbstractNode():
 	def SetLocalServerStatus(self, is_enabled):
 		self.IsNodeLocalServerEnabled = is_enabled
 	
-	def StartLocalNode(self):
-		print("TODO - (MkSNode.Run) Missing management of network HW disconnection")
-		thread.start_new_thread(self.NodeLocalNetworkConectionListener, ())
-	
 	def ServicesManager(self):
 		if self.IsMaster is True:
 			return
@@ -1042,6 +1018,12 @@ class AbstractNode():
 						else:
 							self.ScanNetwork()
 			self.ServiceSearchTS = time.time()
+
+	def LogMSG(self, message):
+		if self.Logger is not None:
+			self.Logger.Log(message)
+		else:
+			print("({classname})# [NONE LOGGER] - {0}".format(message,classname=self.ClassName))
 
 	def Run (self, callback):
 		# Will be called each half a second.
@@ -1067,7 +1049,9 @@ class AbstractNode():
 
 		# Start local node dervice thread
 		if self.IsNodeLocalServerEnabled is True:
-			self.StartLocalNode()
+			self.SocketServer.Logger = self.Logger
+			self.SocketServer.SetExitSync(self.ExitLocalServerEvent)
+			self.SocketServer.Start(16999)
 
 		# Waiting here till SIGNAL from OS will come.
 		while self.IsMainNodeRunnig:
@@ -1102,7 +1086,8 @@ class AbstractNode():
 		
 		# TODO - Don't think we need this event.
 		# self.ExitEvent.wait()
-		if self.IsListenerEnabled is True:
+		if self.IsNodeLocalServerEnabled is True:
+			self.SocketServer.Stop()
 			self.ExitLocalServerEvent.wait()
 	
 	def Stop (self, reason):
