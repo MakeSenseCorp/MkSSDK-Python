@@ -29,118 +29,117 @@ class SlaveNode(MkSAbstractNode.AbstractNode):
 		self.IsLocalUIEnabled					= False
 		# Sates
 		self.States 							= {
-			'IDLE': 							self.StateIdle,
-			'INIT':								self.StateInit,
-			'CONNECT_MASTER':					self.StateConnectMaster,
-			'FIND_PORT_MANUALY':				self.StateFindPortManualy,
-			'GET_MASTER_INFO':					self.StateGetMasterInfo,
-			'GET_PORT': 						self.StateGetPort,
-			'WAIT_FOR_PORT':					self.StateWaitForPort,
-			'START_LISTENER':					self.StateStartListener,
-			'WORKING':							self.StateWorking,
-			'EXIT':								self.StateExit
+			'IDLE': 							self.State_Idle,
+			'INIT':								self.State_Init,
+			'CONNECT_MASTER':					self.State_ConnectMaster,
+			'FIND_PORT_MANUALY':				self.State_FindPortManualy,
+			'GET_MASTER_INFO':					self.State_GetMasterInfo,
+			'GET_PORT': 						self.State_GetPort,
+			'WAIT_FOR_PORT':					self.State_WaitForPort,
+			'START_LISTENER':					self.State_StartListener,
+			'WORKING':							self.State_Working,
+			'EXIT':								self.State_Exit
 		}
 		# Handlers
 		self.NodeResponseHandlers['get_port'] 			= self.GetPortResponseHandler
+		self.NodeRequestHandlers['shutdown'] 			= self.ShutdownRequestHandler
 		#self.ResponseHandlers	= {
-		#	'get_local_nodes': 						self.GetLocalNodeResponseHandler,
-		#	'get_master_info': 						self.GetMasterInfoResponseHandler,
-		#	'set_sensor_info': 						self.SetSensorInfoResponseHandler,
 		#	'get_node_info':						self.GetNodeInfoHandler,
 		#	'undefined':							self.UndefindHandler
 		#}
 		#self.RequestHandlers	= {
 		#	'set_sensor_info': 						self.SetSensorInfoRequestHandler,
 		#	'upload_file':							self.UploadFileHandler,
-		#	'exit':									self.ExitHandler,
 		#	'undefined':							self.UndefindHandler
 		#}
 		# Callbacks
 		self.OnGetNodeInfoCallback 					= None
 		self.OnGetSensorInfoRequestCallback			= None
 		self.OnSetSensorInfoRequestCallback 		= None
-		self.OnUploadFileRequestCallback 			= None
 		# Flags
 		self.IsListenerEnabled 						= False
 		# Counters
 		self.MasterConnectionTries 					= 0
 		self.MasterInformationTries 				= 0
-		self.MasterTickTimeout 						= 1
+		self.MasterTickTimeout 						= 4
 		self.EnableLog								= True
-		
+
+	''' 
+		Description: 	N/A
+		Return: 		N/A
+	'''	
 	def EnableLogs(self, name):
 		self.Logger = MkSLogger.Logger(name)
 		self.Logger.EnablePrint()
 		self.Logger.EnableLogger()
 
-	#def Initiate(self):
-	#	self.SetState("INIT")
-
-	def StateIdle(self):
-		print ("({classname})# Note, in IDLE state ...".format(classname=self.ClassName))
+	''' 
+		Description: 	State [IDLE]
+		Return: 		None
+	'''	
+	def State_Idle(self):
+		self.LogMSG("({classname})# Note, in IDLE state ...".format(classname=self.ClassName))
 		time.sleep(1)
-	
-	def StateInit (self):
+
+	''' 
+		Description: 	State [INIT]
+		Return: 		None
+	'''		
+	def State_Init (self):
 		self.MasterConnectionTries	= 0
 		self.MasterInformationTries	= 0	
+		self.SetState("CONNECT_MASTER")
 
-		print ("({classname})# Trying to connect Master ({tries}) ...".format(classname=self.ClassName, tries=self.MasterConnectionTries))
-		self.MasterConnectionTries += 1
-		if self.ConnectMaster() is True:
-			self.SetState("GET_MASTER_INFO")
-			print ("({classname})# Send get_node_info request ...".format(classname=self.ClassName))
-			# Send request
-			message = self.BasicProtocol.BuildRequest("DIRECT", "MASTER", self.UUID, "get_node_info", {}, {})
-			packet  = self.BasicProtocol.AppendMagic(message)
-			if self.LocalMasterConnection is None:
-				pass
-			else:
-				self.Transceiver.Send({"sock":self.LocalMasterConnection.Socket, "packet":packet})
-		else:
-			self.SetState("CONNECT_MASTER")
-
-	def StateConnectMaster(self):
-		if 0 == self.Ticker % self.MasterTickTimeout:
+	''' 
+		Description: 	State [CONNECT_MASTER]
+		Return: 		None
+	'''	
+	def State_ConnectMaster(self):
+		if 0 == self.Ticker % self.MasterTickTimeout or 0 == self.MasterConnectionTries:
 			if self.MasterConnectionTries > 3:
-				# self.SetState("EXIT")
-				self.SetState("FIND_PORT_MANUALY")
+				self.SetState("EXIT")
+				# self.SetState("FIND_PORT_MANUALY")
 			else:
-				print ("({classname})# Trying to connect Master ({tries}) ...".format(classname=self.ClassName, tries=self.MasterConnectionTries))
-				if self.ConnectMaster() is True:
+				self.LogMSG("({classname})# Trying to connect Master ({tries}) ...".format(classname=self.ClassName, tries=self.MasterConnectionTries))
+				if self.ConnectLocalMaster() is True:
 					self.SetState("GET_MASTER_INFO")
 				else:
 					self.SetState("CONNECT_MASTER")
 					self.MasterConnectionTries += 1
-	
-	def StateGetMasterInfo(self):
-		if 0 == self.Ticker % 10:
+
+	''' 
+		Description: 	State [GET_MASTER_INFO]
+		Return: 		None
+	'''		
+	def State_GetMasterInfo(self):
+		if 0 == self.Ticker % 10 or 0 == self.MasterInformationTries:
 			if self.MasterInformationTries > 3:
-				# self.SetState("EXIT")
-				self.SetState("FIND_PORT_MANUALY")
+				self.SetState("EXIT")
+				# self.SetState("FIND_PORT_MANUALY")
 			else:
-				print ("({classname})# Send get_node_info request ...".format(classname=self.ClassName))
+				self.LogMSG("({classname})# Send <get_node_info> request ...".format(classname=self.ClassName))
 				# Send request
 				message = self.BasicProtocol.BuildRequest("DIRECT", "MASTER", self.UUID, "get_node_info", {}, {})
 				packet  = self.BasicProtocol.AppendMagic(message)
-				if self.LocalMasterConnection is None:
-					pass
-				else:
+				if self.LocalMasterConnection is not None:
 					self.Transceiver.Send({"sock":self.LocalMasterConnection.Socket, "packet":packet})
 				self.MasterInformationTries += 1
 
-	def StateGetPort(self):
-		print ("({classname})# Sending get_port request ...".format(classname=self.ClassName))
+	''' 
+		Description: 	State [GET_PORT]
+		Return: 		None
+	'''	
+	def State_GetPort(self):
+		self.LogMSG("({classname})# Sending <get_port> request ...".format(classname=self.ClassName))
 		# Send request
 		message = self.BasicProtocol.BuildRequest("DIRECT", self.MasterUUID, self.UUID, "get_port", self.NodeInfo, {})
 		packet  = self.BasicProtocol.AppendMagic(message)
 		if self.LocalMasterConnection is None:
-			pass
-		else:
 			self.Transceiver.Send({"sock":self.LocalMasterConnection.Socket, "packet":packet})
 		self.SetState("WAIT_FOR_PORT")
 	
-	def StateFindPortManualy(self):
-		print ("({classname})# Trying to find port manualy ...".format(classname=self.ClassName))
+	def State_FindPortManualy(self):
+		self.LogMSG("({classname})# Trying to find port manualy ...".format(classname=self.ClassName))
 		if self.SlaveListenerPort == 0:
 			for idx in range(1,33):
 				port = 10000 + idx
@@ -154,47 +153,63 @@ class SlaveNode(MkSAbstractNode.AbstractNode):
 		else:
 			self.SetState("START_LISTENER")
 
-	def StateWaitForPort(self):
+	''' 
+		Description: 	State [WAIT_FOR_PORT]
+		Return: 		None
+	'''	
+	def State_WaitForPort(self):
 		if 0 == self.Ticker % 20:
 			if 0 == self.SlaveListenerPort:
 				self.SetState("GET_PORT")
 			else:
 				self.SetState("START_LISTENER")
 
-	def StateStartListener(self):
-		print ("({classname})# Trying to start listener ...".format(classname=self.ClassName))
-		self.ServerAdderss = ('', self.SlaveListenerPort)
-		status = self.TryStartListener()
-		if status is True:
-			self.IsListenerEnabled = True
-			if self.IsLocalUIEnabled is True:
-				self.LocalWSManager.RunServer()
-			self.SetState("WORKING")
-	
-	def StateWorking(self):
-		if self.SystemLoaded is False:
-			self.SystemLoaded = True # Update node that system done loading.
-			if self.NodeSystemLoadedCallback is not None:
-				self.NodeSystemLoadedCallback()
-		
-		if 0 == self.Ticker % 60:
-			self.SendGatewayPing()
+	''' 
+		Description: 	State [START_LISTENER]
+		Return: 		None
+	'''	
+	def State_StartListener(self):
+		self.LogMSG("({classname})# Trying to start listener ...".format(classname=self.ClassName))
+		self.SocketServer.Start(self.SlaveListenerPort)
+		self.SetState("WORKING")			
 
-	def StateExit(self):
+	''' 
+		Description: 	State [WORKING]
+		Return: 		None
+	'''		
+	def State_Working(self):
+		if self.SocketServer.GetListenerStatus() is True:
+			if self.SystemLoaded is False:
+				self.SystemLoaded = True # Update node that system done loading.
+				if self.NodeSystemLoadedCallback is not None:
+					self.NodeSystemLoadedCallback()
+			
+			if 0 == self.Ticker % 60:
+				self.SendGatewayPing()
+
+	''' 
+		Description: 	State [EXIT]
+		Return: 		None
+	'''	
+	def State_Exit(self):
 		self.Exit("Exit state initiated")
 
 	def GetNodeInfoRequestHandler(self, sock, packet):
-		print ("({classname})# Node Info Request ...".format(classname=self.ClassName))
+		self.LogMSG("({classname})# Node Info Request ...".format(classname=self.ClassName))
 		payload = self.NodeInfo
 		payload["is_master"] 	= False
 		payload["master_uuid"] 	= self.MasterUUID
 		return self.BasicProtocol.BuildResponse(packet, payload)
 
+	''' 
+		Description: 	Handler [node_info] RESPONSE
+		Return: 		N/A
+	'''	
 	def GetNodeInfoResponseHandler(self, sock, packet):
 		source  	= self.BasicProtocol.GetSourceFromJson(packet)
 		payload 	= self.BasicProtocol.GetPayloadFromJson(packet)
 		additional 	= self.BasicProtocol.GetAdditionalFromJson(packet)
-		print ("({classname})# Node Info Response ...".format(classname=self.ClassName))
+		self.LogMSG("({classname})# Node Info Response ...".format(classname=self.ClassName))
 		if source in "MASTER":
 			# We are here because this is a response for slave boot sequence
 			self.MasterInfo = payload
@@ -204,7 +219,11 @@ class SlaveNode(MkSAbstractNode.AbstractNode):
 		else:
 			if self.OnGetNodeInfoCallback is not None:
 				self.OnGetNodeInfoCallback(payload, additional["online"])
-	
+
+	''' 
+		Description: 	Handler [get_port] RESPONSE
+		Return: 		N/A
+	'''		
 	def GetPortResponseHandler(self, sock, packet):
 		source  = self.BasicProtocol.GetSourceFromJson(packet)
 		payload = self.BasicProtocol.GetPayloadFromJson(packet)
@@ -224,7 +243,7 @@ class SlaveNode(MkSAbstractNode.AbstractNode):
 			self.Transceiver.Send({"sock":self.LocalMasterConnection.Socket, "packet":packet})
 
 	def EmitOnNodeChange(self, data):
-		# print ("({classname})# Emit onNodeChange event ...".format(classname=self.ClassName))
+		# self.LogMSG("({classname})# Emit onNodeChange event ...".format(classname=self.ClassName))
 		self.DeviceChangeListLock.acquire()
 		for item in self.OnDeviceChangeList:
 			payload 	= item["payload"]
@@ -272,16 +291,8 @@ class SlaveNode(MkSAbstractNode.AbstractNode):
 			print ("({classname})# Sending ping request ...".format(classname=self.ClassName))
 			self.Transceiver.Send({"sock":self.LocalMasterConnection.Socket, "packet":packet})
 	
-	def PreUILoaderHandler(self):
-		print ("({classname})# PreUILoaderHandler ...".format(classname=self.ClassName))
-		port = 8000 + (self.ServerAdderss[1] - 10000)
-		self.InitiateLocalServer(port)
-		# UI RestAPI
-		self.UI.AddEndpoint("/get/node_widget/<key>",		"get_node_widget",	self.GetNodeWidgetHandler)
-		self.UI.AddEndpoint("/get/node_config/<key>",		"get_node_config",	self.GetNodeConfigHandler)
-	
 	def NodeDisconnectHandler(self, sock):
-		print ("({classname})# [NodeDisconnectHandler]".format(classname=self.ClassName))
+		self.LogMSG("({classname})# [NodeDisconnectHandler]".format(classname=self.ClassName))
 		# Check if disconneced connection is a master.
 		for node in self.MasterNodesList:
 			if sock == node.Socket:
@@ -301,106 +312,29 @@ class SlaveNode(MkSAbstractNode.AbstractNode):
 		if self.OnGetNodeInfoCallback is not None:
 			self.OnGetNodeInfoCallback(packet)
 
-	# TODO - Implement this method.
-	def GetNodeStatusRequestHandler(self, sock, packet):
-		pass
-
-	def GetNodeStatusRequestHandler(self, sock, packet):
-		pass
-	
+	''' 
+		Description: 	Handler [get_node_status] RESPONSE
+		Return: 		N/A
+	'''		
 	def GetNodeStatusResponseHandler(self, sock, packet):
 		if self.OnApplicationResponseCallback is not None:
 			self.OnApplicationResponseCallback(sock, packet)
-	
-	# ############
 
-	"""
-	Local Face RESP API methods
-	"""
-	def GetNodeWidgetHandler(self, key):
-		print ("[SlaveNode]# GetNodeWidgetHandler", self.Pwd + "static/js/node/widget.js")
-		objFile = MkSFile.File()
-		js = objFile.Load("static/js/node/widget.js")
-		return js
+	''' 
+		Description: 	Handler [shutdown] REQUEST
+		Return: 		N/A
+	'''
+	def ShutdownRequestHandler(self, sock, packet):
+		self.LogMSG("({classname})# [ShutdownRequestHandler]".format(classname=self.ClassName))
+		if self.OnShutdownCallback is not None:
+			self.OnShutdownCallback()
 
-	def GetNodeConfigHandler(self, key):
-		print ("[SlaveNode]# GetNodeConfigHandler", self.Pwd + "static/js/node/widget_config.js")
-		objFile = MkSFile.File()
-		js = objFile.Load("static/js/node/widget_config.js")
-		return js
-	"""
-	Local Face RESP API methods
-	"""
-	# TODO - NO master change.
-	def SendSensorInfoChange(self, sensors):
-		json = self.Commands.GenerateJsonProxyRequest(self.UUID, "WEBFACE", "get_sensor_info", {})
-		msg  = self.Commands.ProxyResponse(json, sensors)
-		if self.LocalMasterConnection is None:
-			pass
-		else:
-			self.Transceiver.Send({"sock":self.LocalMasterConnection.Socket, "packet":packet})
-	
-	def GetListOfNodeFromGateway(self):
-		print ("[SlaveNode] GetListOfNodeFromGateway")
-		payload = self.Commands.SendListOfNodesRequest("GATEWAY", self.UUID)
-		if self.LocalMasterConnection is None:
-			pass
-		else:
-			self.Transceiver.Send({"sock":self.LocalMasterConnection.Socket, "packet":packet})
-	
-	# TODO - NO master change.
-	def GetNodeInfo(self, uuid):
-		print ("[SlaveNode] GetNodeInfo")
-		payload = self.Commands.NodeInfoRequest(uuid, self.UUID)
-		if self.LocalMasterConnection is None:
-			pass
-		else:
-			self.Transceiver.Send({"sock":self.LocalMasterConnection.Socket, "packet":packet})
-
-	def CleanMasterList(self):
-		for node in self.MasterNodesList:
-			self.RemoveConnection(node.Socket)
-		self.MasterNodesList = []
-
-	def SearchForMasters(self):
-		if self.OnMasterSearchCallback is not None:
-			self.OnMasterSearchCallback()
-		# Clean master nodes list.
-		if False == self.SearchDontClean:
-			self.CleanMasterList()
-		# Find all master nodes on the network.
-		return self.FindMasters()
-
-	def NodeMasterAvailable(self, sock):
-		print ("NodeMasterAvailable")
-		# Append new master to the list
-		conn = self.GetNodeBySock(sock)
-		# TODO - Check if we don't have this connection already
-		self.MasterNodesList.append(conn)
-		# Get Master slave nodes.
-		packet = self.CommandsGetLocalNodes()
+		# Send message to requestor.
+		message = self.BasicProtocol.BuildResponse(packet, {"status":"shutdown"})
+		packet  = self.BasicProtocol.AppendMagic(message)
 		self.Transceiver.Send({"sock":sock, "packet":packet})
-		#sock.send(packet)
 
-	def GetLocalNodeResponseHandler(self, sock, packet):
-		pass
-
-	def GetMasterInfoResponseHandler(self, sock, packet):
-		pass
-
-	def GetSensorInfoResponseHandler(self, sock, packet):
-		pass
-
-	def SetSensorInfoResponseHandler(self, sock, packet):
-		pass
-
-	def UploadFileHandler(self, sock, packet):
-		if self.OnUploadFileRequestCallback is not None:
-			self.OnUploadFileRequestCallback(packet, sock)
-
-	def ExitHandler(self, sock, packet):
-		if self.OnExitCallback is not None:
-			self.OnExitCallback()
-			packet = self.Commands.ExitResponse("OK")
-			self.Transceiver.Send({"sock":sock, "packet":packet})
-			
+		# Let the messsage propogate to local server.
+		time.sleep(1)
+		self.Exit("Shutdown request received")
+		return None		

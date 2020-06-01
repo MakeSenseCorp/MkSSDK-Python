@@ -1,0 +1,73 @@
+
+
+
+	
+	# ############
+
+	"""
+	Local Face RESP API methods
+	"""
+	def GetNodeWidgetHandler(self, key):
+		print ("[SlaveNode]# GetNodeWidgetHandler", self.Pwd + "static/js/node/widget.js")
+		objFile = MkSFile.File()
+		js = objFile.Load("static/js/node/widget.js")
+		return js
+
+	def GetNodeConfigHandler(self, key):
+		print ("[SlaveNode]# GetNodeConfigHandler", self.Pwd + "static/js/node/widget_config.js")
+		objFile = MkSFile.File()
+		js = objFile.Load("static/js/node/widget_config.js")
+		return js
+	"""
+	Local Face RESP API methods
+	"""
+	# TODO - NO master change.
+	def SendSensorInfoChange(self, sensors):
+		json = self.Commands.GenerateJsonProxyRequest(self.UUID, "WEBFACE", "get_sensor_info", {})
+		msg  = self.Commands.ProxyResponse(json, sensors)
+		if self.LocalMasterConnection is None:
+			pass
+		else:
+			self.Transceiver.Send({"sock":self.LocalMasterConnection.Socket, "packet":packet})
+	
+	def GetListOfNodeFromGateway(self):
+		print ("[SlaveNode] GetListOfNodeFromGateway")
+		payload = self.Commands.SendListOfNodesRequest("GATEWAY", self.UUID)
+		if self.LocalMasterConnection is None:
+			pass
+		else:
+			self.Transceiver.Send({"sock":self.LocalMasterConnection.Socket, "packet":packet})
+	
+	# TODO - NO master change.
+	def GetNodeInfo(self, uuid):
+		print ("[SlaveNode] GetNodeInfo")
+		payload = self.Commands.NodeInfoRequest(uuid, self.UUID)
+		if self.LocalMasterConnection is None:
+			pass
+		else:
+			self.Transceiver.Send({"sock":self.LocalMasterConnection.Socket, "packet":packet})
+
+	def CleanMasterList(self):
+		for node in self.MasterNodesList:
+			self.RemoveConnection(node.Socket)
+		self.MasterNodesList = []
+
+	def SearchForMasters(self):
+		if self.OnMasterSearchCallback is not None:
+			self.OnMasterSearchCallback()
+		# Clean master nodes list.
+		if False == self.SearchDontClean:
+			self.CleanMasterList()
+		# Find all master nodes on the network.
+		return self.FindMasters()
+
+	def NodeMasterAvailable(self, sock):
+		print ("NodeMasterAvailable")
+		# Append new master to the list
+		conn = self.GetNodeBySock(sock)
+		# TODO - Check if we don't have this connection already
+		self.MasterNodesList.append(conn)
+		# Get Master slave nodes.
+		packet = self.CommandsGetLocalNodes()
+		self.Transceiver.Send({"sock":sock, "packet":packet})
+		#sock.send(packet)

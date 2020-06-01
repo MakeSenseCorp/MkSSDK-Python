@@ -25,7 +25,6 @@ class AbstractNode():
 		self.ClassName								= ""
 		self.File 									= MkSFile.File()
 		self.SocketServer							= MkSLocalSocketMngr.Manager()
-		self.Connector 								= None
 		self.Network								= None
 		self.LocalWSManager							= None
 		self.MKSPath								= ""
@@ -56,7 +55,6 @@ class AbstractNode():
 		self.State 									= 'IDLE' # Current state of node
 		self.States 								= None	 # States list
 		# Locks and Events
-		self.ExitEvent 								= threading.Event()
 		self.ExitLocalServerEvent					= threading.Event()
 		# Debug
 		self.DebugMode								= False	
@@ -73,7 +71,7 @@ class AbstractNode():
 		self.OnMasterDisconnectedCallback			= None # When slave node loose connection with master node.
 		self.OnTerminateConnectionCallback 			= None # When local server (listener) terminate socket connection.
 		self.OnLocalServerListenerStartedCallback	= None # When loacl server (listener) succesfully binded port.
-		self.OnExitCallback							= None # When node recieve command to terminate itself.
+		self.OnShutdownCallback						= None # When node recieve command to terminate itself.
 		self.OnGetNodesListCallback 				= None # Get all online nodes from GLOBAL gateway (Not implemented yet)
 		# Registered items
 		self.OnDeviceChangeList						= [] # Register command "register_on_node_change"
@@ -345,7 +343,7 @@ class AbstractNode():
 						broadcast 	= False
 
 						packet["additional"]["client_type"] = "global_ws" # Why?
-						self.Logger.Log("({classname})# SOCK [{direction}] {source} -> {dest} [{cmd}]".format(classname=self.ClassName,
+						self.LogMSG("({classname})# SOCK [{direction}] {source} -> {dest} [{cmd}]".format(classname=self.ClassName,
 									direction=direction,
 									source=source,
 									dest=destination,
@@ -368,7 +366,7 @@ class AbstractNode():
 										packet = self.BasicProtocol.AppendMagic(message)
 										self.SocketServer.Send(sock, packet)
 									except Exception as e:
-										self.Logger.Log("({classname})# ERROR - [#1]\n(EXEPTION)# {error}".format(error=str(e),classname=self.ClassName))
+										self.LogMSG("({classname})# ERROR - [#1]\n(EXEPTION)# {error}".format(error=str(e),classname=self.ClassName))
 								else:
 									# This command belongs to the application level
 									if self.OnApplicationRequestCallback is not None:
@@ -379,36 +377,36 @@ class AbstractNode():
 											packet = self.BasicProtocol.AppendMagic(message)
 											self.SocketServer.Send(sock, packet)
 										except Exception as e:
-											self.Logger.Log("({classname})# ERROR - [#2]\n(EXEPTION)# {error}".format(error=str(e),classname=self.ClassName))
+											self.LogMSG("({classname})# ERROR - [#2]\n(EXEPTION)# {error}".format(error=str(e),classname=self.ClassName))
 							elif direction in "response":
 								if command in self.NodeResponseHandlers.keys():
 									try:
 										self.NodeResponseHandlers[command](sock, packet)
 									except Exception as e:
-										self.Logger.Log("({classname})# ERROR - [#3]\n(EXEPTION)# {error}".format(error=str(e),classname=self.ClassName))
+										self.LogMSG("({classname})# ERROR - [#3]\n(EXEPTION)# {error}".format(error=str(e),classname=self.ClassName))
 								else:
 									# This command belongs to the application level
 									if self.OnApplicationResponseCallback is not None:
 										try:
 											self.OnApplicationResponseCallback(sock, packet)
 										except Exception as e:
-											self.Logger.Log("({classname})# ERROR - [#4]\n(EXEPTION)# {error}".format(error=str(e),classname=self.ClassName))
+											self.LogMSG("({classname})# ERROR - [#4]\n(EXEPTION)# {error}".format(error=str(e),classname=self.ClassName))
 							else:
 								pass
 						else:
 							# This massage is external (MOSTLY MASTER)
 							try:
 								if self.Network is not None:
-									self.Logger.Log("({classname})# This massage is external (MOSTLY MASTER)".format(classname=self.ClassName))
+									self.LogMSG("({classname})# This massage is external (MOSTLY MASTER)".format(classname=self.ClassName))
 									self.SendPacketGateway(data)
 							except Exception as e:
-								self.Logger.Log("({classname})# ERROR - [#5]\n(EXEPTION)# {error}".format(error=str(e),classname=self.ClassName))
+								self.LogMSG("({classname})# ERROR - [#5]\n(EXEPTION)# {error}".format(error=str(e),classname=self.ClassName))
 					else:
 						pass
 			else:
-				self.Logger.Log("({classname})# [DataSocketInputHandler] Data Invalid ...".format(classname=self.ClassName))
+				self.LogMSG("({classname})# [DataSocketInputHandler] Data Invalid ...".format(classname=self.ClassName))
 		except Exception as e:
-			self.Logger.Log("({classname})# [DataSocketInputHandler] ERROR - {error}".format(error=str(e),classname=self.ClassName))
+			self.LogMSG("({classname})# [DataSocketInputHandler] ERROR - {error}".format(error=str(e),classname=self.ClassName))
 	
 	''' 
 		Description: 	This handler cslled after socket created and appended
@@ -458,22 +456,8 @@ class AbstractNode():
 		connection.Obj["name"] 			= "N/A"
 		connection.Obj["status"] 		= 1
 
-		#if self.IsLocalUIEnabled is True:
-		#	# Run preloader for UI interface
-		#	if self.UI is None:
-		#		self.Logger.Log("({classname})# Executing UI preloader (Only valid for local UI aka Webface)".format(classname=self.ClassName))
-		#		self.PreUILoaderHandler()
-
-		# Run UI thread
-		#if self.IsLocalUIEnabled is True:
-		#	if self.UI is None:
-		#		self.Logger.Log("({classname})# Local UI(Webface) is not set ... (NULL)".format(classname=self.ClassName))
-		#	else:
-		#		self.Logger.Log("({classname})# Running local UI(Webface)".format(classname=self.ClassName))
-		#		self.UI.Run()
-
 	def GetOnlineDevicesHandler(self, sock, packet):
-		self.Logger.Log("({classname})# Online network device list ...".format(classname=self.ClassName))
+		self.LogMSG("({classname})# Online network device list ...".format(classname=self.ClassName))
 		payload = self.BasicProtocol.GetPayloadFromJson(packet)
 		self.NetworkOnlineDevicesList = payload["online_devices"]
 
@@ -503,7 +487,7 @@ class AbstractNode():
 	
 	def CloseLocalSocketRequestHandler(self, sock, packet):
 		payload	= self.BasicProtocol.GetPayloadFromJson(packet)
-		self.Logger.Log("({classname})# Close server socket request ... {0}".format(payload, classname=self.ClassName))
+		self.LogMSG("({classname})# Close server socket request ... {0}".format(payload, classname=self.ClassName))
 		self.RemoveConnectionBySock(sock)
 		#if self.MasterSocket == sock:
 		#	self.MasterSocket = None
@@ -521,7 +505,7 @@ class AbstractNode():
 		self.GetNodeInfoResponseHandler(sock, packet)
 
 	def FindNodeRequestHandler(self, sock, packet):
-		self.Logger.Log("({classname})# Search node request ...".format(classname=self.ClassName))
+		self.LogMSG("({classname})# Search node request ...".format(classname=self.ClassName))
 		payload = self.BasicProtocol.GetPayloadFromJson(packet)
 		cat_1 = payload["cat_1"]
 		cat_2 = payload["cat_2"]
@@ -537,7 +521,7 @@ class AbstractNode():
 			return ""
 	
 	def SetState (self, state):
-		self.Logger.Log("({classname})# Change state [{0}]".format(state,classname=self.ClassName))
+		self.LogMSG("({classname})# Change state [{0}]".format(state,classname=self.ClassName))
 		self.State = state
 	
 	def GetState (self):
@@ -629,7 +613,7 @@ class AbstractNode():
 			item_payload = item["payload"]
 			if item_payload["uuid"] == uuid:
 				del self.OnDeviceChangeList[i]
-				self.Logger.Log("({classname})# Unregistered WEBFACE local session ({uuid}) ({length}))".format(classname=self.ClassName,
+				self.LogMSG("({classname})# Unregistered WEBFACE local session ({uuid}) ({length}))".format(classname=self.ClassName,
 						uuid=str(uuid),
 						length=len(self.OnDeviceChangeList)))
 				is_removed = True
@@ -647,7 +631,7 @@ class AbstractNode():
 			if "ws_id" in item_payload:
 				if item_payload["ws_id"] == id:
 					del self.OnDeviceChangeList[i]
-					self.Logger.Log("({classname})# Unregistered WEBFACE local session ({ws_id}) ({length}))".format(classname=self.ClassName,
+					self.LogMSG("({classname})# Unregistered WEBFACE local session ({ws_id}) ({length}))".format(classname=self.ClassName,
 							ws_id=str(id),
 							length=len(self.OnDeviceChangeList)))
 					is_removed = True
@@ -661,7 +645,7 @@ class AbstractNode():
 			if "webface_indexer" in item_payload:
 				if item_payload["webface_indexer"] == id:
 					self.OnDeviceChangeList.remove(item)
-					self.Logger.Log("({classname})# Unregistered WEBFACE global session ({webface_indexer}))".format(classname=self.ClassName,
+					self.LogMSG("({classname})# Unregistered WEBFACE global session ({webface_indexer}))".format(classname=self.ClassName,
 							webface_indexer=str(id)))
 					self.DeviceChangeListLock.release()
 					return True
@@ -681,7 +665,7 @@ class AbstractNode():
 			})
 	
 	def RegisterOnNodeChangeHandler(self, sock, packet):
-		self.Logger.Log("({classname})# On Node change request recieved ....".format(classname=self.ClassName))
+		self.LogMSG("({classname})# On Node change request recieved ....".format(classname=self.ClassName))
 		payload 	= self.BasicProtocol.GetPayloadFromJson(packet)
 		item_type 	= payload["item_type"]
 		# Node
@@ -761,7 +745,7 @@ class AbstractNode():
 		if ("html" in fileType):
 			content = content.replace("[NODE_UUID]", self.UUID)
 			if stamping is None:
-				self.Logger.Log("({classname})# [ERROR] Missing STAMPING in packet ...".format(classname=self.ClassName))
+				self.LogMSG("({classname})# [ERROR] Missing STAMPING in packet ...".format(classname=self.ClassName))
 				content = content.replace("[GATEWAY_IP]", self.GatewayIP)
 			else:
 				if "cloud_t" in stamping:
@@ -831,7 +815,7 @@ class AbstractNode():
 
 		# TODO - Minify file content
 		content = content.replace("\t","")
-		self.Logger.Log("({classname})# Requested file: {path} ({fileName}.{fileType}) ({length})".format(classname=self.ClassName,
+		self.LogMSG("({classname})# Requested file: {path} ({fileName}.{fileType}) ({length})".format(classname=self.ClassName,
 				path=path,
 				fileName=fileName,
 				fileType=fileType,
@@ -843,6 +827,10 @@ class AbstractNode():
 								'content': content.encode('hex')
 		})
 
+	''' 
+		Description: 	N/A
+		Return: 		N/A
+	'''	
 	def LoadSystemConfig(self):
 		self.MKSPath = os.path.join(os.environ['HOME'],"mks")
 		# Information about the node located here.
@@ -850,12 +838,12 @@ class AbstractNode():
 		strMachineJson 		= self.File.Load(os.path.join(self.MKSPath,"config.json"))
 
 		if (strSystemJson is None or len(strSystemJson) == 0):
-			#self.Logger.Log("({classname})# ERROR - Cannot find system.json file.".format(classname=self.ClassName))
+			self.LogMSG("({classname})# ERROR - Cannot find system.json file.".format(classname=self.ClassName))
 			self.Exit("ERROR - Cannot find system.json file")
 			return False
 
 		if (strMachineJson is None or len(strMachineJson) == 0):
-			#self.Logger.Log("({classname})# ERROR - Cannot find config.json file.".format(classname=self.ClassName))
+			self.LogMSG("({classname})# ERROR - Cannot find config.json file.".format(classname=self.ClassName))
 			self.Exit("ERROR - Cannot find config.json file")
 			return False
 		
@@ -866,16 +854,16 @@ class AbstractNode():
 			self.ServiceDepened 	= dataSystem["node"]["service"]["depend"]
 		
 			self.EnableLogs(str(self.NodeInfo["type"]))
-			self.Logger.Log("({classname})# MakeSense HOME folder '{0}'".format(self.MKSPath, classname=self.ClassName))
+			self.LogMSG("({classname})# MakeSense HOME folder '{0}'".format(self.MKSPath, classname=self.ClassName))
 
 			for network in self.NetworkCards:
 				if network["iface"] in dataConfig["network"]["iface"]:
 					self.MyLocalIP = network["ip"]
-					self.Logger.Log("({classname})# Local IP found ... {0}".format(self.MyLocalIP,classname=self.ClassName))
+					self.LogMSG("({classname})# Local IP found ... {0}".format(self.MyLocalIP,classname=self.ClassName))
 					break
 			
 			if self.MyLocalIP == "":
-				self.Logger.Log("({classname})# ERROR - Local IP not found".format(classname=self.ClassName))
+				self.LogMSG("({classname})# ERROR - Local IP not found".format(classname=self.ClassName))
 
 			# Node connection to WS information
 			self.Key 				= dataConfig["network"]["key"]
@@ -901,103 +889,25 @@ class AbstractNode():
 			else:
 				self.UUID = self.NodeInfo["uuid"]
 			
-			self.SetNodeUUID(self.UUID)
-			self.SetNodeType(self.Type)
-			self.SetNodeName(self.Name)
-			self.SetGatewayIPAddress(self.GatewayIP)
 			self.BasicProtocol.SetKey(self.Key)
 		except Exception as e:
-			self.Logger.Log("({classname})# ERROR - Wrong configuration format\n(EXEPTION)# {error}".format(error=str(e),classname=self.ClassName))
+			self.LogMSG("({classname})# ERROR - Wrong configuration format\n(EXEPTION)# {error}".format(error=str(e),classname=self.ClassName))
 			self.Exit("ERROR - Wrong configuration format")
 			return False
 		
 		return True
-	
-	def InitiateLocalServer(self, port):
-		if self.IsLocalUIEnabled is True:
-			self.UI 			= MkSLocalWebServer.WebInterface("Context", port)
-			self.LocalWebPort	= port
-			# Data for the pages.
-			jsonUIData 	= {
-				'ip': str(self.MyLocalIP),
-				'port': str(port),
-				'uuid': str(self.UUID)
-			}
-			data = json.dumps(jsonUIData)
-			# UI Pages
-			self.UI.AddEndpoint("/", 			"index", 		None, 		data)
-			self.UI.AddEndpoint("/nodes", 		"nodes", 		None, 		data)
-			self.UI.AddEndpoint("/config", 		"config", 		None, 		data)
-			self.UI.AddEndpoint("/app", 		"app", 			None, 		data)
-			self.UI.AddEndpoint("/mobile", 		"mobile", 		None, 		data)
-			self.UI.AddEndpoint("/mobile/app", 	"mobile/app", 	None, 		data)
-			# UI RestAPI
-			self.UI.AddEndpoint("/test/<key>", 						"test", 						self.TestWithKeyHandler)
-			self.UI.AddEndpoint("/get/socket_list/<key>", 			"get_socket_list", 				self.GetConnectedSocketsListHandler)
 
-	def AppendFaceRestTable(self, endpoint=None, endpoint_name=None, handler=None, args=None, method=['GET']):
-		if self.IsLocalUIEnabled is True:
-			self.UI.AddEndpoint(endpoint, endpoint_name, handler, args, method)
-	
-	def LocalWSDisconnectedHandler(self, ws_id):
-		self.UnregisterLocalWS(ws_id)
-
-	def LocalWSDataArrivedHandler(self, ws, data):
-		# print("({classname})# (WS) {0}".format(data,classname=self.ClassName))
-		try:
-			packet 		= json.loads(data)
-			if ("HANDSHAKE" == self.BasicProtocol.GetMessageTypeFromJson(packet)):
-				return
-			
-			command 	= self.BasicProtocol.GetCommandFromJson(packet)
-			direction 	= self.BasicProtocol.GetDirectionFromJson(packet)
-			destination = self.BasicProtocol.GetDestinationFromJson(packet)
-			source 		= self.BasicProtocol.GetSourceFromJson(packet)
-
-			packet["additional"]["client_type"] = "local_ws"
-
-			self.Logger.Log("({classname})# WS LOCAL [{direction}] {source} -> {dest} [{cmd}]".format(classname=self.ClassName,
-						direction=direction,
-						source=source,
-						dest=destination,
-						cmd=command))
-
-			if direction in "request":
-				if command in self.NodeRequestHandlers.keys():
-					message = self.NodeRequestHandlers[command](ws, packet)
-					ws.send(message)
-				else:
-					# This command belongs to the application level
-					if self.OnApplicationRequestCallback is not None:
-						message = self.OnApplicationRequestCallback(ws, packet)
-						ws.send(message)
-			elif direction in "response":
-				if command in self.NodeResponseHandlers.keys():
-					self.NodeResponseHandlers[command](ws, packet)
-				else:
-					# This command belongs to the application level
-					if self.OnApplicationResponseCallback is not None:
-						self.OnApplicationResponseCallback(ws, packet)
-			else:
-				pass
-		except Exception as e:
-			self.Logger.Log("({classname})# ERROR - [LocalWSDataArrivedHandler]\n(EXEPTION)# {error}\n{data}".format(error=str(e),data=data,classname=self.ClassName))
-
-	def SetNodeUUID(self, uuid):
-		self.UUID = uuid
-
-	def SetNodeType(self, node_type):
-		self.Type = node_type
-	
-	def SetNodeName(self, name):
-		self.Name = name
-	
-	def SetGatewayIPAddress(self, ip):
-		self.GatewayIP = ip
-	
+	''' 
+		Description: 	N/A
+		Return: 		N/A
+	'''		
 	def SetWebServiceStatus(self, is_enabled):
 		self.IsNodeWSServiceEnabled = is_enabled
 
+	''' 
+		Description: 	N/A
+		Return: 		N/A
+	'''	
 	def SetLocalServerStatus(self, is_enabled):
 		self.IsNodeLocalServerEnabled = is_enabled
 	
@@ -1019,39 +929,38 @@ class AbstractNode():
 							self.ScanNetwork()
 			self.ServiceSearchTS = time.time()
 
+	''' 
+		Description: 	N/A
+		Return: 		N/A
+	'''	
 	def LogMSG(self, message):
 		if self.Logger is not None:
 			self.Logger.Log(message)
 		else:
 			print("({classname})# [NONE LOGGER] - {0}".format(message,classname=self.ClassName))
-
+	
+	''' 
+		Description: 	N/A
+		Return: 		N/A
+	'''	
 	def Run (self, callback):
 		# Will be called each half a second.
 		self.WorkingCallback = callback
-		if self.IsLocalUIEnabled is True:
-			# Import Local WebSocket objects
-			from mksdk import MkSLocalWebServer
-			from mksdk import MkSLocalWS
-			self.LocalWSManager = MkSLocalWS.WSManager
-			# Register callbacks
-			self.LocalWSManager.OnDataArrivedEvent  = self.LocalWSDataArrivedHandler
-			self.LocalWSManager.OnWSDisconnected 	= self.LocalWSDisconnectedHandler
-		self.ExitEvent.clear()
-		self.ExitLocalServerEvent.clear()
-
 		# Read sytem configuration
 		if (self.LoadSystemConfig() is False):
 			print("({classname})# Load system configuration ... FAILED".format(classname=self.ClassName))
 			return
 		
-		self.Logger.Log("({classname})# System configuration loaded".format(classname=self.ClassName))
+		self.LogMSG("({classname})# System configuration loaded".format(classname=self.ClassName))
 		self.SetState("INIT")
 
 		# Start local node dervice thread
+		self.ExitLocalServerEvent.clear()
 		if self.IsNodeLocalServerEnabled is True:
 			self.SocketServer.Logger = self.Logger
 			self.SocketServer.SetExitSync(self.ExitLocalServerEvent)
-			self.SocketServer.Start(16999)
+			if self.IsMaster is True:
+				self.SocketServer.Start(16999)
 
 		# Waiting here till SIGNAL from OS will come.
 		while self.IsMainNodeRunnig:
@@ -1061,42 +970,43 @@ class AbstractNode():
 
 			# User callback
 			if ("WORKING" == self.GetState() and self.SystemLoaded is True):
-				#TODO - Services section must be in differebt thread
-				self.ServicesManager()
+				self.ServicesManager() # TODO - Must be in differebt thread
 				self.WorkingCallback()
-				if self.IsLocalUIEnabled is True:
-					# This check is for client nodes
-					if (self.Type not in [1, 2]):
-						if self.LocalWSManager is not None:
-							if self.LocalWSManager.IsServerRunnig() is False and self.LocalMasterConnection is None:
-								self.Logger.Log("({classname})# Exiting main thread ... ({0}, {1}) ...".format(self.LocalWSManager.IsServerRunnig(), self.LocalMasterConnection.Socket, classname=self.ClassName))
-								self.Exit("Exiting main thread")
 
 			self.Ticker += 1
 			time.sleep(0.5)
 		
-		self.Logger.Log("({classname})# Start Exiting Node ...".format(classname=self.ClassName))
-		# self.ExitEvent.set()
+		self.LogMSG("({classname})# Start Exiting Node ...".format(classname=self.ClassName))
+
+		# If websocket server enabled, shut it down.
 		if self.IsNodeWSServiceEnabled is True:
 			if self.Network is not None:
 				self.Network.Disconnect()
 
-		if self.IsHardwareBased is True:
-			self.Connector.Disconnect()
-		
-		# TODO - Don't think we need this event.
-		# self.ExitEvent.wait()
+		# If local socket server enabled (most nodes), shut it down.
 		if self.IsNodeLocalServerEnabled is True:
 			self.SocketServer.Stop()
 			self.ExitLocalServerEvent.wait()
 	
+	''' 
+		Description: 	N/A
+		Return: 		N/A
+	'''	
 	def Stop (self, reason):
-		self.Logger.Log("({classname})# Stop Node ... ({0})".format(reason,classname=self.ClassName))
+		self.LogMSG("({classname})# Stop Node ... ({0})".format(reason,classname=self.ClassName))
 		self.IsMainNodeRunnig 		= False
 		self.IsLocalSocketRunning 	= False
-	
+
+	''' 
+		Description: 	N/A
+		Return: 		N/A
+	'''	
 	def Pause (self):
 		pass
-	
+
+	''' 
+		Description: 	N/A
+		Return: 		N/A
+	'''	
 	def Exit (self, reason):
 		self.Stop(reason)
