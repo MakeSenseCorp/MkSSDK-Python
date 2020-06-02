@@ -428,12 +428,15 @@ class Manager():
 	'''
     def CleanAllSockets(self):
 		self.LogMSG("({classname})# [CleanAllSockets]".format(classname=self.ClassName))
-		while len(self.OpenConnections) > 0:
-			conn = self.OpenConnections.values()[0]
-			self.LogMSG("({classname})# [CleanAllSockets] {0}, {1}, {2}, {3}, {4}".format(len(self.OpenConnections),conn.HASH,conn.IP,conn.Port,classname=self.ClassName))
-			status = self.Disconnect(conn.IP, conn.Port)
-			if status is False:
-				del self.OpenConnections.values()[0]
+		try:
+			while len(self.OpenConnections) > 0:
+				conn = self.OpenConnections.values()[0]
+				self.LogMSG("({classname})# [CleanAllSockets] {0}, {1}, {2}, {3}".format(len(self.OpenConnections),conn.HASH,conn.IP,conn.Port,classname=self.ClassName))
+				status = self.Disconnect(conn.IP, conn.Port)
+				if status is False:
+					del self.OpenConnections.values()[0]
+		except Exception as e:
+			self.LogMSG("({classname})# [CleanAllSockets] ERROR {0}".format(e,classname=self.ClassName))
 
 		self.LogMSG("({classname})# [CleanAllSockets] All sockets where released ({0})".format(len(self.OpenConnections),classname=self.ClassName))
 
@@ -460,16 +463,18 @@ class Manager():
 	''' 
     def SetExitSync(self, sync):
 		self.ExitSynchronizer = sync
+	
+    def EnableListener(self, port):
+		self.IsListenerEnabled 	= True
+		self.ServerAdderss = ('', port)
 
     ''' 
 		Description: 	Start worker thread of server.
 		Return: 		None.
 	'''	
-    def Start(self, port):
+    def Start(self):
 		if self.ServerStarted is False:
-			self.ServerStarted 		= True
-			self.IsListenerEnabled 	= True
-			self.ServerAdderss = ('', port)
+			self.ServerStarted = True
 			thread.start_new_thread(self.LocalSocketWorker, ())
 
     ''' 

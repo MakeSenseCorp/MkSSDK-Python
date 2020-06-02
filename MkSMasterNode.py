@@ -77,8 +77,6 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 		# Handlers
 		self.NodeRequestHandlers['get_port'] 		= self.GetPortRequestHandler
 		self.NodeRequestHandlers['get_local_nodes'] = self.GetLocalNodesRequestHandler
-		# self.NodeRequestHandlers['get_master_info'] 	= self.GetMasterInfoRequestHandler
-		# self.NodeRequestHandlers['upload_file'] 		= self.UploadFileHandler
 		# Callbacks
 		self.GatewayDataArrivedCallback 		= None
 		self.GatewayConnectedCallback 			= None
@@ -172,7 +170,8 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 		Return: 		None
 	'''	
 	def State_InitLocalServer(self):
-		self.SocketServer.Start(16999)
+		self.SocketServer.EnableListener(16999)
+		self.SocketServer.Start()
 		if self.SocketServer.GetListenerStatus() is True:
 			self.SetState("INIT_GATEWAY")
 		time.sleep(1)
@@ -338,11 +337,12 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 		Return: 		N/A
 	'''
 	def GetPortRequestHandler(self, sock, packet):
+		self.LogMSG("({classname})# [GetPortRequestHandler]".format(classname=self.ClassName))
+
 		if sock is None:
 			return ""
 		
 		node_info = self.BasicProtocol.GetPayloadFromJson(packet)
-
 		nodetype 	= node_info['type']
 		uuid 		= node_info['uuid']
 		name 		= node_info['name']
@@ -399,12 +399,12 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 
 				# Send message (master_append_node) to all nodes.
 				connection_map = self.SocketServer.GetConnections()
-				for key in self.connection_map:
-					item = self.connection_map[key]
+				for key in connection_map:
+					item = connection_map[key]
 					if item.Socket != self.SocketServer:
 						message = self.Network.BasicProtocol.BuildMessage("response", "DIRECT", item.Obj["uuid"], self.UUID, "master_append_node", node_info, {})
 						message = self.Network.BasicProtocol.AppendMagic(message)
-						self.SendNodePacket(item.IP, item.Port, message)
+						self.SocketServer.SendData(item.IP, item.Port, message)
 				
 				# Store UUID if it is a service
 				if nodetype == 101:
@@ -418,7 +418,7 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 				return self.Network.BasicProtocol.BuildResponse(packet, { 'port': port })
 			else:
 				# Already assigned port (resending)
-				return self.Network.BasicProtocol.BuildResponse(packet, { 'port': conn.ListenerPort })
+				return self.Network.BasicProtocol.BuildResponse(packet, { 'port': conn.Obj["listener_port"] })
 		else:
 			# No available ports
 			return self.Network.BasicProtocol.BuildResponse(packet, { 'port': 0 })
@@ -429,8 +429,8 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 	'''	
 	def LocalServerTerminated(self):
 		connection_map = self.SocketServer.GetConnections()
-		for key in self.connection_map:
-			conn = self.connection_map[key]
+		for key in connection_map:
+			conn = connection_map[key]
 			payload = { 
 				'node': { 	
 					'ip':	str(conn.IP), 
@@ -477,8 +477,8 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 
 		# Send message (master_remove_node) to all nodes.
 		connection_map = self.SocketServer.GetConnections()
-		for key in self.connection_map:
-			node = self.connection_map[key]
+		for key in connection_map:
+			node = connection_map[key]
 			if node.Socket == self.SocketServer or node.Socket == sock:
 				pass
 			else:
@@ -495,8 +495,8 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 	def GetLocalNodesRequestHandler(self, sock, packet):
 		nodes = []
 		connection_map = self.SocketServer.GetConnections()
-		for key in self.connection_map:
-			conn = self.connection_map[key]
+		for key in connection_map:
+			conn = connection_map[key]
 			nodes.append({
 				'ip':	str(conn.IP), 
 				'port':	conn.Obj["listener_port"], 
@@ -565,8 +565,8 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 		self.LogMSG("(Master Node)# Connection to Gateway established ...")
 		# Send registration of all slaves to Gateway.
 		connection_map = self.SocketServer.GetConnections()
-		for key in self.connection_map:
-			conn = self.connection_map[key]
+		for key in connection_map:
+			conn = connection_map[key]
 			if conn.Obj["status"] == 5: # Mean - CONNECTED | PORT_AVAILABLE
 				# Send message to Gateway
 				payload = { 

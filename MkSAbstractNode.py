@@ -235,7 +235,7 @@ class AbstractNode():
 		Return: 		Status (True/False).
 	'''
 	def ConnectMaster(self, ip):
-		connection, status = self.SocketServer.Connect((ip, 16999))
+		connection, status = self.SocketServer.Connect(ip, 16999)
 		if status is True:
 			connection.Obj["local_type"] = "MASTER"
 			self.MasterNodesList.append(connection)
@@ -291,8 +291,8 @@ class AbstractNode():
 	'''
 	def GetNodeByUUID(self, uuid):
 		connection_map = self.SocketServer.GetConnections()
-		for key in self.connection_map:
-			conn = self.connection_map[key]
+		for key in connection_map:
+			conn = connection_map[key]
 			if conn.Obj["uuid"] == uuid:
 				return conn
 		return None
@@ -333,8 +333,9 @@ class AbstractNode():
 				for fragment in multiData[1:]:
 					if "MKSE" in fragment:
 						# Handling MKS packet
+						raw_data	= fragment[:-5]
 						sock 		= connection.Socket
-						packet 		= json.loads(fragment[:-5])
+						packet 		= json.loads(raw_data)
 						messageType = self.BasicProtocol.GetMessageTypeFromJson(packet)
 						command 	= self.BasicProtocol.GetCommandFromJson(packet)
 						direction 	= self.BasicProtocol.GetDirectionFromJson(packet)
@@ -398,7 +399,7 @@ class AbstractNode():
 							try:
 								if self.Network is not None:
 									self.LogMSG("({classname})# This massage is external (MOSTLY MASTER)".format(classname=self.ClassName))
-									self.SendPacketGateway(data)
+									self.SendPacketGateway(raw_data)
 							except Exception as e:
 								self.LogMSG("({classname})# ERROR - [#5]\n(EXEPTION)# {error}".format(error=str(e),classname=self.ClassName))
 					else:
@@ -959,8 +960,6 @@ class AbstractNode():
 		if self.IsNodeLocalServerEnabled is True:
 			self.SocketServer.Logger = self.Logger
 			self.SocketServer.SetExitSync(self.ExitLocalServerEvent)
-			if self.IsMaster is True:
-				self.SocketServer.Start(16999)
 
 		# Waiting here till SIGNAL from OS will come.
 		while self.IsMainNodeRunnig:
