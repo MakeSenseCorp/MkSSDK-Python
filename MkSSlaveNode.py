@@ -165,11 +165,17 @@ class SlaveNode(MkSAbstractNode.AbstractNode):
 		Return: 		None
 	'''	
 	def State_StartListener(self):
-		self.LogMSG("({classname})# Trying to start listener ...".format(classname=self.ClassName))
+		self.LogMSG("({classname})# [State_StartListener]".format(classname=self.ClassName))
 		self.SocketServer.EnableListener(self.SlaveListenerPort)
 		self.SocketServer.StartListener()
-		self.SetState("WORKING")			
-
+		# Let socket listener start
+		time.sleep(0.1)
+		# Update connection database.
+		conn = self.SocketServer.GetConnectionBySock(self.SocketServer.GetListenerSocket())
+		conn.Obj["listener_port"] = self.SocketServer.GetListenerPort()
+		# Change state
+		self.SetState("WORKING")
+		
 	''' 
 		Description: 	State [WORKING]
 		Return: 		None
@@ -200,6 +206,8 @@ class SlaveNode(MkSAbstractNode.AbstractNode):
 		payload = self.NodeInfo
 		payload["is_master"] 	= False
 		payload["master_uuid"] 	= self.MasterUUID
+		payload["pid"]			= self.MyPID
+		payload["listener_port"]	= self.SocketServer.GetListenerPort()
 		return self.BasicProtocol.BuildResponse(packet, payload)
 
 	''' 
@@ -210,7 +218,16 @@ class SlaveNode(MkSAbstractNode.AbstractNode):
 		source  	= self.BasicProtocol.GetSourceFromJson(packet)
 		payload 	= self.BasicProtocol.GetPayloadFromJson(packet)
 		additional 	= self.BasicProtocol.GetAdditionalFromJson(packet)
-		self.LogMSG("({classname})# [GetNodeInfoResponseHandler] {0}".format(payload, classname=self.ClassName))
+		self.LogMSG("({classname})# [GetNodeInfoResponseHandler] [{0}, {1}, {2}, {3}]".format(payload["uuid"],payload["type"],payload["pid"],payload["name"], classname=self.ClassName))
+
+		conn = self.SocketServer.GetConnectionBySock(sock)
+		conn.Obj["uuid"] 			= payload["uuid"]
+		conn.Obj["type"] 			= payload["type"]
+		conn.Obj["pid"] 			= payload["pid"]
+		conn.Obj["name"] 			= payload["name"]
+		conn.Obj["listener_port"]	= payload["listener_port"]
+		conn.Obj["status"] 	= 1
+		
 		if source in "MASTER":
 			# We are here because this is a response for slave boot sequence
 			self.MasterInfo = payload
@@ -219,7 +236,7 @@ class SlaveNode(MkSAbstractNode.AbstractNode):
 				self.SetState("GET_PORT")
 		else:
 			if self.OnGetNodeInfoCallback is not None:
-				self.OnGetNodeInfoCallback(payload, additional["online"])
+				self.OnGetNodeInfoCallback(payload)
 
 	''' 
 		Description: 	Handler [get_port] RESPONSE

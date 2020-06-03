@@ -313,7 +313,7 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 			message = self.BasicProtocol.StringifyPacket(packet)
 			message = self.BasicProtocol.AppendMagic(message)
 			# Send via server (multithreaded and safe)
-			conn.SocketServer.Send(message)
+			conn.Socket.send(message)
 		else:
 			self.LogMSG("[MasterNode] HandleInternalReqest NODE NOT FOUND")
 			# Need to look at other masters list.
@@ -325,9 +325,29 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 	'''	
 	def GetNodeInfoRequestHandler(self, sock, packet):
 		payload = self.NodeInfo
-		payload["is_master"] 	= self.IsMaster
-		payload["master_uuid"] 	= self.UUID
+		payload["is_master"] 		= self.IsMaster
+		payload["master_uuid"] 		= self.UUID
+		payload["pid"]				= self.MyPID
+		payload["listener_port"]	= self.SocketServer.GetListenerPort()
 		return self.Network.BasicProtocol.BuildResponse(packet, payload)
+	
+	''' 
+		Description: 	Handler [get_node_info] RESPONSE
+		Return: 		N/A
+	'''	
+	def GetNodeInfoResponseHandler(self, sock, packet):
+		source  	= self.BasicProtocol.GetSourceFromJson(packet)
+		payload 	= self.BasicProtocol.GetPayloadFromJson(packet)
+		additional 	= self.BasicProtocol.GetAdditionalFromJson(packet)
+		self.LogMSG("({classname})# [GetNodeInfoResponseHandler] (NO LOGIC) {0}".format(payload, classname=self.ClassName))
+
+		conn = self.SocketServer.GetConnectionBySock(sock)
+		conn.Obj["uuid"] 			= payload["uuid"]
+		conn.Obj["type"] 			= payload["type"]
+		conn.Obj["pid"] 			= payload["pid"]
+		conn.Obj["name"] 			= payload["name"]
+		conn.Obj["listener_port"]	= payload["listener_port"]
+		conn.Obj["status"] 			= 1
 
 	''' 
 		Description: 	
@@ -373,6 +393,7 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 				conn.Obj["uuid"] 			= uuid
 				conn.Obj["name"] 			= name
 				conn.Obj["status"] 			= int(conn.Obj["status"]) | 4
+				conn.Obj["is_slave"]		= 1
 
 				# Update installed node list (UI will be updated)
 				#for item in self.InstalledNodes:
@@ -401,7 +422,7 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 				connection_map = self.SocketServer.GetConnections()
 				for key in connection_map:
 					item = connection_map[key]
-					if item.Socket != self.SocketServer:
+					if item.Socket != self.SocketServer.GetListenerSocket():
 						message = self.Network.BasicProtocol.BuildMessage("response", "DIRECT", item.Obj["uuid"], self.UUID, "master_append_node", node_info, {})
 						message = self.Network.BasicProtocol.AppendMagic(message)
 						self.SocketServer.SendData(item.IP, item.Port, message)
@@ -446,47 +467,45 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 		Description: 	[HANDLERS]
 		Return: 		N/A
 	'''	
-	def NodeDisconnectHandler(self, sock):
-		print ("({classname})# [NodeDisconnectHandler]".format(classname=self.ClassName))
-		conn = self.SocketServer.GetConnectionBySock()
-		self.PortsForClients.append(conn.Obj["listener_port"] - 10000)
+	def NodeDisconnectedHandler(self, connection):
+		self.LogMSG("({classname})# [NodeDisconnectedHandler] ({name} {uuid})".format(
+						classname=self.ClassName,
+						name=connection.Obj["name"],
+						uuid=connection.Obj["uuid"]))
+		if connection is not None:
+			if connection.Obj["is_slave"] == 1:
+				self.PortsForClients.append(connection.Obj["listener_port"] - 10000)
+				# Update installed node list (UI will be updated)
+				#for item in self.InstalledNodes:
+				#	if item.UUID == connection.Obj["uuid"]:
+				#		item.IP 			= ""
+				#		item.ListenerPort 	= 0
+				#		item.Status 		= "Stopped"
+				
+				# Send message to Gateway
+				payload = { 
+					'node': { 	
+						'ip':	connection.IP, 
+						'port':	connection.Obj["listener_port"], 
+						'uuid':	connection.Obj["uuid"], 
+						'type':	connection.Obj["type"]
+					} 
+				}
+				message = self.Network.BasicProtocol.BuildRequest("MASTER", "GATEWAY", self.UUID, "node_disconnected", payload, {})
+				self.SendPacketGateway(message)
 
-		self.LogMSG("({classname})# Slave ({name}) {uuid} has disconnected".format(
-				classname=self.ClassName,
-				name=conn.Obj["name"],
-				uuid=conn.Obj["uuid"]))
+				# Send message (master_remove_node) to all nodes.
+				connection_map = self.SocketServer.GetConnections()
+				for key in connection_map:
+					node = connection_map[key]
+					if node.Socket == self.SocketServer or node.Socket == connection.Socket:
+						pass
+					else:
+						message = self.Network.BasicProtocol.BuildMessage("response", "DIRECT", node.Obj["uuid"], self.UUID, "master_remove_node", connection.Obj, {})
+						message = self.Network.BasicProtocol.AppendMagic(message)
+						self.SocketServer.SendData(node.IP, node.Port, message)
 
-		# Update installed node list (UI will be updated)
-		#for item in self.InstalledNodes:
-		#	if item.UUID == conn.Obj["uuid"]:
-		#		item.IP 			= ""
-		#		item.ListenerPort 	= 0
-		#		item.Status 		= "Stopped"
-		
-		# Send message to Gateway
-		payload = { 
-			'node': { 	
-				'ip':	conn.IP, 
-				'port':	conn.Obj["listener_port"], 
-				'uuid':	conn.Obj["uuid"], 
-				'type':	conn.Obj["type"]
-			} 
-		}
-		message = self.Network.BasicProtocol.BuildRequest("MASTER", "GATEWAY", self.UUID, "node_disconnected", payload, {})
-		self.SendPacketGateway(message)
-
-		# Send message (master_remove_node) to all nodes.
-		connection_map = self.SocketServer.GetConnections()
-		for key in connection_map:
-			node = connection_map[key]
-			if node.Socket == self.SocketServer or node.Socket == sock:
-				pass
-			else:
-				message = self.Network.BasicProtocol.BuildMessage("response", "DIRECT", node.UUID, self.UUID, "master_remove_node", conn.Obj, {})
-				message = self.Network.BasicProtocol.AppendMagic(message)
-				self.SendNodePacket(node.IP, node.Port, message)
-
-		#self.LocalSlaveList.remove(slave)
+				#self.LocalSlaveList.remove(slave)
 
 	''' 
 		Description: 	[HANDLERS]

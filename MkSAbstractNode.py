@@ -302,7 +302,7 @@ class AbstractNode():
 		Return: 		<N/A>
 	'''
 	def SendBroadcastBySocket(self, sock, command):
-		message = self.BasicProtocol.BuildRequest("BROADCAST", "", self.UUID, command, {}, {})
+		message = self.BasicProtocol.BuildRequest("BROADCAST", "UNKNOWN", self.UUID, command, {}, {})
 		packet  = self.BasicProtocol.AppendMagic(message)
 		self.SocketServer.Send(sock, packet)
 		return True
@@ -314,10 +314,7 @@ class AbstractNode():
 	def SendBroadcastByUUID(self, uuid, command):
 		conn = self.GetNodeByUUID(uuid)
 		if conn is not None:
-			message = self.BasicProtocol.BuildRequest("BROADCAST", "", self.UUID, command, {}, {})
-			packet  = self.BasicProtocol.AppendMagic(message)
-			self.SocketServer.Send(conn.Socket, packet)
-			return True
+			return self.SendBroadcastBySocket(conn.Socket, command)
 		return False
 	
 	''' 
@@ -344,11 +341,12 @@ class AbstractNode():
 						broadcast 	= False
 
 						packet["additional"]["client_type"] = "global_ws" # Why?
-						self.LogMSG("({classname})# SOCK [{direction}] {source} -> {dest} [{cmd}]".format(classname=self.ClassName,
+						self.LogMSG("({classname})# SOCK [{type}] [{direction}] {source} -> {dest} [{cmd}]".format(classname=self.ClassName,
 									direction=direction,
 									source=source,
 									dest=destination,
-									cmd=command))
+									cmd=command,
+									type=messageType))
 						
 						if messageType == "BROADCAST":
 							broadcast = True
@@ -367,7 +365,7 @@ class AbstractNode():
 										packet = self.BasicProtocol.AppendMagic(message)
 										self.SocketServer.Send(sock, packet)
 									except Exception as e:
-										self.LogMSG("({classname})# ERROR - [#1]\n(EXEPTION)# {error}".format(error=str(e),classname=self.ClassName))
+										self.LogMSG("({classname})# ERROR - [#1] ({0})\n(EXEPTION)# {error}".format(command,error=str(e),classname=self.ClassName))
 								else:
 									# This command belongs to the application level
 									if self.OnApplicationRequestCallback is not None:
@@ -415,7 +413,7 @@ class AbstractNode():
 		Return: 		
 	'''
 	def NewNodeConnectedHandler(self, connection):
-		if self.SocketServer.ServerSocket != connection.Socket:
+		if self.SocketServer.GetListenerSocket() != connection.Socket:
 			# Raise event for user
 			if self.OnAceptNewConnectionCallback is not None:
 				self.OnAceptNewConnectionCallback(connection)
@@ -429,6 +427,7 @@ class AbstractNode():
 		connection.Obj["pid"] 			= 0
 		connection.Obj["name"] 			= "N/A"
 		connection.Obj["status"] 		= 1
+		connection.Obj["is_slave"]		= 0
 	
 	''' 
 		Description: 	
@@ -472,7 +471,7 @@ class AbstractNode():
 		if payload["tagging"]["cat_1"] == "service":
 			self.Services[payload["type"]]["uuid"] 		= payload["uuid"]
 			self.Services[payload["type"]]["enabled"] 	= 1
-		self.GetNodeInfoResponseHandler(sock, packet)
+		# self.GetNodeInfoResponseHandler(sock, packet)
 
 	def MasterRemoveNodeResponseHandler(self, sock, packet):
 		payload 	= self.BasicProtocol.GetPayloadFromJson(packet)
@@ -484,7 +483,7 @@ class AbstractNode():
 		if payload["tagging"]["cat_1"] == "service":
 			self.Services[payload["type"]]["uuid"] 		= ""
 			self.Services[payload["type"]]["enabled"] 	= 0
-		self.GetNodeInfoResponseHandler(sock, packet)
+		# self.GetNodeInfoResponseHandler(sock, packet)
 	
 	def CloseLocalSocketRequestHandler(self, sock, packet):
 		payload	= self.BasicProtocol.GetPayloadFromJson(packet)
@@ -503,7 +502,7 @@ class AbstractNode():
 		if payload["tagging"]["cat_1"] == "service":
 			self.Services[payload["type"]]["uuid"] 		= payload["uuid"]
 			self.Services[payload["type"]]["enabled"] 	= 1
-		self.GetNodeInfoResponseHandler(sock, packet)
+		# self.GetNodeInfoResponseHandler(sock, packet)
 
 	def FindNodeRequestHandler(self, sock, packet):
 		self.LogMSG("({classname})# Search node request ...".format(classname=self.ClassName))

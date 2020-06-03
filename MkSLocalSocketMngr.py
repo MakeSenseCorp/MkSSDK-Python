@@ -40,6 +40,7 @@ class Manager():
 		# Network
         self.ServerSocket 				= None # Local server listener
         self.ServerAdderss				= None # Local server listener
+        self.ListenerPort				= 0
         self.RecievingSockets			= []
         self.SendingSockets				= []
         self.OpenSocketsCounter			= 0
@@ -378,7 +379,7 @@ class Manager():
 		SendNodePacket
 	'''
     def SendData(self, ip, port, packet):
-		self.LogMSG("({classname})# [SendData]".format(classname=self.ClassName))
+		self.LogMSG("({classname})# [SendData] {0} {1}".format(ip,port,classname=self.ClassName))
 		key = self.Security.GetMD5Hash("{0}_{1}".format(ip,str(port)))
 		if key in self.OpenConnections:
 			node = self.OpenConnections[key]
@@ -461,10 +462,25 @@ class Manager():
 		Description: 	<N/A>
 		Return: 		<N/A>
 	''' 
+    def GetListenerPort(self):
+		return self.ListenerPort
+	
+    ''' 
+		Description: 	<N/A>
+		Return: 		<N/A>
+	''' 
+    def GetListenerSocket(self):
+		return self.ServerSocket
+
+    ''' 
+		Description: 	<N/A>
+		Return: 		<N/A>
+	''' 
     def SetExitSync(self, sync):
 		self.ExitSynchronizer = sync
 	
     def EnableListener(self, port):
+		self.ListenerPort 		= port
 		self.IsListenerEnabled 	= True
 		self.ServerAdderss = ('', port)
 
