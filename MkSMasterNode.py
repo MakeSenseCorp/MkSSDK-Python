@@ -41,7 +41,6 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 		# Members
 		self.PortsForClients					= [item for item in range(1,33)]
 		self.MasterVersion						= "1.0.1"
-		self.PackagesList						= ["Gateway","LinuxTerminal"] # Default Master capabilities.
 		self.InstalledNodes 					= []
 		self.IsMaster 							= True
 		self.IsLocalUIEnabled					= False
@@ -376,14 +375,6 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 		# Do we have available port.
 		if self.PortsForClients:
 			conn = self.SocketServer.GetConnectionBySock(sock)
-			
-			#existing_slave = None
-			#for slave in self.LocalSlaveList:
-			#	if slave.UUID == conn.UUID:
-			#		existing_slave = slave
-			#		continue
-			#if None == existing_slave:
-
 			if conn.Obj["listener_port"] == 0:
 				# New request
 				port = 10000 + self.PortsForClients.pop()
@@ -395,16 +386,9 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 				conn.Obj["status"] 			= int(conn.Obj["status"]) | 4
 				conn.Obj["is_slave"]		= 1
 
-				# Update installed node list (UI will be updated)
-				#for item in self.InstalledNodes:
-				#	if item.UUID == node.UUID:
-				#		item.IP 			= node.IP
-				#		item.ListenerPort 	= node.ListenerPort
-				#		item.Status 		= "Running"
+				# [TODO] Update installed node list (UI will be updated)
+				# [TODO] What will happen when slave node will try to get port when we are not connected to AWS?
 
-				#self.LocalSlaveList.append(node)
-
-				# TODO - What will happen when slave node will try to get port when we are not connected to AWS?
 				# Send message to Gateway
 				payload = { 
 					'node': { 	
@@ -475,12 +459,7 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 		if connection is not None:
 			if connection.Obj["is_slave"] == 1:
 				self.PortsForClients.append(connection.Obj["listener_port"] - 10000)
-				# Update installed node list (UI will be updated)
-				#for item in self.InstalledNodes:
-				#	if item.UUID == connection.Obj["uuid"]:
-				#		item.IP 			= ""
-				#		item.ListenerPort 	= 0
-				#		item.Status 		= "Stopped"
+				# [TODO] Update installed node list (UI will be updated)
 				
 				# Send message to Gateway
 				payload = { 
@@ -504,8 +483,6 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 						message = self.Network.BasicProtocol.BuildMessage("response", "DIRECT", node.Obj["uuid"], self.UUID, "master_remove_node", connection.Obj, {})
 						message = self.Network.BasicProtocol.AppendMagic(message)
 						self.SocketServer.SendData(node.IP, node.Port, message)
-
-				#self.LocalSlaveList.remove(slave)
 
 	''' 
 		Description: 	[HANDLERS]
