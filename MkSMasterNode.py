@@ -305,7 +305,7 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 	'''	
 	def HandleExternalRequest(self, packet):
 		self.LogMSG("({classname})# External request (PROXY)".format(classname=self.ClassName))
-		destination = self.Network.BasicProtocol.GetDestinationFromJson(packet)
+		destination = self.BasicProtocol.GetDestinationFromJson(packet)
 		conn 		= self.GetNodeByUUID(destination)
 		
 		if conn is not None:
@@ -328,7 +328,7 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 		payload["master_uuid"] 		= self.UUID
 		payload["pid"]				= self.MyPID
 		payload["listener_port"]	= self.SocketServer.GetListenerPort()
-		return self.Network.BasicProtocol.BuildResponse(packet, payload)
+		return self.BasicProtocol.BuildResponse(packet, payload)
 	
 	''' 
 		Description: 	Handler [get_node_info] RESPONSE
@@ -399,7 +399,7 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 						'name':	name
 					} 
 				}
-				message = self.Network.BasicProtocol.BuildRequest("MASTER", "GATEWAY", self.UUID, "node_connected", payload, {})
+				message = self.BasicProtocol.BuildRequest("MASTER", "GATEWAY", self.UUID, "node_connected", payload, {})
 				self.SendPacketGateway(message)
 
 				# Send message (master_append_node) to all nodes.
@@ -407,8 +407,8 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 				for key in connection_map:
 					item = connection_map[key]
 					if item.Socket != self.SocketServer.GetListenerSocket():
-						message = self.Network.BasicProtocol.BuildMessage("response", "DIRECT", item.Obj["uuid"], self.UUID, "master_append_node", node_info, {})
-						message = self.Network.BasicProtocol.AppendMagic(message)
+						message = self.BasicProtocol.BuildMessage("response", "DIRECT", item.Obj["uuid"], self.UUID, "master_append_node", node_info, {})
+						message = self.BasicProtocol.AppendMagic(message)
 						self.SocketServer.SendData(item.IP, item.Port, message)
 				
 				# Store UUID if it is a service
@@ -420,13 +420,13 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 					self.IPScannerServiceUUID 	= uuid
 					self.RegisterOnNodeChangeEvent(self.IPScannerServiceUUID)
 
-				return self.Network.BasicProtocol.BuildResponse(packet, { 'port': port })
+				return self.BasicProtocol.BuildResponse(packet, { 'port': port })
 			else:
 				# Already assigned port (resending)
-				return self.Network.BasicProtocol.BuildResponse(packet, { 'port': conn.Obj["listener_port"] })
+				return self.BasicProtocol.BuildResponse(packet, { 'port': conn.Obj["listener_port"] })
 		else:
 			# No available ports
-			return self.Network.BasicProtocol.BuildResponse(packet, { 'port': 0 })
+			return self.BasicProtocol.BuildResponse(packet, { 'port': 0 })
 
 	''' 
 		Description: 	[HANDLERS]
@@ -444,7 +444,7 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 					'type':	conn.Obj["type"]
 				} 
 			}
-			message = self.Network.BasicProtocol.BuildRequest("MASTER", "GATEWAY", self.UUID, "node_disconnected", payload, {})
+			message = self.BasicProtocol.BuildRequest("MASTER", "GATEWAY", self.UUID, "node_disconnected", payload, {})
 			self.SendPacketGateway(message)
 
 	''' 
@@ -470,18 +470,17 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 						'type':	connection.Obj["type"]
 					} 
 				}
-				message = self.Network.BasicProtocol.BuildRequest("MASTER", "GATEWAY", self.UUID, "node_disconnected", payload, {})
+				message = self.BasicProtocol.BuildRequest("MASTER", "GATEWAY", self.UUID, "node_disconnected", payload, {})
 				self.SendPacketGateway(message)
 
 				# Send message (master_remove_node) to all nodes.
 				connection_map = self.SocketServer.GetConnections()
 				for key in connection_map:
 					node = connection_map[key]
-					if node.Socket == self.SocketServer or node.Socket == connection.Socket:
-						pass
-					else:
-						message = self.Network.BasicProtocol.BuildMessage("response", "DIRECT", node.Obj["uuid"], self.UUID, "master_remove_node", connection.Obj, {})
-						message = self.Network.BasicProtocol.AppendMagic(message)
+					# Don't send this message to master you your self.
+					if node.Socket != self.SocketServer.GetListenerSocket() and node.Socket != connection.Socket:
+						message = self.BasicProtocol.BuildMessage("response", "DIRECT", node.Obj["uuid"], self.UUID, "master_remove_node", connection.Obj, {})
+						message = self.BasicProtocol.AppendMagic(message)
 						self.SocketServer.SendData(node.IP, node.Port, message)
 
 	''' 
@@ -499,7 +498,7 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 				'uuid':	conn.Obj["uuid"],
 				'type':	conn.Obj["type"]
 			})
-		return self.Network.BasicProtocol.BuildResponse(packet, { 'nodes': nodes })
+		return self.BasicProtocol.BuildResponse(packet, { 'nodes': nodes })
 
 	''' 
 		Description: 	[HANDLERS]
@@ -509,7 +508,7 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 		payload = {
 			"status":"online"
 		}
-		return self.Network.BasicProtocol.BuildResponse(packet, payload)
+		return self.BasicProtocol.BuildResponse(packet, payload)
 
 	''' 
 		Description: 	[HANDLERS]
@@ -549,7 +548,7 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 	'''	
 	def SendRequest(self, uuid, msg_type, command, payload, additional):
 		# Generate request
-		message = self.Network.BasicProtocol.BuildRequest(msg_type, uuid, self.UUID, command, payload, additional)
+		message = self.BasicProtocol.BuildRequest(msg_type, uuid, self.UUID, command, payload, additional)
 		# Send message
 		self.SendPacketGateway(message)
 
@@ -574,5 +573,5 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 						'name':	conn.Obj["name"]
 					} 
 				}
-				message = self.Network.BasicProtocol.BuildRequest("MASTER", "GATEWAY", self.UUID, "node_connected", payload, {})
+				message = self.BasicProtocol.BuildRequest("MASTER", "GATEWAY", self.UUID, "node_connected", payload, {})
 				self.SendPacketGateway(message)

@@ -150,13 +150,21 @@ class Network ():
 	def SendWebSocket(self, packet):
 		try:
 			if packet is not "" and packet is not None:
-				self.Logger.Log("({classname})# Node -> Gateway - Packet\n{0}".format(packet,classname=self.ClassName))
+				pckt 	= json.loads(packet)
+				src  	= self.BasicProtocol.GetSourceFromJson(pckt)
+				dst  	= self.BasicProtocol.GetDestinationFromJson(pckt)
+				drt 	= self.BasicProtocol.GetDirectionFromJson(pckt)
+				cmd 	= self.BasicProtocol.GetCommandFromJson(pckt)
+				self.Logger.Log("({classname})# Node -> Gateway [{2}] {0} -> {1} ({3})".format(src,dst,drt,cmd,classname=self.ClassName))
 				self.WSConnection.send(packet)
 			else:
 				self.Logger.Log("({classname})# Sending packet to Gateway FAILED".format(classname=self.ClassName))
 				print ("({classname})# Sending packet to Gateway FAILED".format(classname=self.ClassName))
-		except:
-			self.Logger.Log("({classname})# [EXCEPTION] Sending packet to Gateway FAILED".format(classname=self.ClassName))
+		except Exception as e:
+			self.Logger.Log("({classname})# ERROR - [SocketTXCallback]\n\n********** EXCEPTION **********\n----\nITEM\n----\n{0}\n-----\nERROR\n-----\n({error})\n********************************\n".format(
+				packet,
+				classname=self.ClassName,
+				error=str(e)))
 			return False
 		
 		return True

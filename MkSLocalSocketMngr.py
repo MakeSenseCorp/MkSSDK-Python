@@ -102,7 +102,7 @@ class Manager():
 			self.LogMSG("({classname})# [SocketTXCallback]".format(classname=self.ClassName))
 			item["sock"].send(item["packet"])
 		except Exception as e:
-			self.LogMSG("({classname})# ERROR - [SocketTXCallback]\nPACKET#\n{0}\n(EXEPTION)# {error}".format(
+			self.LogMSG("({classname})# ERROR - [SocketTXCallback]\n\n********** EXCEPTION **********\n----\nITEM\n----\n{0}\n-----\nERROR\n-----\n({error})\n********************************\n".format(
 				item["packet"],
 				classname=self.ClassName,
 				error=str(e)))
