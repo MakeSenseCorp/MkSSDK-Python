@@ -116,7 +116,7 @@ class Manager():
 			self.LogMSG("({classname})# [SocketRXCallback]".format(classname=self.ClassName))
 			self.RXHandlerMethod[item["type"]](item["data"])
 		except Exception as e:
-			self.LogMSG("({classname})# ERROR - [SocketRXCallback]\nPACKET#\n{0}\n(EXEPTION)# {error}".format(
+			self.LogMSG("({classname})# ERROR - [SocketRXCallback]\n\n********** EXCEPTION **********\n----\nITEM\n----\n{0}\n-----\nERROR\n-----\n({error})\n********************************\n".format(
 				item,
 				classname=self.ClassName,
 				error=str(e)))
@@ -140,6 +140,7 @@ class Manager():
 		except Exception as e:
 			self.RemoveConnectionBySock(self.ServerSocket)
 			self.LogMSG("({classname})# Failed to open listener, {0}\n[EXCEPTION] {1}".format(str(self.ServerAdderss[1]),e,classname=self.ClassName))
+			time.sleep(1)
 			return False
 		
 		try:

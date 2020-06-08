@@ -44,13 +44,6 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 		self.InstalledNodes 					= []
 		self.IsMaster 							= True
 		self.IsLocalUIEnabled					= False
-		# Queue
-		self.GatewayRXQueueLock      	    	= threading.Lock()
-		self.GatewayRXQueue						= Queue.Queue()
-		self.GatewayRXWorkerRunning 			= False
-		self.GatewayTXQueueLock      	    	= threading.Lock()
-		self.GatewayTXQueue						= Queue.Queue()
-		self.GatewayTXWorkerRunning 			= False
 		# Debug & Logging
 		self.DebugMode							= True
 		# Node connection to WS information
@@ -85,9 +78,6 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 		# Flags
 		self.IsListenerEnabled 					= False
 		self.PipeStdoutRun						= False
-
-		thread.start_new_thread(self.GatewayRXQueueWorker, ())
-		thread.start_new_thread(self.GatewayTXQueueWorker, ())
 	
 	''' 
 		Description: 	N/A
@@ -215,16 +205,51 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 		Return: 		N/A
 	'''	
 	def WebSocketDataArrivedCallback (self, packet):
-		self.GatewayRXQueueLock.acquire()
 		try:
-			self.SetState("WORKING")
-			self.GatewayRXQueue.put(packet)
+			# self.SetState("WORKING")
+			messageType = self.BasicProtocol.GetMessageTypeFromJson(packet)
+			direction 	= self.BasicProtocol.GetDirectionFromJson(packet)
+			destination = self.BasicProtocol.GetDestinationFromJson(packet)
+			source 		= self.BasicProtocol.GetSourceFromJson(packet)
+			command 	= self.BasicProtocol.GetCommandFromJson(packet)
+
+			packet["additional"]["client_type"] = "global_ws"
+			self.LogMSG("({classname})# WS [{direction}] {source} -> {dest} [{cmd}]".format(
+						classname=self.ClassName,
+						direction=direction,
+						source=source,
+						dest=destination,
+						cmd=command))
+			
+			if messageType == "BROADCAST":
+				pass
+		
+			if destination in source:
+				return
+
+			# Is this packet for me?
+			if destination in self.UUID:
+				if messageType == "CUSTOM":
+					return
+				elif messageType in ["DIRECT", "PRIVATE", "WEBFACE"]:
+					if command in self.NodeRequestHandlers.keys():
+						message = self.NodeRequestHandlers[command](None, packet)
+						self.SendPacketGateway(message)
+					else:
+						if self.GatewayDataArrivedCallback is not None:
+							message = self.GatewayDataArrivedCallback(None, packet)
+							self.SendPacketGateway(message)
+				else:
+					self.LogMSG("({classname})# [Websocket INBOUND] ERROR - Not support {0} request type.".format(messageType, classname=self.ClassName))
+			else:
+				self.LogMSG("(Master Node)# Not mine ... Sending to slave ... " + destination)
+				# Find who has this destination adderes.
+				self.HandleExternalRequest(packet)
 		except Exception as e:
 			self.LogMSG("({classname})# WebSocket Error - Data arrived issue\nPACKET#\n{0}\n(EXEPTION)# {error}".format(
-						packet,
-						classname=self.ClassName,
-						error=str(e)))
-		self.GatewayRXQueueLock.release()
+				packet,
+				classname=self.ClassName,
+				error=str(e)))
 
 	''' 
 		Description: 	N/A
@@ -237,67 +262,6 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 		self.AccessTick = 0
 		self.NetworkAccessTickLock.release()
 		self.SetState("ACCESS_WAIT_GATEWAY")
-
-	''' 
-		Description: 	N/A
-		Return: 		N/A
-	'''		
-	def GatewayRXQueueWorker(self):
-		self.GatewayRXWorkerRunning = True
-		while self.GatewayRXWorkerRunning is True:
-			try:
-				packet 		= self.GatewayRXQueue.get(block=True,timeout=None)
-				messageType = self.BasicProtocol.GetMessageTypeFromJson(packet)
-				direction 	= self.BasicProtocol.GetDirectionFromJson(packet)
-				destination = self.BasicProtocol.GetDestinationFromJson(packet)
-				source 		= self.BasicProtocol.GetSourceFromJson(packet)
-				command 	= self.BasicProtocol.GetCommandFromJson(packet)
-
-				packet["additional"]["client_type"] = "global_ws"
-
-				self.LogMSG("({classname})# WS [{direction}] {source} -> {dest} [{cmd}]".format(
-							classname=self.ClassName,
-							direction=direction,
-							source=source,
-							dest=destination,
-							cmd=command))
-				
-				if messageType == "BROADCAST":
-					pass
-			
-				if destination in source:
-					return
-
-				# Is this packet for me?
-				if destination in self.UUID:
-					if messageType == "CUSTOM":
-						return
-					elif messageType in ["DIRECT", "PRIVATE", "WEBFACE"]:
-						if command in self.NodeRequestHandlers.keys():
-							message = self.NodeRequestHandlers[command](None, packet)
-							self.SendPacketGateway(message)
-						else:
-							if self.GatewayDataArrivedCallback is not None:
-								message = self.GatewayDataArrivedCallback(None, packet)
-								self.SendPacketGateway(message)
-					else:
-						self.LogMSG("({classname})# [Websocket INBOUND] ERROR - Not support {0} request type.".format(messageType, classname=self.ClassName))
-				else:
-					self.LogMSG("(Master Node)# Not mine ... Sending to slave ... " + destination)
-					# Find who has this destination adderes.
-					self.HandleExternalRequest(packet)
-			except Exception as e:
-				print ("({classname})# [ERROR] (GatewayRXQueueWorker) {0}".format(str(e), classname=self.ClassName))
-
-	''' 
-		Description: 	N/A
-		Return: 		N/A
-	'''		
-	def GatewayTXQueueWorker(self):
-		self.GatewayTXWorkerRunning = True
-		while self.GatewayTXWorkerRunning is True:
-			packet = self.GatewayTXQueue.get(block=True,timeout=None)
-			self.Network.SendWebSocket(packet)
 	
 	''' 
 		Description: 	Master as proxy server.
@@ -531,15 +495,7 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 		Return: 		N/A
 	'''	
 	def SendPacketGateway(self, packet):
-		self.GatewayTXQueueLock.acquire()
-		try:
-			self.GatewayTXQueue.put(packet)
-		except Exception as e:
-			self.LogMSG("({classname})# ERROR - [SendPacketGateway]\nPACKET#\n{0}\n(EXEPTION)# {error}".format(
-						packet,
-						classname=self.ClassName,
-						error=str(e)))
-		self.GatewayTXQueueLock.release()
+		self.Network.SendWebSocket(packet)
 
 	''' 
 		Description: 	N/A

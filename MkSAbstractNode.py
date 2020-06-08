@@ -98,7 +98,7 @@ class AbstractNode():
 		self.NodeRequestHandlers					= {
 			'get_node_info': 						self.GetNodeInfoRequestHandler,
 			'get_node_status': 						self.GetNodeStatusRequestHandler,
-			'get_file': 							self.GetFileHandler,
+			'get_file': 							self.GetFileRequestHandler,
 			'register_on_node_change':				self.RegisterOnNodeChangeHandler,
 			'unregister_on_node_change':			self.UnregisterOnNodeChangeHandler,
 			'find_node':							self.FindNodeRequestHandler,
@@ -112,7 +112,7 @@ class AbstractNode():
 			'find_node': 							self.FindNodeResponseHandler,
 			'master_append_node':					self.MasterAppendNodeResponseHandler,
 			'master_remove_node':					self.MasterRemoveNodeResponseHandler,
-			'get_online_devices':					self.GetOnlineDevicesHandler
+			'get_online_devices':					self.GetOnlineDevicesResponseHandler
 		}
 		# LocalFace UI
 		self.UI 									= None
@@ -456,43 +456,41 @@ class AbstractNode():
 		connection.Obj["name"] 			= "N/A"
 		connection.Obj["status"] 		= 1
 
-	def GetOnlineDevicesHandler(self, sock, packet):
-		self.LogMSG("({classname})# Online network device list ...".format(classname=self.ClassName))
+	''' 
+		Description: 	Get devices in local network
+		Return: 		None
+	'''	
+	def ScanNetwork(self):
+		self.SendRequestToNode(self.Services[103]["uuid"], "get_online_devices", {})
+
+	''' 
+		Description: 	Get devices in local network handler. [RESPONSE]
+		Return: 		None
+	'''		
+	def GetOnlineDevicesResponseHandler(self, sock, packet):
+		self.LogMSG("({classname})# [GetOnlineDevicesResponseHandler]".format(classname=self.ClassName))
 		payload = self.BasicProtocol.GetPayloadFromJson(packet)
 		self.NetworkOnlineDevicesList = payload["online_devices"]
 
-	def MasterAppendNodeResponseHandler(self, sock, packet):
-		payload 	= self.BasicProtocol.GetPayloadFromJson(packet)
-		additional = self.BasicProtocol.GetAdditionalFromJson(packet)
+	''' 
+		Description: 	Find nodes according to type and categories.
+		Return: 		None
+	'''	
+	def FindNode(self, category1, category2, category3, node_type):
+		payload = {
+			'cat_1': category1,
+			'cat_2': category2,
+			'cat_3': category3,
+			'type': node_type
+		}
+		self.SendRequest("BROADCAST", "BROADCAST", "find_node", payload, {})
 
-		additional["online"] = True
-		packet = self.BasicProtocol.SetAdditional(packet, additional)
-
-		if payload["tagging"]["cat_1"] == "service":
-			self.Services[payload["type"]]["uuid"] 		= payload["uuid"]
-			self.Services[payload["type"]]["enabled"] 	= 1
-		# self.GetNodeInfoResponseHandler(sock, packet)
-
-	def MasterRemoveNodeResponseHandler(self, sock, packet):
-		payload 	= self.BasicProtocol.GetPayloadFromJson(packet)
-		additional = self.BasicProtocol.GetAdditionalFromJson(packet)
-		
-		additional["online"] = False
-		packet = self.BasicProtocol.SetAdditional(packet, additional)
-
-		if payload["tagging"]["cat_1"] == "service":
-			self.Services[payload["type"]]["uuid"] 		= ""
-			self.Services[payload["type"]]["enabled"] 	= 0
-		# self.GetNodeInfoResponseHandler(sock, packet)
-	
-	def CloseLocalSocketRequestHandler(self, sock, packet):
-		payload	= self.BasicProtocol.GetPayloadFromJson(packet)
-		self.LogMSG("({classname})# Close server socket request ... {0}".format(payload, classname=self.ClassName))
-		self.RemoveConnectionBySock(sock)
-		#if self.MasterSocket == sock:
-		#	self.MasterSocket = None
-
+	''' 
+		Description: 	Find nodes according to type and categories handler. [RESPONSE]
+		Return: 		None
+	'''	
 	def FindNodeResponseHandler(self, sock, packet):
+		self.LogMSG("({classname})# [FindNodeResponseHandler]".format(classname=self.ClassName))
 		payload 	= self.BasicProtocol.GetPayloadFromJson(packet)
 		additional 	= self.BasicProtocol.GetAdditionalFromJson(packet)
 
@@ -502,10 +500,16 @@ class AbstractNode():
 		if payload["tagging"]["cat_1"] == "service":
 			self.Services[payload["type"]]["uuid"] 		= payload["uuid"]
 			self.Services[payload["type"]]["enabled"] 	= 1
+		
+		# Send threw node info handler as well.
 		# self.GetNodeInfoResponseHandler(sock, packet)
 
+	''' 
+		Description: 	Find nodes according to type and categories handler. [REQUEST]
+		Return: 		None
+	'''	
 	def FindNodeRequestHandler(self, sock, packet):
-		self.LogMSG("({classname})# Search node request ...".format(classname=self.ClassName))
+		self.LogMSG("({classname})# [FindNodeRequestHandler]".format(classname=self.ClassName))
 		payload = self.BasicProtocol.GetPayloadFromJson(packet)
 		cat_1 = payload["cat_1"]
 		cat_2 = payload["cat_2"]
@@ -519,6 +523,40 @@ class AbstractNode():
 			return self.BasicProtocol.BuildResponse(packet, self.NodeInfo)
 		else:
 			return ""
+		
+	def MasterAppendNodeResponseHandler(self, sock, packet):
+		self.LogMSG("({classname})# [MasterAppendNodeResponseHandler]".format(classname=self.ClassName))
+		payload 	= self.BasicProtocol.GetPayloadFromJson(packet)
+		additional 	= self.BasicProtocol.GetAdditionalFromJson(packet)
+
+		additional["online"] = True
+		packet = self.BasicProtocol.SetAdditional(packet, additional)
+
+		if payload["tagging"]["cat_1"] == "service":
+			self.Services[payload["type"]]["uuid"] 		= payload["uuid"]
+			self.Services[payload["type"]]["enabled"] 	= 1
+		# Send threw node info handler as well.
+		# self.GetNodeInfoResponseHandler(sock, packet)
+
+	def MasterRemoveNodeResponseHandler(self, sock, packet):
+		self.LogMSG("({classname})# [MasterRemoveNodeResponseHandler]".format(classname=self.ClassName))
+		payload 	= self.BasicProtocol.GetPayloadFromJson(packet)
+		additional = self.BasicProtocol.GetAdditionalFromJson(packet)
+		
+		additional["online"] = False
+		packet = self.BasicProtocol.SetAdditional(packet, additional)
+
+		if payload["tagging"]["cat_1"] == "service":
+			self.Services[payload["type"]]["uuid"] 		= ""
+			self.Services[payload["type"]]["enabled"] 	= 0
+		# self.GetNodeInfoResponseHandler(sock, packet)
+	
+	def CloseLocalSocketRequestHandler(self, sock, packet):
+		payload	= self.BasicProtocol.GetPayloadFromJson(packet)
+		self.LogMSG("({classname})# [CloseLocalSocketRequestHandler] {0}".format(payload, classname=self.ClassName))
+		self.RemoveConnectionBySock(sock)
+		#if self.MasterSocket == sock:
+		#	self.MasterSocket = None
 	
 	def SetState (self, state):
 		self.LogMSG("({classname})# Change state [{0}]".format(state,classname=self.ClassName))
@@ -545,21 +583,9 @@ class AbstractNode():
 
 	def FindIPScannerService(self):
 		self.FindNode("service", "network", "ip_scanner", 0)
-	
-	def ScanNetwork(self):
-		self.SendRequestToNode(self.Services[103]["uuid"], "get_online_devices", {})
 
 	def GetNetworkOnlineDevicesList(self):
 		return self.NetworkOnlineDevicesList
-
-	def FindNode(self, category1, category2, category3, node_type):
-		payload = {
-			'cat_1': category1,
-			'cat_2': category2,
-			'cat_3': category3,
-			'type': node_type
-		}
-		self.SendRequest("BROADCAST", "BROADCAST", "find_node", payload, {})
 
 	def SendRequestToNode(self, uuid, command, payload):
 		self.SendRequest(uuid, "DIRECT", command, payload, {})
@@ -723,7 +749,11 @@ class AbstractNode():
 	def UnregisterGlobalWS(self, id):
 		return self.RemoveDeviceChangeListGlobal(id)
 
-	def GetFileHandler(self, sock, packet):
+	''' 
+		Description: 	Get file handler [REQUEST]
+		Return: 		N/A
+	'''	
+	def GetFileRequestHandler(self, sock, packet):
 		objFile 		= MkSFile.File()
 		payload 		= self.BasicProtocol.GetPayloadFromJson(packet)
 		uiType 			= payload["ui_type"]
@@ -731,6 +761,7 @@ class AbstractNode():
 		fileName 		= payload["file_name"]
 		client_type 	= packet["additional"]["client_type"]
 		stamping 		= packet["stamping"]
+		# TODO - Node should get type of machine the node ui running on.
 		machine_type 	= "pc"
 
 		folder = {
@@ -749,69 +780,27 @@ class AbstractNode():
 				content = content.replace("[GATEWAY_IP]", self.GatewayIP)
 			else:
 				if "cloud_t" in stamping:
+					# TODO - Cloud URL must be in config.json
 					content = content.replace("[GATEWAY_IP]", "ec2-54-188-199-33.us-west-2.compute.amazonaws.com")
 				else:
 					content = content.replace("[GATEWAY_IP]", self.GatewayIP)
 
+			css 	= ""
+			script 	= ""
 			if client_type == "global_ws":
-				css = '''
-					<link rel="stylesheet" href="/static/lib/bootstrap/css/bootstrap.min.css" crossorigin="anonymous">
-					<link rel="stylesheet" href="/static/lib/bootstrap/css/bootstrap-slider.css" crossorigin="anonymous">
-					<link rel="stylesheet" href="/static/lib/fontawesome-5.11.2/css/all.min.css">
-					<link rel="stylesheet" href="/static/lib/bootstrap4-editable/css/bootstrap-editable.css">
-					<link rel="stylesheet" href="/static/lib/chartjs/2.9.3/Chart.min.css">
-					<link rel="stylesheet" href="/static/lib/datetimepicker/bootstrap-datetimepicker.min.css">
-				'''
-
-				script = '''
-					<script src="/static/lib/nodes/js/jquery_3_3_1/jquery.min.js"></script>
-					<script src="/static/lib/nodes/js/popper_1_14_7/popper.min.js" crossorigin="anonymous"></script>
-					<script src="/static/lib/bootstrap/js/bootstrap.min.js" crossorigin="anonymous"></script>
-					<script src="/static/lib/bootstrap/js/bootstrap-slider.js" crossorigin="anonymous"></script>
-					<script src="/static/lib/nodes/js/feather_4_19/feather.min.js"></script>
-					<script src="/static/lib/nodes/map/feather_4_19/feather.min.js.map"></script>
-					<script src="/static/lib/bootstrap4-editable/js/bootstrap-editable.min.js"></script>
-					<script src="/static/lib/chartjs/2.9.3/Chart.min.js"></script>
-					<script src="/static/lib/datetimepicker/bootstrap-datetimepicker.min.js"></script>
-					
+				script = '''					
 					<script src="mksdk-js/MkSAPI.js"></script>
 					<script src="mksdk-js/MkSCommon.js"></script>
 					<script src="mksdk-js/MkSGateway.js"></script>
 					<script src="mksdk-js/MkSWebface.js"></script>
 				'''
 			elif client_type == "local_ws":
-				css = '''
-					<link rel="stylesheet" href="static/lib/bootstrap/css/bootstrap.min.css" crossorigin="anonymous">
-					<link rel="stylesheet" href="static/lib/bootstrap/css/bootstrap-slider.css" crossorigin="anonymous">
-					<link rel="stylesheet" href="static/lib/fontawesome-5.11.2/css/all.min.css">
-					<link rel="stylesheet" href="static/lib/bootstrap4-editable/css/bootstrap-editable.css">
-					<link rel="stylesheet" href="static/lib/chartjs/2.9.3/Chart.min.css">
-					<link rel="stylesheet" href="static/lib/datetimepicker/bootstrap-datetimepicker.min.css">
-				'''
-
-				script = '''
-					<script src="static/lib/nodes/js/jquery_3_3_1/jquery.min.js"></script>
-					<script src="static/lib/nodes/js/popper_1_14_7/popper.min.js" crossorigin="anonymous"></script>
-					<script src="static/lib/bootstrap/js/bootstrap.min.js" crossorigin="anonymous"></script>
-					<script src="static/lib/bootstrap/js/bootstrap-slider.js" crossorigin="anonymous"></script>
-					<script src="static/lib/nodes/js/feather_4_19/feather.min.js"></script>
-					<script src="static/lib/nodes/map/feather_4_19/feather.min.js.map"></script>
-					<script src="static/lib/bootstrap4-editable/js/bootstrap-editable.min.js"></script>
-					<script src="static/lib/chartjs/2.9.3/Chart.min.js"></script>
-					<script src="static/lib/datetimepicker/bootstrap-datetimepicker.min.js"></script>
-					
-					<script src="static/mksdk-js/MkSCommon.js"></script>
-					<script src="static/mksdk-js/MkSAPI.js"></script>
-					<script src="static/mksdk-js/MkSGateway.js"></script>
-					<script src="static/mksdk-js/MkSWebface.js"></script>
-				'''
+				pass
 			else:
-				css 	= ""
-				script 	= ""
+				pass
 		
 			content = content.replace("[CSS]",css)
 			content = content.replace("[SCRIPTS]",script)
-
 
 		# TODO - Minify file content
 		content = content.replace("\t","")

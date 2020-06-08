@@ -204,9 +204,9 @@ class SlaveNode(MkSAbstractNode.AbstractNode):
 	def GetNodeInfoRequestHandler(self, sock, packet):
 		self.LogMSG("({classname})# [GetNodeInfoRequestHandler]".format(classname=self.ClassName))
 		payload = self.NodeInfo
-		payload["is_master"] 	= False
-		payload["master_uuid"] 	= self.MasterUUID
-		payload["pid"]			= self.MyPID
+		payload["is_master"] 		= False
+		payload["master_uuid"] 		= self.MasterUUID
+		payload["pid"]				= self.MyPID
 		payload["listener_port"]	= self.SocketServer.GetListenerPort()
 		return self.BasicProtocol.BuildResponse(packet, payload)
 

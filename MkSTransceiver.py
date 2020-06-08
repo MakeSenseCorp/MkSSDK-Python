@@ -16,7 +16,13 @@ class Manager():
         self.RXQueue.Start()
     
     def Send(self, item):
-        self.TXQueue.QueueItem(item)
+        if self.TXQueue is not None:
+            self.TXQueue.QueueItem(item)
+            return True
+        return False
     
     def Receive(self, item):
-        self.RXQueue.QueueItem(item)
+        if self.RXQueue is not None:
+            self.RXQueue.QueueItem(item)
+            return True
+        return False
