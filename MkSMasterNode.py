@@ -93,7 +93,7 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 		Return: 		None
 	'''	
 	def State_Idle (self):
-		self.LogMSG("(Master Node)# Note, in IDLE state ...")
+		self.LogMSG("({classname})# Note, in IDLE state ...".format(classname=self.ClassName))
 		time.sleep(1)
 
 	''' 

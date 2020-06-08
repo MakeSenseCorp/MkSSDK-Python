@@ -248,6 +248,13 @@ class AbstractNode():
 		return False
 
 	''' 
+		Description:	Connect node over socket, add connection to connections list.
+		Return: 		Connection and status
+	'''
+	def ConnectNode(self, ip, port):
+		return self.SocketServer.Connect(ip, port)
+
+	''' 
 		Description:	Search for MASTER nodes on local network.
 		Return: 		IP list of MASTER nodes.
 	'''
@@ -297,6 +304,19 @@ class AbstractNode():
 				return conn
 		return None
 
+	''' 
+		Description: 	<N/A>
+		Return: 		<N/A>
+	'''
+	def SendBySocket(self, sock, command, payload):
+		conn = self.SocketServer.GetConnectionBySock(sock)
+		if conn is not None:
+			message = self.BasicProtocol.BuildRequest("DIRECT", conn.Obj["uuid"], self.UUID, command, payload, {})
+			packet  = self.BasicProtocol.AppendMagic(message)
+			self.SocketServer.Send(sock, packet)
+			return True
+		return False
+	
 	''' 
 		Description: 	<N/A>
 		Return: 		<N/A>
