@@ -42,6 +42,7 @@ class AbstractNode():
 		self.IsMainNodeRunnig 						= True
 		self.AccessTick 							= 0 	# Network establishment counter
 		self.RegisteredNodes  						= []
+		self.System									= None
 		self.SystemLoaded							= False
 		self.IsHardwareBased 						= False
 		self.IsNodeWSServiceEnabled 				= False # Based on HTTP requests and web sockets
@@ -366,7 +367,7 @@ class AbstractNode():
 									source=source,
 									dest=destination,
 									cmd=command,
-									type=messageType))
+									type=messageType), 5)
 						
 						if messageType == "BROADCAST":
 							broadcast = True
@@ -385,7 +386,7 @@ class AbstractNode():
 										packet = self.BasicProtocol.AppendMagic(message)
 										self.SocketServer.Send(sock, packet)
 									except Exception as e:
-										self.LogMSG("({classname})# ERROR - [#1] ({0})\n(EXEPTION)# {error}".format(command,error=str(e),classname=self.ClassName))
+										self.LogException("[DataSocketInputHandler #1] {0}".format(command),e,3)
 								else:
 									# This command belongs to the application level
 									if self.OnApplicationRequestCallback is not None:
@@ -396,36 +397,36 @@ class AbstractNode():
 											packet = self.BasicProtocol.AppendMagic(message)
 											self.SocketServer.Send(sock, packet)
 										except Exception as e:
-											self.LogMSG("({classname})# ERROR - [#2]\n(EXEPTION)# {error}".format(error=str(e),classname=self.ClassName))
+											self.LogException("[DataSocketInputHandler #2]",e,3)
 							elif direction in "response":
 								if command in self.NodeResponseHandlers.keys():
 									try:
 										self.NodeResponseHandlers[command](sock, packet)
 									except Exception as e:
-										self.LogMSG("({classname})# ERROR - [#3]\n(EXEPTION)# {error}".format(error=str(e),classname=self.ClassName))
+										self.LogException("[DataSocketInputHandler #3]",e,3)
 								else:
 									# This command belongs to the application level
 									if self.OnApplicationResponseCallback is not None:
 										try:
 											self.OnApplicationResponseCallback(sock, packet)
 										except Exception as e:
-											self.LogMSG("({classname})# ERROR - [#4]\n(EXEPTION)# {error}".format(error=str(e),classname=self.ClassName))
+											self.LogException("[DataSocketInputHandler #4]",e,3)
 							else:
 								pass
 						else:
 							# This massage is external (MOSTLY MASTER)
 							try:
 								if self.Network is not None:
-									self.LogMSG("({classname})# This massage is external (MOSTLY MASTER)".format(classname=self.ClassName))
+									self.LogMSG("({classname})# This massage is external (MOSTLY MASTER)".format(classname=self.ClassName), 5)
 									self.SendPacketGateway(raw_data)
 							except Exception as e:
-								self.LogMSG("({classname})# ERROR - [#5]\n(EXEPTION)# {error}".format(error=str(e),classname=self.ClassName))
+								self.LogException("[DataSocketInputHandler #5]",e,3)
 					else:
 						pass
 			else:
-				self.LogMSG("({classname})# [DataSocketInputHandler] Data Invalid ...".format(classname=self.ClassName))
+				self.LogMSG("({classname})# [DataSocketInputHandler] Data Invalid ...".format(classname=self.ClassName), 4)
 		except Exception as e:
-			self.LogMSG("({classname})# [DataSocketInputHandler] ERROR - {error}".format(error=str(e),classname=self.ClassName))
+			self.LogException("[DataSocketInputHandler]",e,3)
 	
 	''' 
 		Description: 	This handler cslled after socket created and appended
@@ -488,7 +489,7 @@ class AbstractNode():
 		Return: 		None
 	'''		
 	def GetOnlineDevicesResponseHandler(self, sock, packet):
-		self.LogMSG("({classname})# [GetOnlineDevicesResponseHandler]".format(classname=self.ClassName))
+		self.LogMSG("({classname})# [GetOnlineDevicesResponseHandler]".format(classname=self.ClassName),5)
 		payload = self.BasicProtocol.GetPayloadFromJson(packet)
 		self.NetworkOnlineDevicesList = payload["online_devices"]
 
@@ -510,7 +511,7 @@ class AbstractNode():
 		Return: 		None
 	'''	
 	def FindNodeResponseHandler(self, sock, packet):
-		self.LogMSG("({classname})# [FindNodeResponseHandler]".format(classname=self.ClassName))
+		self.LogMSG("({classname})# [FindNodeResponseHandler]".format(classname=self.ClassName),5)
 		payload 	= self.BasicProtocol.GetPayloadFromJson(packet)
 		additional 	= self.BasicProtocol.GetAdditionalFromJson(packet)
 
@@ -529,7 +530,7 @@ class AbstractNode():
 		Return: 		None
 	'''	
 	def FindNodeRequestHandler(self, sock, packet):
-		self.LogMSG("({classname})# [FindNodeRequestHandler]".format(classname=self.ClassName))
+		self.LogMSG("({classname})# [FindNodeRequestHandler]".format(classname=self.ClassName),5)
 		payload = self.BasicProtocol.GetPayloadFromJson(packet)
 		cat_1 = payload["cat_1"]
 		cat_2 = payload["cat_2"]
@@ -545,7 +546,7 @@ class AbstractNode():
 			return ""
 		
 	def MasterAppendNodeResponseHandler(self, sock, packet):
-		self.LogMSG("({classname})# [MasterAppendNodeResponseHandler]".format(classname=self.ClassName))
+		self.LogMSG("({classname})# [MasterAppendNodeResponseHandler]".format(classname=self.ClassName),5)
 		payload 	= self.BasicProtocol.GetPayloadFromJson(packet)
 		additional 	= self.BasicProtocol.GetAdditionalFromJson(packet)
 
@@ -559,7 +560,7 @@ class AbstractNode():
 		# self.GetNodeInfoResponseHandler(sock, packet)
 
 	def MasterRemoveNodeResponseHandler(self, sock, packet):
-		self.LogMSG("({classname})# [MasterRemoveNodeResponseHandler]".format(classname=self.ClassName))
+		self.LogMSG("({classname})# [MasterRemoveNodeResponseHandler]".format(classname=self.ClassName),5)
 		payload 	= self.BasicProtocol.GetPayloadFromJson(packet)
 		additional = self.BasicProtocol.GetAdditionalFromJson(packet)
 		
@@ -573,13 +574,13 @@ class AbstractNode():
 	
 	def CloseLocalSocketRequestHandler(self, sock, packet):
 		payload	= self.BasicProtocol.GetPayloadFromJson(packet)
-		self.LogMSG("({classname})# [CloseLocalSocketRequestHandler] {0}".format(payload, classname=self.ClassName))
+		self.LogMSG("({classname})# [CloseLocalSocketRequestHandler] {0}".format(payload, classname=self.ClassName),5)
 		self.RemoveConnectionBySock(sock)
 		#if self.MasterSocket == sock:
 		#	self.MasterSocket = None
 	
 	def SetState (self, state):
-		self.LogMSG("({classname})# Change state [{0}]".format(state,classname=self.ClassName))
+		self.LogMSG("({classname})# Change state [{0}]".format(state,classname=self.ClassName),5)
 		self.State = state
 	
 	def GetState (self):
@@ -661,7 +662,7 @@ class AbstractNode():
 				del self.OnDeviceChangeList[i]
 				self.LogMSG("({classname})# Unregistered WEBFACE local session ({uuid}) ({length}))".format(classname=self.ClassName,
 						uuid=str(uuid),
-						length=len(self.OnDeviceChangeList)))
+						length=len(self.OnDeviceChangeList)),5)
 				is_removed = True
 		self.DeviceChangeListLock.release()
 		return is_removed
@@ -679,7 +680,7 @@ class AbstractNode():
 					del self.OnDeviceChangeList[i]
 					self.LogMSG("({classname})# Unregistered WEBFACE local session ({ws_id}) ({length}))".format(classname=self.ClassName,
 							ws_id=str(id),
-							length=len(self.OnDeviceChangeList)))
+							length=len(self.OnDeviceChangeList)),5)
 					is_removed = True
 		self.DeviceChangeListLock.release()
 		return is_removed
@@ -692,7 +693,7 @@ class AbstractNode():
 				if item_payload["webface_indexer"] == id:
 					self.OnDeviceChangeList.remove(item)
 					self.LogMSG("({classname})# Unregistered WEBFACE global session ({webface_indexer}))".format(classname=self.ClassName,
-							webface_indexer=str(id)))
+							webface_indexer=str(id)),5)
 					self.DeviceChangeListLock.release()
 					return True
 		self.DeviceChangeListLock.release()
@@ -711,7 +712,7 @@ class AbstractNode():
 			})
 	
 	def RegisterOnNodeChangeHandler(self, sock, packet):
-		self.LogMSG("({classname})# On Node change request recieved ....".format(classname=self.ClassName))
+		self.LogMSG("({classname})# On Node change request recieved ....".format(classname=self.ClassName),5)
 		payload 	= self.BasicProtocol.GetPayloadFromJson(packet)
 		item_type 	= payload["item_type"]
 		# Node
@@ -796,7 +797,7 @@ class AbstractNode():
 		if ("html" in fileType):
 			content = content.replace("[NODE_UUID]", self.UUID)
 			if stamping is None:
-				self.LogMSG("({classname})# [ERROR] Missing STAMPING in packet ...".format(classname=self.ClassName))
+				self.LogMSG("({classname})# [ERROR] Missing STAMPING in packet ...".format(classname=self.ClassName),3)
 				content = content.replace("[GATEWAY_IP]", self.GatewayIP)
 			else:
 				if "cloud_t" in stamping:
@@ -828,7 +829,7 @@ class AbstractNode():
 				path=path,
 				fileName=fileName,
 				fileType=fileType,
-				length=str(len(content))))
+				length=str(len(content))),5)
 		
 		return self.BasicProtocol.BuildResponse(packet, {
 								'file_type': fileType,
@@ -847,12 +848,12 @@ class AbstractNode():
 		strMachineJson 		= self.File.Load(os.path.join(self.MKSPath,"config.json"))
 
 		if (strSystemJson is None or len(strSystemJson) == 0):
-			self.LogMSG("({classname})# ERROR - Cannot find system.json file.".format(classname=self.ClassName))
+			self.LogMSG("({classname})# ERROR - Cannot find system.json file.".format(classname=self.ClassName),2)
 			self.Exit("ERROR - Cannot find system.json file")
 			return False
 
 		if (strMachineJson is None or len(strMachineJson) == 0):
-			self.LogMSG("({classname})# ERROR - Cannot find config.json file.".format(classname=self.ClassName))
+			self.LogMSG("({classname})# ERROR - Cannot find config.json file.".format(classname=self.ClassName),2)
 			self.Exit("ERROR - Cannot find config.json file")
 			return False
 		
@@ -861,18 +862,19 @@ class AbstractNode():
 			dataConfig 				= json.loads(strMachineJson)
 			self.NodeInfo 			= dataSystem["node"]["info"]
 			self.ServiceDepened 	= dataSystem["node"]["service"]["depend"]
+			self.System				= dataSystem["node"]["system"]
 		
 			self.EnableLogs(str(self.NodeInfo["type"]))
-			self.LogMSG("({classname})# MakeSense HOME folder '{0}'".format(self.MKSPath, classname=self.ClassName))
+			self.LogMSG("({classname})# MakeSense HOME folder '{0}'".format(self.MKSPath, classname=self.ClassName),5)
 
 			for network in self.NetworkCards:
 				if network["iface"] in dataConfig["network"]["iface"]:
 					self.MyLocalIP = network["ip"]
-					self.LogMSG("({classname})# Local IP found ... {0}".format(self.MyLocalIP,classname=self.ClassName))
+					self.LogMSG("({classname})# Local IP found ... {0}".format(self.MyLocalIP,classname=self.ClassName),5)
 					break
 			
 			if self.MyLocalIP == "":
-				self.LogMSG("({classname})# ERROR - Local IP not found".format(classname=self.ClassName))
+				self.LogMSG("({classname})# ERROR - Local IP not found".format(classname=self.ClassName),3)
 
 			# Node connection to WS information
 			self.Key 				= dataConfig["network"]["key"]
@@ -900,10 +902,11 @@ class AbstractNode():
 			
 			self.BasicProtocol.SetKey(self.Key)
 		except Exception as e:
-			self.LogMSG("({classname})# ERROR - Wrong configuration format\n(EXEPTION)# {error}".format(error=str(e),classname=self.ClassName))
+			self.LogException("Wrong configuration format",e,2)
 			self.Exit("ERROR - Wrong configuration format")
 			return False
 		
+		self.LogMSG("({classname})# [LoadSystemConfig] DEBUG #4".format(classname=self.ClassName),5)
 		return True
 
 	''' 
@@ -942,11 +945,28 @@ class AbstractNode():
 		Description: 	N/A
 		Return: 		N/A
 	'''	
-	def LogMSG(self, message):
+	def LogMSG(self, message, level):
 		if self.Logger is not None:
-			self.Logger.Log(message)
+			self.Logger.Log(message, level)
 		else:
 			print("({classname})# [NONE LOGGER] - {0}".format(message,classname=self.ClassName))
+
+	''' 
+		Description: 	N/A
+		Return: 		N/A
+	'''	
+	def LogException(self, message, e, level):
+		if self.Logger is not None:
+			exeption = "({classname})# ********** EXCEPTION **********\n----\nINFO\n----\n{0}\n-----\nERROR\n-----\n({error})\n********************************\n".format(
+				message,
+				classname=self.ClassName,
+				error=str(e))
+			self.Logger.Log(exeption, level)
+		else:
+			print("({classname})# ********** EXCEPTION **********\n----\nINFO\n----\n{0}\n-----\nERROR\n-----\n({error})\n********************************\n".format(
+				message,
+				classname=self.ClassName,
+				error=str(e)))
 	
 	''' 
 		Description: 	N/A
@@ -960,7 +980,7 @@ class AbstractNode():
 			print("({classname})# Load system configuration ... FAILED".format(classname=self.ClassName))
 			return
 		
-		self.LogMSG("({classname})# System configuration loaded".format(classname=self.ClassName))
+		self.LogMSG("({classname})# System configuration loaded".format(classname=self.ClassName),5)
 		self.SetState("INIT")
 
 		# Start local node dervice thread
@@ -983,7 +1003,7 @@ class AbstractNode():
 			self.Ticker += 1
 			time.sleep(0.5)
 		
-		self.LogMSG("({classname})# Start Exiting Node ...".format(classname=self.ClassName))
+		self.LogMSG("({classname})# Start Exiting Node ...".format(classname=self.ClassName),5)
 
 		# If websocket server enabled, shut it down.
 		if self.IsNodeWSServiceEnabled is True:
@@ -1000,7 +1020,7 @@ class AbstractNode():
 		Return: 		N/A
 	'''	
 	def Stop (self, reason):
-		self.LogMSG("({classname})# Stop Node ... ({0})".format(reason,classname=self.ClassName))
+		self.LogMSG("({classname})# Stop Node ... ({0})".format(reason,classname=self.ClassName),5)
 		self.IsMainNodeRunnig 		= False
 		self.IsLocalSocketRunning 	= False
 

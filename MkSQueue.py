@@ -31,7 +31,7 @@ class Manager():
             try:
                 self.LocalQueue.put(item)
             except Exception as e:
-                print("({classname})# ERROR [MkSQueue QueueItem] {error}".format(classname=self.ClassName,error=str(e)))
+                print("({classname})# ERROR [QueueItem] {0} {error}".format(item,classname=self.ClassName,error=str(e)))
             self.Locker.release()
 
     def Worker(self):
@@ -41,4 +41,4 @@ class Manager():
                 if self.HandlerCallback is not None:
                     self.HandlerCallback(item)
             except Exception as e:
-                print("({classname})# ERROR - [MkSQueue Worker] {error}".format(classname=self.ClassName,error=str(e)))
+                print("({classname})# ERROR - [Worker] {0} {error}".format(item,classname=self.ClassName,error=str(e)))

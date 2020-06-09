@@ -67,6 +67,7 @@ class StandaloneNode(MkSAbstractNode.AbstractNode):
 	def EnableLogs(self, name):
 		self.Logger = MkSLogger.Logger(name)
 		self.Logger.EnablePrint()
+		self.Logger.SetLogLevel(self.System["log_level"])
 		self.Logger.EnableLogger()
 
 	''' 
@@ -74,7 +75,7 @@ class StandaloneNode(MkSAbstractNode.AbstractNode):
 		Return: 		None
 	'''	
 	def State_Idle (self):
-		self.LogMSG("({classname})# Note, in IDLE state ...".format(classname=self.ClassName))
+		self.LogMSG("({classname})# Note, in IDLE state ...".format(classname=self.ClassName),5)
 		time.sleep(1)
 
 	''' 
@@ -206,7 +207,7 @@ class StandaloneNode(MkSAbstractNode.AbstractNode):
 						direction=direction,
 						source=source,
 						dest=destination,
-						cmd=command))
+						cmd=command),5)
 			
 			if messageType == "BROADCAST":
 				pass
@@ -229,21 +230,18 @@ class StandaloneNode(MkSAbstractNode.AbstractNode):
 				else:
 					self.LogMSG("({classname})# [Websocket INBOUND] ERROR - Not support {0} request type.".format(messageType, classname=self.ClassName))
 			else:
-				self.LogMSG("(Master Node)# Not mine ... Sending to slave ... " + destination)
+				self.LogMSG("({classname})# Not mine ... Sending to slave ... " + destination,5)
 				# Find who has this destination adderes.
 				self.HandleExternalRequest(packet)
 		except Exception as e:
-			self.LogMSG("({classname})# WebSocket Error - Data arrived issue\nPACKET#\n{0}\n(EXEPTION)# {error}".format(
-				packet,
-				classname=self.ClassName,
-				error=str(e)))
+			self.LogException("[WebSocketDataArrivedCallback] {0}".format(packet),e,3)
 
 	''' 
 		Description: 	N/A
 		Return: 		N/A
 	'''	
 	def WebSocketErrorCallback (self):
-		self.LogMSG("({classname})# ERROR - Gateway socket error".format(classname=self.ClassName))
+		self.LogMSG("({classname})# ERROR - Gateway socket error".format(classname=self.ClassName),3)
 		# TODO - Send callback "OnWSError"
 		self.NetworkAccessTickLock.acquire()
 		try:
@@ -288,7 +286,7 @@ class StandaloneNode(MkSAbstractNode.AbstractNode):
 		Return: 		N/A
 	'''	
 	def GatewayConnectedEvent(self):
-		self.LogMSG("({classname})# Connection to Gateway established ...".format(classname=self.ClassName))
+		self.LogMSG("({classname})# [GatewayConnectedEvent]".format(classname=self.ClassName),5)
 		# Send registration of all slaves to Gateway.
 		connection_map = self.SocketServer.GetConnections()
 		for key in connection_map:

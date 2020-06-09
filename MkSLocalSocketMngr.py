@@ -62,7 +62,7 @@ class Manager():
 		Return: 		
 	'''   
     def SockNewConnection_RXHandlerMethod(self, data):
-		self.LogMSG("({classname})# [SockNewConnection_RXHandlerMethod]".format(classname=self.ClassName))
+		self.LogMSG("({classname})# [SockNewConnection_RXHandlerMethod]".format(classname=self.ClassName),1)
 		conn = data["conn"]
 		addr = data["addr"]
 		self.AppendConnection(conn, addr[0], addr[1])
@@ -72,7 +72,7 @@ class Manager():
 		Return: 		
 	'''  		
     def SockDataArrived_RXHandlerMethod(self, data):
-		self.LogMSG("({classname})# [SockDataArrived_RXHandlerMethod]".format(classname=self.ClassName))
+		self.LogMSG("({classname})# [SockDataArrived_RXHandlerMethod]".format(classname=self.ClassName),1)
 		sock 	= data["sock"]
 		packet 	= data["data"]
 		conn 	= self.GetConnectionBySock(sock)
@@ -83,14 +83,14 @@ class Manager():
 			if self.DataArrivedEvent is not None:
 				self.DataArrivedEvent(conn, packet)
 		except Exception as e:
-			self.LogMSG("({classname})# [DataArrivedEvent] ERROR {0}".format(e,classname=self.ClassName))
+			self.LogException("[DataArrivedEvent]",e,3)
 
     ''' 
 		Description: 	
 		Return: 		
 	'''  	
     def SockDisconnected_RXHandlerMethod(self, sock):
-		self.LogMSG("({classname})# [SockDisconnected_RXHandlerMethod]".format(classname=self.ClassName))
+		self.LogMSG("({classname})# [SockDisconnected_RXHandlerMethod]".format(classname=self.ClassName),1)
 		self.RemoveConnectionBySock(sock)
 
     ''' 
@@ -99,13 +99,10 @@ class Manager():
 	'''    
     def SocketTXCallback(self, item):
 		try:
-			self.LogMSG("({classname})# [SocketTXCallback]".format(classname=self.ClassName))
+			self.LogMSG("({classname})# [SocketTXCallback]".format(classname=self.ClassName),1)
 			item["sock"].send(item["packet"])
 		except Exception as e:
-			self.LogMSG("({classname})# ERROR - [SocketTXCallback]\n\n********** EXCEPTION **********\n----\nITEM\n----\n{0}\n-----\nERROR\n-----\n({error})\n********************************\n".format(
-				item["packet"],
-				classname=self.ClassName,
-				error=str(e)))
+			self.LogException("[SocketTXCallback] {0}".format(item["packet"]),e,3)
 
     ''' 
 		Description: 	
@@ -113,13 +110,10 @@ class Manager():
 	'''  	
     def SocketRXCallback(self, item):
 		try:
-			self.LogMSG("({classname})# [SocketRXCallback]".format(classname=self.ClassName))
+			self.LogMSG("({classname})# [SocketRXCallback]".format(classname=self.ClassName),1)
 			self.RXHandlerMethod[item["type"]](item["data"])
 		except Exception as e:
-			self.LogMSG("({classname})# ERROR - [SocketRXCallback]\n\n********** EXCEPTION **********\n----\nITEM\n----\n{0}\n-----\nERROR\n-----\n({error})\n********************************\n".format(
-				item,
-				classname=self.ClassName,
-				error=str(e)))
+			self.LogException("[SocketRXCallback] {0}".format(item),e,3)
 
     ''' 
 		Description: 	
@@ -127,7 +121,7 @@ class Manager():
 	'''     
     def StartListener(self):
 		try:
-			self.LogMSG("({classname})# Start listener...".format(classname=self.ClassName))
+			self.LogMSG("({classname})# [StartListener]".format(classname=self.ClassName),5)
 			self.ServerSocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 			self.ServerSocket.setblocking(0)
 
@@ -139,7 +133,7 @@ class Manager():
 			self.LocalSocketWorkerRunning = True
 		except Exception as e:
 			self.RemoveConnectionBySock(self.ServerSocket)
-			self.LogMSG("({classname})# Failed to open listener, {0}\n[EXCEPTION] {1}".format(str(self.ServerAdderss[1]),e,classname=self.ClassName))
+			self.LogException("Failed to open listener, {0}".format(str(self.ServerAdderss[1])),e,3)
 			time.sleep(1)
 			return False
 		
@@ -148,7 +142,7 @@ class Manager():
 			if self.ServerStartetedEvent is not None:
 				self.ServerStartetedEvent(conn)
 		except Exception as e:
-			self.LogMSG("({classname})# [ServerStartetedEvent] ERROR {0}".format(e,classname=self.ClassName))
+			self.LogException("[ServerStartetedEvent]",e,3)
 		
 		return True
 
@@ -187,7 +181,7 @@ class Manager():
 		while self.LocalSocketWorkerRunning is True:
 			try:
 				readable, writable, exceptional = select.select(self.RecievingSockets, self.SendingSockets, self.RecievingSockets, 0.5)
-				# self.LogMSG("({classname})# [LocalSocketWorker] Heartbeat".format(classname=self.ClassName))
+				#self.LogMSG("({classname})# [LocalSocketWorker] Heartbeat".format(classname=self.ClassName),1)
 				# Socket management.
 				for sock in readable:
 					if sock is self.ServerSocket and self.IsListenerEnabled is True:
@@ -218,30 +212,37 @@ class Manager():
 										}
 									})
 								else:
-									self.LogMSG("({classname})# [LocalSocketWorker] Socket closed ...".format(classname=self.ClassName))
+									self.LogMSG("({classname})# [LocalSocketWorker] Socket closed ...".format(classname=self.ClassName),1)
 									# Remove socket from list.
 									self.RecievingSockets.remove(sock)
 									self.Transceiver.Receive({
 										"type": "sock_disconnected",
 										"data": sock
 									})
+							else:
+								pass
 						except Exception as e:
-							self.LogMSG("({classname})# ERROR - Local socket recieve\n(EXEPTION)# {error}\n{data}".format(error=str(e),data=data,classname=self.ClassName))
 							# Remove socket from list.
 							self.RecievingSockets.remove(sock)
-							self.Transceiver.Receive("sock_disconnected", sock)
+							self.Transceiver.Receive({
+								"type": "sock_disconnected",
+								"data": sock
+							})
+				
+				for sock in writable:
+					self.LogMSG("({classname})# [LocalSocketWorker] Socket Writeable ...".format(classname=self.ClassName),5)
 						
 				for sock in exceptional:
-					self.LogMSG("({classname})# [LocalSocketWorker] Socket Exceptional ...".format(classname=self.ClassName))
+					self.LogMSG("({classname})# [LocalSocketWorker] Socket Exceptional ...".format(classname=self.ClassName),5)
 			except Exception as e:
-				self.LogMSG("({classname})# ERROR - Local socket listener\n(EXEPTION)# {error}".format(error=str(e),classname=self.ClassName))
+				self.LogException("[LocalSocketWorker]",e,3)
 
 		# Stop TX/RX Queue Workers
-		self.LogMSG("({classname})# [LocalSocketWorker] Stop TX/RX Queue Workers".format(classname=self.ClassName))
+		self.LogMSG("({classname})# [LocalSocketWorker] Stop TX/RX Queue Workers".format(classname=self.ClassName),5)
 		self.LocalServerTXWorkerRunning = False
 		self.LocalServerRXWorkerRunning = False
 		time.sleep(1)
-		self.LogMSG("({classname})# [LocalSocketWorker] Clean all connection to this server".format(classname=self.ClassName))
+		self.LogMSG("({classname})# [LocalSocketWorker] Clean all connection to this server".format(classname=self.ClassName),5)
 		# Clean all resorses before exit.
 		self.RemoveConnectionBySock(self.ServerSocket)
 		self.CleanAllSockets()
@@ -249,7 +250,7 @@ class Manager():
 		if self.ServerStopedEvent is not None:
 			self.ServerStopedEvent()
 		self.IsListenerEnabled = False
-		self.LogMSG("({classname})# [LocalSocketWorker] Exit Local Server Thread ... ({0}/{1})".format(len(self.RecievingSockets),len(self.SendingSockets),classname=self.ClassName))
+		self.LogMSG("({classname})# [LocalSocketWorker] Exit Local Server Thread ... ({0}/{1})".format(len(self.RecievingSockets),len(self.SendingSockets),classname=self.ClassName),5)
 		time.sleep(0.5)
 		self.ExitSynchronizer.set()
 
@@ -259,13 +260,13 @@ class Manager():
 		Return: 		Status and socket.
 	'''
     def AppendConnection(self, sock, ip, port):
-		self.LogMSG("({classname})# [AppendConnection]".format(classname=self.ClassName))
+		self.LogMSG("({classname})# [AppendConnection]".format(classname=self.ClassName),1)
 		# Append to recieving data sockets.
 		self.RecievingSockets.append(sock)
 		# Append to list of all connections.
 		conn = MkSLocalSocketUtils.SocketConnection(ip, port, sock)
 		hash_key = conn.GetHash()
-		self.LogMSG("({classname})# [AppendConnection] {0} {1} {2}".format(ip,str(port),hash_key,classname=self.ClassName))
+		self.LogMSG("({classname})# [AppendConnection] {0} {1} {2}".format(ip,str(port),hash_key,classname=self.ClassName),5)
 		self.OpenConnections[hash_key] 	= conn
 		self.SockToHASHMap[sock] 		= hash_key
 		
@@ -274,7 +275,7 @@ class Manager():
 			if self.NewConnectionEvent is not None:
 				self.NewConnectionEvent(conn)
 		except Exception as e:
-			self.LogMSG("({classname})# [NewConnectionEvent] ERROR {0}".format(e,classname=self.ClassName))
+			self.LogException("[NewConnectionEvent]",e,3)
 
 		# Increment socket counter.
 		self.OpenSocketsCounter += self.OpenSocketsCounter
@@ -285,7 +286,7 @@ class Manager():
 		Return: 		Status.
 	'''
     def RemoveConnectionByHASH(self, hash_key):
-		self.LogMSG("({classname})# [RemoveConnectionByHASH]".format(classname=self.ClassName))
+		self.LogMSG("({classname})# [RemoveConnectionByHASH]".format(classname=self.ClassName),1)
 		if hash_key in self.OpenConnections:
 			conn = self.OpenConnections[hash_key]
 			if conn is None:
@@ -295,9 +296,9 @@ class Manager():
 				if self.ConnectionRemovedEvent is not None:
 					self.ConnectionRemovedEvent(conn)
 			except Exception as e:
-				self.LogMSG("({classname})# [ConnectionRemovedEvent] ERROR {0}".format(e,classname=self.ClassName))
+				self.LogException("[ConnectionRemovedEvent]",e,3)
 			
-			self.LogMSG("({classname})# [RemoveConnectionByHASH] {0}, {1}".format(conn.IP,conn.Port,classname=self.ClassName))
+			self.LogMSG("({classname})# [RemoveConnectionByHASH] {0}, {1}".format(conn.IP,conn.Port,classname=self.ClassName),5)
 			# Remove socket from list.
 			if conn.Socket in self.RecievingSockets:
 				self.RecievingSockets.remove(conn.Socket)
@@ -318,7 +319,7 @@ class Manager():
 		Return: 		Status.
 	'''
     def RemoveConnectionBySock(self, sock):
-		self.LogMSG("({classname})# [RemoveConnectionBySock]".format(classname=self.ClassName))
+		self.LogMSG("({classname})# [RemoveConnectionBySock]".format(classname=self.ClassName),1)
 		if sock in self.SockToHASHMap:
 			conn = self.GetConnectionBySock(sock)
 			self.RemoveConnectionByHASH(conn.HASH)
@@ -352,7 +353,7 @@ class Manager():
 		ConnectNodeSocket
 	'''
     def ConnectSocket(self, ip_addr_port):
-		self.LogMSG("({classname})# [ConnectSocket]".format(classname=self.ClassName))
+		self.LogMSG("({classname})# [ConnectSocket]".format(classname=self.ClassName),1)
 		sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 		sock.settimeout(5)
 		try:
@@ -367,7 +368,7 @@ class Manager():
 		ConnectNode
 	'''
     def Connect(self, ip, port):
-		self.LogMSG("({classname})# [Connect]".format(classname=self.ClassName))
+		self.LogMSG("({classname})# [Connect]".format(classname=self.ClassName),5)
 		sock, status = self.ConnectSocket((ip, port))
 		conn = None
 		if True == status:
@@ -380,7 +381,7 @@ class Manager():
 		SendNodePacket
 	'''
     def SendData(self, ip, port, packet):
-		self.LogMSG("({classname})# [SendData] {0} {1}".format(ip,port,classname=self.ClassName))
+		self.LogMSG("({classname})# [SendData] {0} {1}".format(ip,port,classname=self.ClassName),1)
 		key = self.Security.GetMD5Hash("{0}_{1}".format(ip,str(port)))
 		if key in self.OpenConnections:
 			node = self.OpenConnections[key]
@@ -402,7 +403,7 @@ class Manager():
 		DisconnectNode
 	'''
     def Disconnect(self, ip, port):
-		self.LogMSG("({classname})# [Disconnect]".format(classname=self.ClassName))
+		self.LogMSG("({classname})# [Disconnect]".format(classname=self.ClassName),5)
 		try:
 			hash_key = self.Security.GetMD5Hash("{0}_{1}".format(ip,str(port)))
 			if hash_key in self.OpenConnections:
@@ -414,7 +415,7 @@ class Manager():
 					#if self.OnTerminateConnectionCallback is not None:
 					#	self.OnTerminateConnectionCallback(node.Socket)
 		except:
-			self.LogMSG("({classname})# [Disconnect] Failed to disconnect".format(classname=self.ClassName))
+			self.LogMSG("({classname})# [Disconnect] Failed to disconnect".format(classname=self.ClassName),3)
 		return False
 	
     ''' 
@@ -429,28 +430,45 @@ class Manager():
 		Return: 		None.
 	'''
     def CleanAllSockets(self):
-		self.LogMSG("({classname})# [CleanAllSockets]".format(classname=self.ClassName))
+		self.LogMSG("({classname})# [CleanAllSockets]".format(classname=self.ClassName),1)
 		try:
 			while len(self.OpenConnections) > 0:
 				conn = self.OpenConnections.values()[0]
-				self.LogMSG("({classname})# [CleanAllSockets] {0}, {1}, {2}, {3}".format(len(self.OpenConnections),conn.HASH,conn.IP,conn.Port,classname=self.ClassName))
+				self.LogMSG("({classname})# [CleanAllSockets] {0}, {1}, {2}, {3}".format(len(self.OpenConnections),conn.HASH,conn.IP,conn.Port,classname=self.ClassName),5)
 				status = self.Disconnect(conn.IP, conn.Port)
 				if status is False:
 					del self.OpenConnections.values()[0]
 		except Exception as e:
-			self.LogMSG("({classname})# [CleanAllSockets] ERROR {0}".format(e,classname=self.ClassName))
+			self.LogException("[CleanAllSockets]",e,3)
 
-		self.LogMSG("({classname})# [CleanAllSockets] All sockets where released ({0})".format(len(self.OpenConnections),classname=self.ClassName))
+		self.LogMSG("({classname})# [CleanAllSockets] All sockets where released ({0})".format(len(self.OpenConnections),classname=self.ClassName),5)
 
     ''' 
 		Description: 	<N/A>
 		Return: 		<N/A>
 	''' 
-    def LogMSG(self, message):
+    def LogMSG(self, message, level):
 		if self.Logger is not None:
-			self.Logger.Log(message)
+			self.Logger.Log(message, level)
 		else:
 			print("({classname})# [NONE LOGGER] - {0}".format(message,classname=self.ClassName))
+
+    ''' 
+		Description: 	<N/A>
+		Return: 		<N/A>
+	''' 
+    def LogException(self, message, e, level):
+		if self.Logger is not None:
+			exeption = "({classname})# ********** EXCEPTION **********\n----\nINFO\n----\n{0}\n-----\nERROR\n-----\n({error})\n********************************\n".format(
+				message,
+				classname=self.ClassName,
+				error=str(e))
+			self.Logger.Log(exeption, level)
+		else:
+			print("({classname})# ********** EXCEPTION **********\n----\nINFO\n----\n{0}\n-----\nERROR\n-----\n({error})\n********************************\n".format(
+				message,
+				classname=self.ClassName,
+				error=str(e)))
 
     ''' 
 		Description: 	<N/A>

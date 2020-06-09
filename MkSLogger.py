@@ -11,6 +11,7 @@ from mksdk import MkSQueue
 
 class Logger():
     def __init__(self, name):
+        self.ClassName          = "Logger"
         self.Name               = name
         self.LogerEnabled       = False
         self.Logger             = None
@@ -18,30 +19,44 @@ class Logger():
         self.LoggerType         = "MKS"
         self.Path               = ""
         self.Queue              = MkSQueue.Manager(self.Callback)
+        self.LogType            = 5
+        self.LogTypeMap         = {
+            "1": "DEBUG",
+            "2": "CRITICAL",
+            "3": "ERROR",
+            "4": "WARNNING",
+            "5": "INFO"  
+        }
     
     def Callback(self, item):
         if self.LogerEnabled is True:
-            log_Type = "INFO"
             try:
-                message = item["message"]
-                if self.Logger is not None:
-                    if self.LoggerType == "MKS":
-                        today = datetime.datetime.today()
-                        date = today.strftime("(%a %b.%d.%Y) (%H:%M:%S)")
-                        msg = "{0} - [{1}] - ({2}) - {3}\n".format(date, log_Type, item["thread_id"], message)
-                        self.Logger.Append(self.Path, msg)
-                    elif self.LoggerType == "DEFAULT":
-                        self.Logger.info(message)
-                    else:
-                        pass
-                    
-                if self.Print is True:
-                    print(message)
+                lvl = item["level"]
+                if str(lvl) in self.LogTypeMap:
+                    log_type = self.LogTypeMap[str(lvl)]
+                    if lvl >= self.LogType:
+                        message = item["message"]
+                        if self.Logger is not None:
+                            if self.LoggerType == "MKS":
+                                today = datetime.datetime.today()
+                                date = today.strftime("(%a %b.%d.%Y) (%H:%M:%S)")
+                                msg = "{0} - [{1}] - ({2}) - {3}\n".format(date, log_type, item["thread_id"], message)
+                                self.Logger.Append(self.Path, msg)
+                            elif self.LoggerType == "DEFAULT":
+                                self.Logger.info(message)
+                            else:
+                                pass
+                            
+                        if self.Print is True:
+                            print(message)
             except Exception as e:
-                self.Logger.Log("({classname})# ERROR - [LocalQueueWorker] {error}".format(classname=self.ClassName,error=str(e)))
+                print("({classname})# ERROR - [LocalQueueWorker] {error}".format(classname=self.ClassName,error=str(e)))
     
     def EnablePrint(self):
         self.Print = True
+    
+    def SetLogLevel(self, level):
+        self.LogType = level
 
     def EnableLogger(self):
         self.Path = os.path.join('..','..','logs','{0}.log'.format(self.Name))
@@ -62,11 +77,12 @@ class Logger():
         if self.LogerEnabled is True:
             self.Queue.Start()
 
-    def Log(self, message):
+    def Log(self, message, level):
         if self.LogerEnabled is True:
             try:
                 self.Queue.QueueItem({
                     "thread_id": 1,
+                    "level": level,
                     "message": message
                 })
             except Exception as e:

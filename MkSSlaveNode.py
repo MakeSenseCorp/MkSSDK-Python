@@ -62,6 +62,7 @@ class SlaveNode(MkSAbstractNode.AbstractNode):
 	def EnableLogs(self, name):
 		self.Logger = MkSLogger.Logger(name)
 		self.Logger.EnablePrint()
+		self.Logger.SetLogLevel(self.System["log_level"])
 		self.Logger.EnableLogger()
 
 	''' 
@@ -69,7 +70,7 @@ class SlaveNode(MkSAbstractNode.AbstractNode):
 		Return: 		None
 	'''	
 	def State_Idle(self):
-		self.LogMSG("({classname})# Note, in IDLE state ...".format(classname=self.ClassName))
+		self.LogMSG("({classname})# Note, in IDLE state ...".format(classname=self.ClassName),1)
 		time.sleep(1)
 
 	''' 
@@ -91,7 +92,7 @@ class SlaveNode(MkSAbstractNode.AbstractNode):
 				self.SetState("EXIT")
 				# self.SetState("FIND_PORT_MANUALY")
 			else:
-				self.LogMSG("({classname})# Trying to connect Master ({tries}) ...".format(classname=self.ClassName, tries=self.MasterConnectionTries))
+				self.LogMSG("({classname})# Trying to connect Master ({tries}) ...".format(classname=self.ClassName, tries=self.MasterConnectionTries),1)
 				if self.ConnectLocalMaster() is True:
 					self.SetState("GET_MASTER_INFO")
 					self.SocketServer.Start()
@@ -109,7 +110,7 @@ class SlaveNode(MkSAbstractNode.AbstractNode):
 				self.SetState("EXIT")
 				# self.SetState("FIND_PORT_MANUALY")
 			else:
-				self.LogMSG("({classname})# Send <get_node_info> request ...".format(classname=self.ClassName))
+				self.LogMSG("({classname})# Send <get_node_info> request ...".format(classname=self.ClassName),5)
 				# Send request
 				message = self.BasicProtocol.BuildRequest("DIRECT", "MASTER", self.UUID, "get_node_info", {}, {})
 				packet  = self.BasicProtocol.AppendMagic(message)
@@ -122,7 +123,7 @@ class SlaveNode(MkSAbstractNode.AbstractNode):
 		Return: 		None
 	'''	
 	def State_GetPort(self):
-		self.LogMSG("({classname})# Sending <get_port> request ...".format(classname=self.ClassName))
+		self.LogMSG("({classname})# Sending <get_port> request ...".format(classname=self.ClassName),5)
 		# Send request
 		message = self.BasicProtocol.BuildRequest("DIRECT", self.MasterUUID, self.UUID, "get_port", self.NodeInfo, {})
 		packet  = self.BasicProtocol.AppendMagic(message)
@@ -135,7 +136,7 @@ class SlaveNode(MkSAbstractNode.AbstractNode):
 		Return: 		None
 	'''		
 	def State_FindPortManualy(self):
-		self.LogMSG("({classname})# Trying to find port manualy ...".format(classname=self.ClassName))
+		self.LogMSG("({classname})# Trying to find port manualy ...".format(classname=self.ClassName),5)
 		if self.SlaveListenerPort == 0:
 			for idx in range(1,33):
 				port = 10000 + idx
@@ -165,7 +166,7 @@ class SlaveNode(MkSAbstractNode.AbstractNode):
 		Return: 		None
 	'''	
 	def State_StartListener(self):
-		self.LogMSG("({classname})# [State_StartListener]".format(classname=self.ClassName))
+		self.LogMSG("({classname})# [State_StartListener]".format(classname=self.ClassName),5)
 		self.SocketServer.EnableListener(self.SlaveListenerPort)
 		self.SocketServer.StartListener()
 		# Let socket listener start
@@ -202,7 +203,7 @@ class SlaveNode(MkSAbstractNode.AbstractNode):
 		Return: 		N/A
 	'''	
 	def GetNodeInfoRequestHandler(self, sock, packet):
-		self.LogMSG("({classname})# [GetNodeInfoRequestHandler]".format(classname=self.ClassName))
+		self.LogMSG("({classname})# [GetNodeInfoRequestHandler]".format(classname=self.ClassName),5)
 		payload = self.NodeInfo
 		payload["is_master"] 		= False
 		payload["master_uuid"] 		= self.MasterUUID
@@ -218,7 +219,7 @@ class SlaveNode(MkSAbstractNode.AbstractNode):
 		source  	= self.BasicProtocol.GetSourceFromJson(packet)
 		payload 	= self.BasicProtocol.GetPayloadFromJson(packet)
 		additional 	= self.BasicProtocol.GetAdditionalFromJson(packet)
-		self.LogMSG("({classname})# [GetNodeInfoResponseHandler] [{0}, {1}, {2}, {3}]".format(payload["uuid"],payload["type"],payload["pid"],payload["name"], classname=self.ClassName))
+		self.LogMSG("({classname})# [GetNodeInfoResponseHandler] [{0}, {1}, {2}, {3}]".format(payload["uuid"],payload["type"],payload["pid"],payload["name"], classname=self.ClassName),5)
 
 		conn = self.SocketServer.GetConnectionBySock(sock)
 		conn.Obj["uuid"] 			= payload["uuid"]
@@ -245,7 +246,7 @@ class SlaveNode(MkSAbstractNode.AbstractNode):
 	def GetPortResponseHandler(self, sock, packet):
 		source  = self.BasicProtocol.GetSourceFromJson(packet)
 		payload = self.BasicProtocol.GetPayloadFromJson(packet)
-		self.LogMSG("({classname})# [GetPortResponseHandler]".format(classname=self.ClassName))
+		self.LogMSG("({classname})# [GetPortResponseHandler]".format(classname=self.ClassName),5)
 
 		if source in self.MasterUUID:
 			self.SlaveListenerPort = payload["port"]
@@ -294,7 +295,7 @@ class SlaveNode(MkSAbstractNode.AbstractNode):
 		Return: 		N/A
 	'''		
 	def EmitOnNodeChange(self, data):
-		self.LogMSG("({classname})# [EmitOnNodeChange]".format(classname=self.ClassName))
+		self.LogMSG("({classname})# [EmitOnNodeChange]".format(classname=self.ClassName),1)
 		self.DeviceChangeListLock.acquire()
 		# Itterate over registered nodes.
 		for item in self.OnDeviceChangeList:
@@ -317,7 +318,7 @@ class SlaveNode(MkSAbstractNode.AbstractNode):
 				elif payload["pipe"] == "LOCAL_WS":
 					self.EmitOnNodeChange_WebfaceLocalWebsocket(payload, data)
 			else:
-				self.LogMSG("({classname})# [EmitOnNodeChange] Unsupported item type".format(classname=self.ClassName))
+				self.LogMSG("({classname})# [EmitOnNodeChange] Unsupported item type".format(classname=self.ClassName),3)
 		self.DeviceChangeListLock.release()
 
 	''' 
@@ -330,7 +331,7 @@ class SlaveNode(MkSAbstractNode.AbstractNode):
 		packet  = self.BasicProtocol.AppendMagic(message)
 
 		if self.LocalMasterConnection is not None:
-			self.LogMSG("({classname})# Sending ping request ...".format(classname=self.ClassName))
+			self.LogMSG("({classname})# Sending ping request ...".format(classname=self.ClassName),1)
 			self.SocketServer.Send(self.LocalMasterConnection.Socket, packet)
 
 	''' 
@@ -338,7 +339,7 @@ class SlaveNode(MkSAbstractNode.AbstractNode):
 		Return: 		N/A
 	'''		
 	def NodeDisconnectedHandler(self, connection):
-		self.LogMSG("({classname})# [NodeDisconnectedHandler]".format(classname=self.ClassName))
+		self.LogMSG("({classname})# [NodeDisconnectedHandler]".format(classname=self.ClassName),5)
 		# Check if disconneced connection is a master.
 		for node in self.MasterNodesList:
 			if connection.Socket == node.Socket:
@@ -375,7 +376,7 @@ class SlaveNode(MkSAbstractNode.AbstractNode):
 		Return: 		N/A
 	'''
 	def ShutdownRequestHandler(self, sock, packet):
-		self.LogMSG("({classname})# [ShutdownRequestHandler]".format(classname=self.ClassName))
+		self.LogMSG("({classname})# [ShutdownRequestHandler]".format(classname=self.ClassName),5)
 		if self.OnShutdownCallback is not None:
 			self.OnShutdownCallback()
 

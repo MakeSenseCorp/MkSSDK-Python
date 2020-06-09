@@ -51,7 +51,7 @@ class Network ():
 		Return: 		
 	'''   
 	def WebSockNewConnection_RXHandlerMethod(self, data):
-		self.Logger.Log("({classname})# [WebSockNewConnection_RXHandlerMethod]".format(classname=self.ClassName))
+		self.LogMSG("({classname})# [WebSockNewConnection_RXHandlerMethod]".format(classname=self.ClassName),5)
 		if self.OnConnectionCallback is not None:
 			self.OnConnectionCallback()
 
@@ -60,21 +60,21 @@ class Network ():
 		Return: 		
 	'''  		
 	def WebSockDataArrived_RXHandlerMethod(self, data):
-		self.Logger.Log("({classname})# [WebSockDataArrived_RXHandlerMethod]".format(classname=self.ClassName))
+		self.LogMSG("({classname})# [WebSockDataArrived_RXHandlerMethod]".format(classname=self.ClassName),1)
 		packet	= data["data"]
 		# Raise event for user
 		try:
 			if self.OnDataArrivedCallback is not None:
 				self.OnDataArrivedCallback(data)
 		except Exception as e:
-			self.Logger.Log("({classname})# [WebSockDataArrived_RXHandlerMethod] ERROR {0}".format(e,classname=self.ClassName))
+			self.LogException("[WebSockDataArrived_RXHandlerMethod]",e,3)
 
 	''' 
 		Description: 	
 		Return: 		
 	'''  	
 	def WebSockDisconnected_RXHandlerMethod(self, sock):
-		self.Logger.Log("({classname})# [WebSockDisconnected_RXHandlerMethod]".format(classname=self.ClassName))
+		self.LogMSG("({classname})# [WebSockDisconnected_RXHandlerMethod]".format(classname=self.ClassName),5)
 		if self.OnConnectionClosedCallback is not None:
 			self.OnConnectionClosedCallback()
 
@@ -83,7 +83,7 @@ class Network ():
 		Return: 		
 	'''  	
 	def WebSockError_RXHandlerMethod(self, error):
-		self.Logger.Log("({classname})# [WebSockError_RXHandlerMethod] {0}".format(error,classname=self.ClassName))
+		self.LogMSG("({classname})# [WebSockError_RXHandlerMethod] {0}".format(error,classname=self.ClassName),3)
 		if self.OnErrorCallback is not None:
 			self.OnErrorCallback()
 
@@ -93,7 +93,7 @@ class Network ():
 	'''    
 	def WebSocketTXCallback(self, item):
 		try:
-			self.Logger.Log("({classname})# [WebSocketTXCallback]".format(classname=self.ClassName))
+			self.LogMSG("({classname})# [WebSocketTXCallback]".format(classname=self.ClassName),1)
 			packet = item["packet"]
 			if packet is not "" and packet is not None:
 				pckt 	= json.loads(packet)
@@ -101,15 +101,12 @@ class Network ():
 				dst  	= self.BasicProtocol.GetDestinationFromJson(pckt)
 				drt 	= self.BasicProtocol.GetDirectionFromJson(pckt)
 				cmd 	= self.BasicProtocol.GetCommandFromJson(pckt)
-				self.Logger.Log("({classname})# Node -> Gateway [{2}] {0} -> {1} ({3})".format(src,dst,drt,cmd,classname=self.ClassName))
+				self.LogMSG("({classname})# Node -> Gateway [{2}] {0} -> {1} ({3})".format(src,dst,drt,cmd,classname=self.ClassName),5)
 				self.WSConnection.send(packet)
 			else:
-				self.Logger.Log("({classname})# Sending packet to Gateway FAILED".format(classname=self.ClassName))
+				self.LogMSG("({classname})# Sending packet to Gateway FAILED".format(classname=self.ClassName),3)
 		except Exception as e:
-			self.Logger.Log("({classname})# ERROR - [WebSocketTXCallback]\n\n********** EXCEPTION **********\n----\nITEM\n----\n{0}\n-----\nERROR\n-----\n({error})\n********************************\n".format(
-				item["packet"],
-				classname=self.ClassName,
-				error=str(e)))
+			self.LogException("[WebSocketTXCallback] {0}".format(item["packet"]),e,3)
 
 	''' 
 		Description: 	
@@ -117,13 +114,10 @@ class Network ():
 	'''  	
 	def WebSocketRXCallback(self, item):
 		try:
-			self.Logger.Log("({classname})# [WebSocketRXCallback]".format(classname=self.ClassName))
+			self.LogMSG("({classname})# [WebSocketRXCallback]".format(classname=self.ClassName),1)
 			self.RXHandlerMethod[item["type"]](item["data"])
 		except Exception as e:
-			self.Logger.Log("({classname})# ERROR - [WebSocketTXCallback]\n\n********** EXCEPTION **********\n----\nITEM\n----\n{0}\n-----\nERROR\n-----\n({error})\n********************************\n".format(
-				item,
-				classname=self.ClassName,
-				error=str(e)))
+			self.LogException("[WebSocketTXCallback] {0}".format(item),e,3)
 
 	''' 
 		Description: 	
@@ -241,17 +235,17 @@ class Network ():
 		Return: 		
 	''' 
 	def NodeWebfaceSocket_Thread (self):
-		self.Logger.Log("({classname})# Connect Gateway ({url})...".format(url=self.WSServerUri,classname=self.ClassName))
+		self.LogMSG("({classname})# Connect Gateway ({url})...".format(url=self.WSServerUri,classname=self.ClassName),5)
 		self.WSConnection.keep_running = True
 		self.WSConnection.run_forever()
-		self.Logger.Log("({classname})# Gateway Disconnected ({url})...".format(url=self.WSServerUri,classname=self.ClassName))
+		self.LogMSG("({classname})# Gateway Disconnected ({url})...".format(url=self.WSServerUri,classname=self.ClassName),5)
 
 	''' 
 		Description: 	
 		Return: 		
 	''' 
 	def Disconnect(self):
-		self.Logger.Log("({classname})# Close WebSocket Connection ...".format(classname=self.ClassName))
+		self.LogMSG("({classname})# Close WebSocket Connection ...".format(classname=self.ClassName),5)
 		self.WSConnection.keep_running = False
 		time.sleep(1)
 
@@ -317,3 +311,30 @@ class Network ():
 	''' 
 	def SendWebSocket(self, packet):
 		return self.Transceiver.Send({"packet":packet})
+
+	''' 
+		Description: 	N/A
+		Return: 		N/A
+	'''	
+	def LogMSG(self, message, level):
+		if self.Logger is not None:
+			self.Logger.Log(message, level)
+		else:
+			print("({classname})# [NONE LOGGER] - {0}".format(message,classname=self.ClassName))
+
+	''' 
+		Description: 	N/A
+		Return: 		N/A
+	'''	
+	def LogException(self, message, e, level):
+		if self.Logger is not None:
+			exeption = "({classname})# ********** EXCEPTION **********\n----\nINFO\n----\n{0}\n-----\nERROR\n-----\n({error})\n********************************\n".format(
+				message,
+				classname=self.ClassName,
+				error=str(e))
+			self.Logger.Log(exeption, level)
+		else:
+			print("({classname})# ********** EXCEPTION **********\n----\nINFO\n----\n{0}\n-----\nERROR\n-----\n({error})\n********************************\n".format(
+				message,
+				classname=self.ClassName,
+				error=str(e)))
