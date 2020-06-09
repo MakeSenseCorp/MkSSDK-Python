@@ -403,7 +403,7 @@ class AbstractNode():
 									try:
 										self.NodeResponseHandlers[command](sock, packet)
 									except Exception as e:
-										self.LogException("[DataSocketInputHandler #3]",e,3)
+										self.LogException("[DataSocketInputHandler #3] {0}".format(command),e,3)
 								else:
 									# This command belongs to the application level
 									if self.OnApplicationResponseCallback is not None:
@@ -449,6 +449,7 @@ class AbstractNode():
 		connection.Obj["name"] 			= "N/A"
 		connection.Obj["status"] 		= 1
 		connection.Obj["is_slave"]		= 0
+		connection.Obj["info"]			= None
 	
 	''' 
 		Description: 	
@@ -560,9 +561,10 @@ class AbstractNode():
 		# self.GetNodeInfoResponseHandler(sock, packet)
 
 	def MasterRemoveNodeResponseHandler(self, sock, packet):
-		self.LogMSG("({classname})# [MasterRemoveNodeResponseHandler]".format(classname=self.ClassName),5)
+		self.LogMSG("({classname})# [MasterRemoveNodeResponseHandler]".format(classname=self.ClassName),1)
 		payload 	= self.BasicProtocol.GetPayloadFromJson(packet)
 		additional = self.BasicProtocol.GetAdditionalFromJson(packet)
+		self.LogMSG("({classname})# [MasterRemoveNodeResponseHandler] {0}".format(payload,classname=self.ClassName),5)
 		
 		additional["online"] = False
 		packet = self.BasicProtocol.SetAdditional(packet, additional)
@@ -906,7 +908,6 @@ class AbstractNode():
 			self.Exit("ERROR - Wrong configuration format")
 			return False
 		
-		self.LogMSG("({classname})# [LoadSystemConfig] DEBUG #4".format(classname=self.ClassName),5)
 		return True
 
 	''' 

@@ -309,6 +309,7 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 		conn.Obj["name"] 			= payload["name"]
 		conn.Obj["listener_port"]	= payload["listener_port"]
 		conn.Obj["status"] 			= 1
+		conn.Obj["info"]			= payload
 
 	''' 
 		Description: 	
@@ -444,6 +445,10 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 						message = self.BasicProtocol.BuildMessage("response", "DIRECT", node.Obj["uuid"], self.UUID, "master_remove_node", connection.Obj, {})
 						message = self.BasicProtocol.AppendMagic(message)
 						self.SocketServer.SendData(node.IP, node.Port, message)
+			
+			# Raise event for user
+			if self.OnTerminateConnectionCallback is not None:
+				self.OnTerminateConnectionCallback(connection)
 
 	''' 
 		Description: 	[HANDLERS]
