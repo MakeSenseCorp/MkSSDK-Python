@@ -365,6 +365,7 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 				message = self.BasicProtocol.BuildRequest("MASTER", "GATEWAY", self.UUID, "node_connected", payload, {})
 				self.SendPacketGateway(message)
 
+				self.LogMSG("({classname})# [DEBUG #1]".format(classname=self.ClassName),5)
 				# Send message (master_append_node) to all nodes.
 				connection_map = self.SocketServer.GetConnections()
 				for key in connection_map:
@@ -373,6 +374,7 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 						message = self.BasicProtocol.BuildMessage("response", "DIRECT", item.Obj["uuid"], self.UUID, "master_append_node", node_info, {})
 						message = self.BasicProtocol.AppendMagic(message)
 						self.SocketServer.SendData(item.IP, item.Port, message)
+				self.LogMSG("({classname})# [DEBUG #2]".format(classname=self.ClassName),5)
 				
 				# Store UUID if it is a service
 				if nodetype == 101:
@@ -382,6 +384,7 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 				elif nodetype == 103:
 					self.IPScannerServiceUUID 	= uuid
 					self.RegisterOnNodeChangeEvent(self.IPScannerServiceUUID)
+				self.LogMSG("({classname})# [DEBUG #3]".format(classname=self.ClassName),5)
 
 				return self.BasicProtocol.BuildResponse(packet, { 'port': port })
 			else:

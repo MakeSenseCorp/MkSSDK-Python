@@ -310,7 +310,10 @@ class Network ():
 		Return: 		
 	''' 
 	def SendWebSocket(self, packet):
-		return self.Transceiver.Send({"packet":packet})
+		if self.State == "CONN":
+			return self.Transceiver.Send({"packet":packet})
+		else:
+			return False
 
 	''' 
 		Description: 	N/A
