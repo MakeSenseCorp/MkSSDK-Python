@@ -140,12 +140,15 @@ class AbstractNode():
 		}
 
 		parser = argparse.ArgumentParser(description='Execution module called Node')
-		parser.add_argument('--path', action='store',
-							dest='pwd', help='Root folder of a Node')
+		parser.add_argument('--path', action='store', dest='pwd', help='Root folder of a Node')
+		parser.add_argument('--type', action='store', dest='type', help='Type of node')
 		args = parser.parse_args()
 
 		if args.pwd is not None:
 			os.chdir(args.pwd)
+		
+		if args.type is not None:
+			pass
 		
 		self.SocketServer.NewSocketEvent			= self.SocketConnectHandler
 		self.SocketServer.CloseSocketEvent			= self.SocketDisconnectedHandler
