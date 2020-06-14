@@ -178,6 +178,18 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 			
 		if 0 == self.Ticker % 60:
 			self.SendGatewayPing()
+
+		if 0 == self.Ticker % 30:
+			try:
+				for key in self.Services:
+					service = self.Services[key]
+					#self.LogMSG("({classname})# [State_Work] Service {0}".format(service, classname=self.ClassName),5)
+					if service["registered"] == 0 and service["enabled"] == 1:
+						self.RegisterOnNodeChangeEvent(service["uuid"])
+					else:
+						pass
+			except Exception as e:
+				self.LogException("[State_Work] Registration Service",e,3)
 	
 	''' 
 		Description: 	N/A
@@ -365,7 +377,6 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 				message = self.BasicProtocol.BuildRequest("MASTER", "GATEWAY", self.UUID, "node_connected", payload, {})
 				self.SendPacketGateway(message)
 
-				self.LogMSG("({classname})# [DEBUG #1]".format(classname=self.ClassName),5)
 				# Send message (master_append_node) to all nodes.
 				connection_map = self.SocketServer.GetConnections()
 				for key in connection_map:
@@ -374,17 +385,12 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 						message = self.BasicProtocol.BuildMessage("response", "DIRECT", item.Obj["uuid"], self.UUID, "master_append_node", node_info, {})
 						message = self.BasicProtocol.AppendMagic(message)
 						self.SocketServer.SendData(item.IP, item.Port, message)
-				self.LogMSG("({classname})# [DEBUG #2]".format(classname=self.ClassName),5)
 				
 				# Store UUID if it is a service
-				if nodetype == 101:
-					self.EMailServiceUUID 		= uuid
-				elif nodetype == 102:
-					self.SMSServiceUUID 		= uuid
-				elif nodetype == 103:
-					self.IPScannerServiceUUID 	= uuid
-					self.RegisterOnNodeChangeEvent(self.IPScannerServiceUUID)
-				self.LogMSG("({classname})# [DEBUG #3]".format(classname=self.ClassName),5)
+				node_type = int(nodetype)
+				if node_type in self.Services:
+					self.Services[node_type]["uuid"] 		= uuid
+					self.Services[node_type]["enabled"] 	= 1
 
 				return self.BasicProtocol.BuildResponse(packet, { 'port': port })
 			else:
@@ -393,6 +399,34 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 		else:
 			# No available ports
 			return self.BasicProtocol.BuildResponse(packet, { 'port': 0 })
+
+	''' 
+		Description: 	Handler [register_on_node_change] RESPONSE
+		Return: 		N/A
+	'''		
+	def RegisterOnNodeChangeResponseHandler(self, sock, packet):
+		payload = self.BasicProtocol.GetPayloadFromJson(packet)
+		self.LogMSG("({classname})# [RegisterOnNodeChangeResponseHandler] {0}".format(payload,classname=self.ClassName),5)
+		node_type = int(payload["type"])
+		if payload["registered"] == "OK":
+			if node_type in self.Services:
+				self.Services[node_type]["registered"] = 1
+			else:
+				pass
+
+	''' 
+		Description: 	Handler [unregister_on_node_change] RESPONSE
+		Return: 		N/A
+	'''			
+	def UnregisterOnNodeChangeResponseHandler(self, sock, packet):
+		payload = self.BasicProtocol.GetPayloadFromJson(packet)
+		self.LogMSG("({classname})# [UnregisterOnNodeChangeResponseHandler] {0}".format(payload,classname=self.ClassName),5)
+		node_type = int(payload["type"])
+		if payload["registered"] == "OK":
+			if node_type in self.Services:
+				self.Services[node_type]["registered"] = 0
+			else:
+				pass
 
 	''' 
 		Description: 	[HANDLERS]
@@ -449,6 +483,15 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 						message = self.BasicProtocol.AppendMagic(message)
 						self.SocketServer.SendData(node.IP, node.Port, message)
 			
+			# Remove from registration list
+			self.RemoveDeviceChangeListNode(connection.Obj["uuid"])
+			# Update service
+			node_type = int(connection.Obj["type"])
+			if node_type in self.Services:
+				self.Services[node_type]["uuid"] 		= ""
+				self.Services[node_type]["enabled"] 	= 0
+				self.Services[node_type]["registered"] 	= 0
+
 			# Raise event for user
 			if self.OnTerminateConnectionCallback is not None:
 				self.OnTerminateConnectionCallback(connection)
@@ -476,7 +519,8 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 	'''	
 	def GetNodeStatusRequestHandler(self, sock, packet):
 		payload = {
-			"status":"online"
+			"status":"online",
+			"state": self.State
 		}
 		return self.BasicProtocol.BuildResponse(packet, payload)
 

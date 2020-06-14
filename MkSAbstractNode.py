@@ -79,9 +79,9 @@ class AbstractNode():
 		# Synchronization
 		self.DeviceChangeListLock 					= threading.Lock()
 		# Services
-		self.IPScannerServiceUUID					= ""
-		self.EMailServiceUUID						= ""
-		self.SMSServiceUUID							= ""
+		#self.IPScannerServiceUUID					= None
+		#self.EMailServiceUUID						= None
+		#self.SMSServiceUUID						= None
 		self.Services 								= {}
 		self.NetworkOnlineDevicesList 				= []
 		# Timers
@@ -100,8 +100,8 @@ class AbstractNode():
 			'get_node_info': 						self.GetNodeInfoRequestHandler,
 			'get_node_status': 						self.GetNodeStatusRequestHandler,
 			'get_file': 							self.GetFileRequestHandler,
-			'register_on_node_change':				self.RegisterOnNodeChangeHandler,
-			'unregister_on_node_change':			self.UnregisterOnNodeChangeHandler,
+			'register_on_node_change':				self.RegisterOnNodeChangeRequestHandler,
+			'unregister_on_node_change':			self.UnregisterOnNodeChangeRequestHandler,
 			'find_node':							self.FindNodeRequestHandler,
 			'master_append_node':					self.MasterAppendNodeRequestHandler,
 			'master_remove_node':					self.MasterRemoveNodeRequestHandler,
@@ -113,7 +113,9 @@ class AbstractNode():
 			'find_node': 							self.FindNodeResponseHandler,
 			'master_append_node':					self.MasterAppendNodeResponseHandler,
 			'master_remove_node':					self.MasterRemoveNodeResponseHandler,
-			'get_online_devices':					self.GetOnlineDevicesResponseHandler
+			'get_online_devices':					self.GetOnlineDevicesResponseHandler,
+			'register_on_node_change':				self.RegisterOnNodeChangeResponseHandler,
+			'unregister_on_node_change':			self.UnregisterOnNodeChangeResponseHandler,
 		}
 		# LocalFace UI
 		self.UI 									= None
@@ -124,19 +126,22 @@ class AbstractNode():
 		self.Services[101] = {
 			'uuid': "",
 			'name': "eMail",
-			'enabled': 0
+			'enabled': 0,
+			'registered': 0
 		}
 
 		self.Services[102] = {
 			'uuid': "",
 			'name': "SMS",
-			'enabled': 0
+			'enabled': 0,
+			'registered': 0
 		}
 
 		self.Services[103] = {
 			'uuid': "",
 			'name': "IP Scanner",
-			'enabled': 0
+			'enabled': 0,
+			'registered': 0
 		}
 
 		parser = argparse.ArgumentParser(description='Execution module called Node')
@@ -459,6 +464,8 @@ class AbstractNode():
 		Return: 		
 	'''
 	def NodeDisconnectedHandler(self, connection):
+		# Remove from registration list
+		self.RemoveDeviceChangeListNode(connection.Obj["uuid"])
 		# Raise event for user
 		if self.OnTerminateConnectionCallback is not None:
 			self.OnTerminateConnectionCallback(connection)
@@ -711,18 +718,23 @@ class AbstractNode():
 			})
 
 	def RegisterOnNodeChangeEvent(self, uuid):
+		self.LogMSG("({classname})# [RegisterOnNodeChangeEvent] {0}".format(uuid,classname=self.ClassName),5)
 		self.SendRequestToNode(uuid, "register_on_node_change", {
 				'item_type': 1,
 				'uuid':	self.UUID
 			})
 	
-	def RegisterOnNodeChangeHandler(self, sock, packet):
-		self.LogMSG("({classname})# On Node change request recieved ....".format(classname=self.ClassName),5)
+	def RegisterOnNodeChangeRequestHandler(self, sock, packet):
+		self.LogMSG("({classname})# [RegisterOnNodeChangeRequestHandler]".format(classname=self.ClassName),5)
 		payload 	= self.BasicProtocol.GetPayloadFromJson(packet)
 		item_type 	= payload["item_type"]
 		# Node
 		if item_type == 1:
 			self.AppendDeviceChangeListNode(payload)
+			return self.BasicProtocol.BuildResponse(packet, {
+				'registered': "OK",
+				'type': self.Type
+			})
 		# Webface
 		elif item_type == 2:
 			piggy = self.BasicProtocol.GetPiggybagFromJson(packet)
@@ -739,10 +751,15 @@ class AbstractNode():
 			})
 		
 		return self.BasicProtocol.BuildResponse(packet, {
-			'registered': "NO REGISTERED"
+			'registered': "FAILED"
 		})
 	
-	def UnregisterOnNodeChangeHandler(self, sock, packet):
+	# Overwrite
+	def RegisterOnNodeChangeResponseHandler(self, sock, packet):
+		self.LogMSG("({classname})# [RegisterOnNodeChangeResponseHandler]".format(classname=self.ClassName),5)
+	
+	def UnregisterOnNodeChangeRequestHandler(self, sock, packet):
+		self.LogMSG("({classname})# [UnregisterOnNodeChangeRequestHandler]".format(classname=self.ClassName),5)
 		payload 		= self.BasicProtocol.GetPayloadFromJson(packet)
 		item_type		= payload["item_type"]
 
@@ -750,6 +767,10 @@ class AbstractNode():
 		if item_type == 1:
 			uuid = payload["uuid"]
 			self.RemoveDeviceChangeListNode(uuid)
+			return self.BasicProtocol.BuildResponse(packet, {
+				'unregistered': "OK",
+				'type': self.Type
+			})
 		# Webface
 		elif item_type == 2:
 			if packet["additional"]["pipe"] == "GATEWAY":
@@ -768,6 +789,9 @@ class AbstractNode():
 		return self.BasicProtocol.BuildResponse(packet, {
 			'unregistered': "FAILED"
 		})
+	
+	def UnregisterOnNodeChangeResponseHandler(self, sock, packet):
+		self.LogMSG("({classname})# [UnregisterOnNodeChangeResponseHandler]".format(classname=self.ClassName),5)
 	
 	def UnregisterLocalWS(self, id):
 		return self.RemoveDeviceChangeListLocal(id)
