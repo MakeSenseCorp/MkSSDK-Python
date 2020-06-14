@@ -520,7 +520,8 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 	def GetNodeStatusRequestHandler(self, sock, packet):
 		payload = {
 			"status":"online",
-			"state": self.State
+			"state": self.State,
+			"info": self.NodeInfo
 		}
 		return self.BasicProtocol.BuildResponse(packet, payload)
 

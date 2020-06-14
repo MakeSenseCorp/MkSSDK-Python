@@ -260,7 +260,8 @@ class SlaveNode(MkSAbstractNode.AbstractNode):
 		self.LogMSG("({classname})# [GetNodeStatusRequestHandler]".format(classname=self.ClassName),5)
 		payload = {
 			"status":"online",
-			"state": self.State
+			"state": self.State,
+			"info": self.NodeInfo
 		}
 		return self.BasicProtocol.BuildResponse(packet, payload)
 
