@@ -424,9 +424,16 @@ class AbstractNode():
 						else:
 							# This massage is external (MOSTLY MASTER)
 							try:
-								if self.Network is not None:
-									self.LogMSG("({classname})# This massage is external (MOSTLY MASTER)".format(classname=self.ClassName), 5)
-									self.SendPacketGateway(raw_data)
+								# Is destination located in my list.
+								conn = self.GetNodeByUUID(destination)
+								if conn is not None:
+									self.LogMSG("({classname})# [REDIRECTING PACKET] Sending directly to local client".format(classname=self.ClassName), 5)
+									message = self.BasicProtocol.AppendMagic(raw_data)
+									self.SocketServer.Send(conn.Socket, message)
+								else:	
+									if self.Network is not None:
+										self.LogMSG("({classname})# This massage is external (MOSTLY MASTER)".format(classname=self.ClassName), 5)
+										self.SendPacketGateway(raw_data)
 							except Exception as e:
 								self.LogException("[DataSocketInputHandler #5]",e,3)
 					else:

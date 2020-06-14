@@ -253,6 +253,18 @@ class SlaveNode(MkSAbstractNode.AbstractNode):
 			self.SetState("START_LISTENER")
 
 	''' 
+		Description: 	[HANDLERS]
+		Return: 		N/A
+	'''	
+	def GetNodeStatusRequestHandler(self, sock, packet):
+		self.LogMSG("({classname})# [GetNodeStatusRequestHandler]".format(classname=self.ClassName),5)
+		payload = {
+			"status":"online",
+			"state": self.State
+		}
+		return self.BasicProtocol.BuildResponse(packet, payload)
+
+	''' 
 		Description: 	Override method to send request
 		Return: 		N/A
 	'''	
