@@ -390,8 +390,12 @@ class SlaveNode(MkSAbstractNode.AbstractNode):
 	'''
 	def ShutdownRequestHandler(self, sock, packet):
 		self.LogMSG("({classname})# [ShutdownRequestHandler]".format(classname=self.ClassName),5)
-		if self.OnShutdownCallback is not None:
-			self.OnShutdownCallback()
+
+		try:
+			if self.OnShutdownCallback is not None:
+				self.OnShutdownCallback()
+		except Exception as e:
+			self.LogException("[ShutdownRequestHandler]",e,3)
 
 		# Send message to requestor.
 		message = self.BasicProtocol.BuildResponse(packet, {"status":"shutdown"})

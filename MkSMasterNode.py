@@ -452,22 +452,30 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 		Return: 		N/A
 	'''	
 	def NodeDisconnectedHandler(self, connection):
-		self.LogMSG("({classname})# [NodeDisconnectedHandler] ({name} {uuid})".format(
-						classname=self.ClassName,
-						name=connection.Obj["name"],
-						uuid=connection.Obj["uuid"]),5)
 		if connection is not None:
+			uuid 	= connection.Obj["uuid"]
+			port 	= connection.Obj["listener_port"]
+			n_type 	= connection.Obj["type"]
+			n_info 	= connection.Obj["info"]
+			name	= connection.Obj["name"]
+			sock 	= connection.Socket
+
+			self.LogMSG("({classname})# [NodeDisconnectedHandler] ({name} {uuid})".format(
+						classname=self.ClassName,
+						name=name,
+						uuid=uuid),5)
+
 			if connection.Obj["is_slave"] == 1:
-				self.PortsForClients.append(connection.Obj["listener_port"] - 10000)
+				self.PortsForClients.append(port - 10000)
 				# [TODO] Update installed node list (UI will be updated)
 				
 				# Send message to Gateway
 				payload = { 
 					'node': { 	
 						'ip':	connection.IP, 
-						'port':	connection.Obj["listener_port"], 
-						'uuid':	connection.Obj["uuid"], 
-						'type':	connection.Obj["type"]
+						'port':	port, 
+						'uuid':	uuid, 
+						'type':	n_type
 					} 
 				}
 				message = self.BasicProtocol.BuildRequest("MASTER", "GATEWAY", self.UUID, "node_disconnected", payload, {})
@@ -478,23 +486,26 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 				for key in connection_map:
 					node = connection_map[key]
 					# Don't send this message to master you your self.
-					if node.Socket != self.SocketServer.GetListenerSocket() and node.Socket != connection.Socket:
-						message = self.BasicProtocol.BuildMessage("response", "DIRECT", node.Obj["uuid"], self.UUID, "master_remove_node", connection.Obj, {})
+					if node.Socket != self.SocketServer.GetListenerSocket() and node.Socket != sock:
+						message = self.BasicProtocol.BuildMessage("response", "DIRECT", node.Obj["uuid"], self.UUID, "master_remove_node", n_info, {})
 						message = self.BasicProtocol.AppendMagic(message)
 						self.SocketServer.SendData(node.IP, node.Port, message)
 			
 			# Remove from registration list
-			self.RemoveDeviceChangeListNode(connection.Obj["uuid"])
+			self.RemoveDeviceChangeListNode(uuid)
 			# Update service
-			node_type = int(connection.Obj["type"])
+			node_type = int(n_type)
 			if node_type in self.Services:
 				self.Services[node_type]["uuid"] 		= ""
 				self.Services[node_type]["enabled"] 	= 0
 				self.Services[node_type]["registered"] 	= 0
 
 			# Raise event for user
-			if self.OnTerminateConnectionCallback is not None:
-				self.OnTerminateConnectionCallback(connection)
+			try:
+				if self.OnTerminateConnectionCallback is not None:
+					self.OnTerminateConnectionCallback(connection)
+			except Exception as e:
+				self.LogException("[NodeDisconnectedHandler]",e,3)
 
 	''' 
 		Description: 	[HANDLERS]

@@ -474,9 +474,12 @@ class AbstractNode():
 		# Remove from registration list
 		self.RemoveDeviceChangeListNode(connection.Obj["uuid"])
 		# Raise event for user
-		if self.OnTerminateConnectionCallback is not None:
-			self.OnTerminateConnectionCallback(connection)
-
+		try:
+			if self.OnTerminateConnectionCallback is not None:
+				self.OnTerminateConnectionCallback(connection)
+		except Exception as e:
+			self.LogException("[NodeDisconnectedHandler]",e,3)
+		
 	''' 
 		Description: 	
 		Return: 		
@@ -639,82 +642,97 @@ class AbstractNode():
 
 		self.OnDeviceChangeList.append({
 			'ts':		time.time(),
-			'payload':	payload
+			'payload':	payload,
+			'type': "1"
 		})		
 		self.DeviceChangeListLock.release()
 
 	def AppendDeviceChangeListLocal(self, payload):
 		self.DeviceChangeListLock.acquire()
-		for item in self.OnDeviceChangeList:
-			if item["payload"]["ws_id"] == payload["ws_id"]:
-				self.DeviceChangeListLock.release()
-				return
+		try:
+			for item in self.OnDeviceChangeList:
+				if item["payload"]["ws_id"] == payload["ws_id"]:
+					self.DeviceChangeListLock.release()
+					return
 
-		self.OnDeviceChangeList.append({
-			'ts':		time.time(),
-			'payload':	payload
-		})		
+			self.OnDeviceChangeList.append({
+				'ts':		time.time(),
+				'payload':	payload,
+				'type': "3"
+			})
+		except Exception as e:
+			self.LogException("[AppendDeviceChangeListLocal]",e,3)
 		self.DeviceChangeListLock.release()
 	
 	def AppendDeviceChangeListGlobal(self, payload):
 		self.DeviceChangeListLock.acquire()
-		for item in self.OnDeviceChangeList:
-			if item["payload"]["webface_indexer"] == payload["webface_indexer"]:
-				self.DeviceChangeListLock.release()
-				return
+		try:
+			for item in self.OnDeviceChangeList:
+				if item["payload"]["webface_indexer"] == payload["webface_indexer"]:
+					self.DeviceChangeListLock.release()
+					return
 
-		self.OnDeviceChangeList.append({
-			'ts':		time.time(),
-			'payload':	payload
-		})		
+			self.OnDeviceChangeList.append({
+				'ts':		time.time(),
+				'payload':	payload,
+				'type': "2"
+			})
+		except Exception as e:
+			self.LogException("[AppendDeviceChangeListGlobal]",e,3)
 		self.DeviceChangeListLock.release()
 	
 	def RemoveDeviceChangeListNode(self, uuid):
 		# Context of geventwebsocket (PAY ATTENTION)
 		self.DeviceChangeListLock.acquire()
-		is_removed = False
-
-		for i in xrange(len(self.OnDeviceChangeList) - 1, -1, -1):
-			item = self.OnDeviceChangeList[i]
-			item_payload = item["payload"]
-			if item_payload["uuid"] == uuid:
-				del self.OnDeviceChangeList[i]
-				self.LogMSG("({classname})# Unregistered WEBFACE local session ({uuid}) ({length}))".format(classname=self.ClassName,
-						uuid=str(uuid),
-						length=len(self.OnDeviceChangeList)),5)
-				is_removed = True
+		try:
+			for item in self.OnDeviceChangeList:
+				if item["type"] == "1":
+					item_payload = item["payload"]
+					if item_payload["uuid"] == uuid:
+						self.OnDeviceChangeList.remove(item)
+						self.LogMSG("({classname})# Unregistered WEBFACE local session ({uuid}) ({length}))".format(classname=self.ClassName,
+							uuid=str(uuid),
+							length=len(self.OnDeviceChangeList)),5)
+						self.DeviceChangeListLock.release()
+						return True
+		except Exception as e:
+			self.LogException("[RemoveDeviceChangeListNode]",e,3)
 		self.DeviceChangeListLock.release()
-		return is_removed
+		return False
 
 	def RemoveDeviceChangeListLocal(self, id):
 		# Context of geventwebsocket (PAY ATTENTION)
 		self.DeviceChangeListLock.acquire()
-		is_removed = False
-
-		for i in xrange(len(self.OnDeviceChangeList) - 1, -1, -1):
-			item = self.OnDeviceChangeList[i]
-			item_payload = item["payload"]
-			if "ws_id" in item_payload:
-				if item_payload["ws_id"] == id:
-					del self.OnDeviceChangeList[i]
-					self.LogMSG("({classname})# Unregistered WEBFACE local session ({ws_id}) ({length}))".format(classname=self.ClassName,
-							ws_id=str(id),
-							length=len(self.OnDeviceChangeList)),5)
-					is_removed = True
+		try:
+			is_removed = False
+			for i in xrange(len(self.OnDeviceChangeList) - 1, -1, -1):
+				item = self.OnDeviceChangeList[i]
+				if item["type"] == "3":
+					item_payload = item["payload"]
+					if "ws_id" in item_payload:
+						if item_payload["ws_id"] == id:
+							del self.OnDeviceChangeList[i]
+							self.LogMSG("({classname})# Unregistered WEBFACE local session ({ws_id}) ({length}))".format(classname=self.ClassName,
+									ws_id=str(id),
+									length=len(self.OnDeviceChangeList)),5)
+							is_removed = True
+		except Exception as e:
+			self.LogException("[RemoveDeviceChangeListLocal]",e,3)
 		self.DeviceChangeListLock.release()
 		return is_removed
 	
 	def RemoveDeviceChangeListGlobal(self, id):
 		self.DeviceChangeListLock.acquire()
 		for item in self.OnDeviceChangeList:
-			item_payload = item["payload"]
-			if "webface_indexer" in item_payload:
-				if item_payload["webface_indexer"] == id:
-					self.OnDeviceChangeList.remove(item)
-					self.LogMSG("({classname})# Unregistered WEBFACE global session ({webface_indexer}))".format(classname=self.ClassName,
-							webface_indexer=str(id)),5)
-					self.DeviceChangeListLock.release()
-					return True
+			if item["type"] == "2":
+				item_payload = item["payload"]
+				if "webface_indexer" in item_payload:
+					if item_payload["webface_indexer"] == id:
+						self.OnDeviceChangeList.remove(item)
+						self.LogMSG("({classname})# Unregistered WEBFACE global session ({webface_indexer}))".format(classname=self.ClassName,
+								webface_indexer=str(id)),5)
+						self.DeviceChangeListLock.release()
+						return True
 		self.DeviceChangeListLock.release()
 		return False
 
