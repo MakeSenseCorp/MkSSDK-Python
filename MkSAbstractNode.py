@@ -1068,8 +1068,11 @@ class AbstractNode():
 
 		# If local socket server enabled (most nodes), shut it down.
 		if self.IsNodeLocalServerEnabled is True:
-			self.SocketServer.Stop()
-			self.ExitLocalServerEvent.wait()
+			if self.SocketServer.GetListenerStatus() is True:
+				self.SocketServer.Stop()
+				self.ExitLocalServerEvent.wait()
+		
+		# TODO - Let user know about closing app
 	
 	''' 
 		Description: 	N/A
