@@ -635,16 +635,19 @@ class AbstractNode():
 
 	def AppendDeviceChangeListNode(self, payload):
 		self.DeviceChangeListLock.acquire()
-		for item in self.OnDeviceChangeList:
-			if item["uuid"] == payload["uuid"]:
-				self.DeviceChangeListLock.release()
-				return
+		try:
+			for item in self.OnDeviceChangeList:
+				if item["uuid"] == payload["uuid"]:
+					self.DeviceChangeListLock.release()
+					return
 
-		self.OnDeviceChangeList.append({
-			'ts':		time.time(),
-			'payload':	payload,
-			'type': "1"
-		})		
+			self.OnDeviceChangeList.append({
+				'ts':		time.time(),
+				'payload':	payload,
+				'type': "1"
+			})
+		except Exception as e:
+			self.LogException("[AppendDeviceChangeListLocal]",e,3)
 		self.DeviceChangeListLock.release()
 
 	def AppendDeviceChangeListLocal(self, payload):

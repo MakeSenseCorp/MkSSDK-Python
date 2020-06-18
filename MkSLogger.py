@@ -6,6 +6,12 @@ import json
 import datetime
 from datetime import date
 
+if sys.version_info[0] < 3:
+	import thread
+else:
+	import _thread
+import threading
+
 from mksdk import MkSFile
 from mksdk import MkSQueue
 
@@ -13,6 +19,7 @@ class Logger():
     def __init__(self, name):
         self.ClassName          = "Logger"
         self.Name               = name
+        self.Locker             = threading.Lock()
         self.LogerEnabled       = False
         self.Logger             = None
         self.Print              = False
@@ -27,15 +34,17 @@ class Logger():
             "4": "WARNNING",
             "5": "INFO"  
         }
+
+        self.Queue.Start()
     
     def Callback(self, item):
-        if self.LogerEnabled is True:
-            try:
-                lvl = item["level"]
-                if str(lvl) in self.LogTypeMap:
-                    log_type = self.LogTypeMap[str(lvl)]
-                    if lvl >= self.LogType:
-                        message = item["message"]
+        try:
+            lvl = item["level"]
+            if str(lvl) in self.LogTypeMap:
+                log_type = self.LogTypeMap[str(lvl)]
+                if lvl >= self.LogType:
+                    message = item["message"]
+                    if self.LogerEnabled is True:
                         if self.Logger is not None:
                             if self.LoggerType == "MKS":
                                 today = datetime.datetime.today()
@@ -46,11 +55,10 @@ class Logger():
                                 self.Logger.info(message)
                             else:
                                 pass
-                            
-                        if self.Print is True:
-                            print(message)
-            except Exception as e:
-                print("({classname})# ERROR - [LocalQueueWorker] {error}".format(classname=self.ClassName,error=str(e)))
+                    if self.Print is True:
+                        print(message)
+        except Exception as e:
+            print("({classname})# ERROR - [LocalQueueWorker] {error}".format(classname=self.ClassName,error=str(e)))
     
     def EnablePrint(self):
         self.Print = True
@@ -73,17 +81,15 @@ class Logger():
             self.LogerEnabled = True
         else:
             pass
-    
-        if self.LogerEnabled is True:
-            self.Queue.Start()
 
     def Log(self, message, level):
-        if self.LogerEnabled is True:
-            try:
-                self.Queue.QueueItem({
-                    "thread_id": 1,
-                    "level": level,
-                    "message": message
-                })
-            except Exception as e:
-                print("({classname})# [Log] ERROR".format(classname=self.ClassName))
+        self.Locker.acquire()
+        try:
+            self.Queue.QueueItem({
+                "thread_id": 1,
+                "level": level,
+                "message": message
+            })
+        except Exception as e:
+            print("({classname})# [Log] ERROR".format(classname=self.ClassName))
+        self.Locker.release()

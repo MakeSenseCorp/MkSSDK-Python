@@ -68,7 +68,9 @@ class StandaloneNode(MkSAbstractNode.AbstractNode):
 		self.Logger = MkSLogger.Logger(name)
 		self.Logger.EnablePrint()
 		self.Logger.SetLogLevel(self.System["log_level"])
-		self.Logger.EnableLogger()
+		if "log_to_file" in self.System:
+			if self.System["log_to_file"] == "True":
+				self.Logger.EnableLogger()
 
 	''' 
 		Description: 	State [IDLE]
