@@ -125,18 +125,16 @@ class AbstractNode():
 
 		self.Services[101] = {
 			'uuid': "",
-			'name': "eMail",
-			'enabled': 0,
-			'registered': 0
-		}
-
-		self.Services[102] = {
-			'uuid': "",
 			'name': "SMS",
 			'enabled': 0,
 			'registered': 0
 		}
-
+		self.Services[102] = {
+			'uuid': "",
+			'name': "eMail",
+			'enabled': 0,
+			'registered': 0
+		}
 		self.Services[103] = {
 			'uuid': "",
 			'name': "IP Scanner",
@@ -671,9 +669,11 @@ class AbstractNode():
 		self.DeviceChangeListLock.acquire()
 		try:
 			for item in self.OnDeviceChangeList:
-				if item["payload"]["webface_indexer"] == payload["webface_indexer"]:
-					self.DeviceChangeListLock.release()
-					return
+				if item["type"] == "2":
+					self.LogMSG("({classname})# -> ({0}) \n ({1}))".format(item["payload"], payload, classname=self.ClassName),5)
+					if item["payload"]["webface_indexer"] == payload["webface_indexer"]:
+						self.DeviceChangeListLock.release()
+						return
 
 			self.OnDeviceChangeList.append({
 				'ts':		time.time(),
@@ -753,7 +753,7 @@ class AbstractNode():
 			})
 	
 	def RegisterOnNodeChangeRequestHandler(self, sock, packet):
-		self.LogMSG("({classname})# [RegisterOnNodeChangeRequestHandler]".format(classname=self.ClassName),5)
+		self.LogMSG("({classname})# [RegisterOnNodeChangeRequestHandler] {0}".format(packet,classname=self.ClassName),5)
 		payload 	= self.BasicProtocol.GetPayloadFromJson(packet)
 		item_type 	= payload["item_type"]
 		# Node
