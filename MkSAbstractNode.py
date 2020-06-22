@@ -635,9 +635,10 @@ class AbstractNode():
 		self.DeviceChangeListLock.acquire()
 		try:
 			for item in self.OnDeviceChangeList:
-				if item["uuid"] == payload["uuid"]:
-					self.DeviceChangeListLock.release()
-					return
+				if item["type"] == "1":
+					if item["payload"]["uuid"] == payload["uuid"]:
+						self.DeviceChangeListLock.release()
+						return
 
 			self.OnDeviceChangeList.append({
 				'ts':		time.time(),
@@ -645,7 +646,7 @@ class AbstractNode():
 				'type': "1"
 			})
 		except Exception as e:
-			self.LogException("[AppendDeviceChangeListLocal]",e,3)
+			self.LogException("[AppendDeviceChangeListNode]",e,3)
 		self.DeviceChangeListLock.release()
 
 	def AppendDeviceChangeListLocal(self, payload):
@@ -670,7 +671,6 @@ class AbstractNode():
 		try:
 			for item in self.OnDeviceChangeList:
 				if item["type"] == "2":
-					self.LogMSG("({classname})# -> ({0}) \n ({1}))".format(item["payload"], payload, classname=self.ClassName),5)
 					if item["payload"]["webface_indexer"] == payload["webface_indexer"]:
 						self.DeviceChangeListLock.release()
 						return
@@ -756,6 +756,9 @@ class AbstractNode():
 		self.LogMSG("({classname})# [RegisterOnNodeChangeRequestHandler] {0}".format(packet,classname=self.ClassName),5)
 		payload 	= self.BasicProtocol.GetPayloadFromJson(packet)
 		item_type 	= payload["item_type"]
+
+		# TODO - HASH strigified payload and check if it is already in list
+
 		# Node
 		if item_type == 1:
 			self.AppendDeviceChangeListNode(payload)
@@ -764,7 +767,7 @@ class AbstractNode():
 				'type': self.Type
 			})
 		# Webface
-		elif item_type == 2:
+		elif item_type in [2,3]:
 			piggy = self.BasicProtocol.GetPiggybagFromJson(packet)
 			payload["pipe"] = packet["additional"]["pipe"]
 			if packet["additional"]["pipe"] == "GATEWAY":
