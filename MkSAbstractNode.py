@@ -90,7 +90,7 @@ class AbstractNode():
 		self.DeviceConnectedCallback 				= None
 		# Initialization methods
 		self.MyPID 									= os.getpid()
-		self.MyLocalIP 								= ""
+		self.MyLocalIP 								= "N/A"
 		self.NetworkCards 							= MkSUtils.GetIPList()
 		# Network
 		#self.MasterSocket							= None
