@@ -232,10 +232,10 @@ class SlaveNode(MkSAbstractNode.AbstractNode):
 		conn.Obj["status"] 	= 1
 		
 		if source in "MASTER":
-			# We are here because this is a response for slave boot sequence
-			self.MasterInfo = payload
-			self.MasterUUID = payload["uuid"]
 			if self.GetState() in "GET_MASTER_INFO":
+				# We are here because this is a response for slave boot sequence
+				self.MasterInfo = payload
+				self.MasterUUID = payload["uuid"]
 				self.SetState("GET_PORT")
 			else:
 				if self.OnGetNodeInfoCallback is not None:
@@ -396,6 +396,7 @@ class SlaveNode(MkSAbstractNode.AbstractNode):
 	def ShutdownRequestHandler(self, sock, packet):
 		self.LogMSG("({classname})# [ShutdownRequestHandler]".format(classname=self.ClassName),5)
 		source  = self.BasicProtocol.GetSourceFromJson(packet)
+		self.LogMSG("({classname})# [ShutdownRequestHandler] {0} {1}".format(source,self.MasterUUID,classname=self.ClassName),5)
 		if source in self.MasterUUID:
 			try:
 				if self.OnShutdownCallback is not None:
