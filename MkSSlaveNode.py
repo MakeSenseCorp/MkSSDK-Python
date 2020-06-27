@@ -395,19 +395,24 @@ class SlaveNode(MkSAbstractNode.AbstractNode):
 	'''
 	def ShutdownRequestHandler(self, sock, packet):
 		self.LogMSG("({classname})# [ShutdownRequestHandler]".format(classname=self.ClassName),5)
+		source  = self.BasicProtocol.GetSourceFromJson(packet)
+		if source in self.MasterUUID:
+			try:
+				if self.OnShutdownCallback is not None:
+					self.OnShutdownCallback()
+			except Exception as e:
+				self.LogException("[ShutdownRequestHandler]",e,3)
 
-		try:
-			if self.OnShutdownCallback is not None:
-				self.OnShutdownCallback()
-		except Exception as e:
-			self.LogException("[ShutdownRequestHandler]",e,3)
-
-		# Send message to requestor.
-		message = self.BasicProtocol.BuildResponse(packet, {"status":"shutdown"})
-		packet  = self.BasicProtocol.AppendMagic(message)
+			# Send message to requestor.
+			message = self.BasicProtocol.BuildResponse(packet, {"status":"shutdown"})
+			packet  = self.BasicProtocol.AppendMagic(message)
+			# Let the messsage propogate to local server.
+			time.sleep(1)
+			self.Exit("Shutdown request received")
+		else:
+			# Send message to requestor.
+			message = self.BasicProtocol.BuildResponse(packet, {"status":"working"})
+			packet  = self.BasicProtocol.AppendMagic(message)	
 		self.SocketServer.Send(sock, packet)
 
-		# Let the messsage propogate to local server.
-		time.sleep(1)
-		self.Exit("Shutdown request received")
 		return None		
