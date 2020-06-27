@@ -304,6 +304,7 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 		payload["master_uuid"] 		= self.UUID
 		payload["pid"]				= self.MyPID
 		payload["listener_port"]	= self.SocketServer.GetListenerPort()
+		payload["ip"]				= self.MyLocalIP
 		return self.BasicProtocol.BuildResponse(packet, payload)
 	
 	''' 

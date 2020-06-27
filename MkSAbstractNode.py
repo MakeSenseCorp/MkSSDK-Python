@@ -310,6 +310,13 @@ class AbstractNode():
 			if conn.Obj["uuid"] == uuid:
 				return conn
 		return None
+	
+	''' 
+		Description: 	Get local node by IP and Port.
+		Return: 		SocketConnection.
+	'''	
+	def GetNode(self, ip, port):
+		return self.SocketServer.GetConnection(ip, port)
 
 	''' 
 		Description: 	<N/A>

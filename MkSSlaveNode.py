@@ -237,6 +237,9 @@ class SlaveNode(MkSAbstractNode.AbstractNode):
 			self.MasterUUID = payload["uuid"]
 			if self.GetState() in "GET_MASTER_INFO":
 				self.SetState("GET_PORT")
+			else:
+				if self.OnGetNodeInfoCallback is not None:
+					self.OnGetNodeInfoCallback(payload)
 		else:
 			if self.OnGetNodeInfoCallback is not None:
 				self.OnGetNodeInfoCallback(payload)

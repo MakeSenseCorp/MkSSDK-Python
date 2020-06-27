@@ -497,7 +497,11 @@ class Manager():
 	''' 
     def SetExitSync(self, sync):
 		self.ExitSynchronizer = sync
-	
+
+    ''' 
+		Description: 	<N/A>
+		Return: 		<N/A>
+	''' 
     def EnableListener(self, port):
 		self.ListenerPort 		= port
 		self.IsListenerEnabled 	= True
