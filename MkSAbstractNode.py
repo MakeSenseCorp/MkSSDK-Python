@@ -12,6 +12,7 @@ import socket, select
 import argparse
 import logging
 import Queue
+import hashlib
 
 import MkSGlobals
 from mksdk import MkSFile
@@ -235,6 +236,10 @@ class AbstractNode():
 	# Overload
 	def MasterRemoveNodeRequestHandler(self, sock, packet):
 		pass
+
+	# Overwrite
+	def RegisterOnNodeChangeResponseHandler(self, sock, packet):
+		self.LogMSG("({classname})# [RegisterOnNodeChangeResponseHandler]".format(classname=self.ClassName),5)
 
 	''' 
 		Description:	Connect node (MASTER) over socket, add connection to connections list
@@ -477,7 +482,11 @@ class AbstractNode():
 	'''
 	def NodeDisconnectedHandler(self, connection):
 		# Remove from registration list
-		self.RemoveDeviceChangeListNode(connection.Obj["uuid"])
+		# self.RemoveDeviceChangeListNode(connection.Obj["uuid"])
+		self.UnregisterItem({
+			'item_type': 1,
+			'uuid':	connection.Obj["uuid"]
+		})
 		# Raise event for user
 		try:
 			if self.OnTerminateConnectionCallback is not None:
@@ -638,204 +647,139 @@ class AbstractNode():
 	def SendRequestToNode(self, uuid, command, payload):
 		self.SendRequest(uuid, "DIRECT", command, payload, {})
 
-	def AppendDeviceChangeListNode(self, payload):
-		self.DeviceChangeListLock.acquire()
-		try:
-			for item in self.OnDeviceChangeList:
-				if item["type"] == "1":
-					if item["payload"]["uuid"] == payload["uuid"]:
-						self.DeviceChangeListLock.release()
-						return
-
-			self.OnDeviceChangeList.append({
-				'ts':		time.time(),
-				'payload':	payload,
-				'type': "1"
-			})
-		except Exception as e:
-			self.LogException("[AppendDeviceChangeListNode]",e,3)
-		self.DeviceChangeListLock.release()
-
-	def AppendDeviceChangeListLocal(self, payload):
-		self.DeviceChangeListLock.acquire()
-		try:
-			for item in self.OnDeviceChangeList:
-				if item["payload"]["ws_id"] == payload["ws_id"]:
-					self.DeviceChangeListLock.release()
-					return
-
-			self.OnDeviceChangeList.append({
-				'ts':		time.time(),
-				'payload':	payload,
-				'type': "3"
-			})
-		except Exception as e:
-			self.LogException("[AppendDeviceChangeListLocal]",e,3)
-		self.DeviceChangeListLock.release()
-	
-	def AppendDeviceChangeListGlobal(self, payload):
-		self.DeviceChangeListLock.acquire()
-		try:
-			for item in self.OnDeviceChangeList:
-				if item["type"] == "2":
-					if item["payload"]["webface_indexer"] == payload["webface_indexer"]:
-						self.DeviceChangeListLock.release()
-						return
-
-			self.OnDeviceChangeList.append({
-				'ts':		time.time(),
-				'payload':	payload,
-				'type': "2"
-			})
-		except Exception as e:
-			self.LogException("[AppendDeviceChangeListGlobal]",e,3)
-		self.DeviceChangeListLock.release()
-	
-	def RemoveDeviceChangeListNode(self, uuid):
-		# Context of geventwebsocket (PAY ATTENTION)
-		self.DeviceChangeListLock.acquire()
-		try:
-			for item in self.OnDeviceChangeList:
-				if item["type"] == "1":
-					item_payload = item["payload"]
-					if item_payload["uuid"] == uuid:
-						self.OnDeviceChangeList.remove(item)
-						self.LogMSG("({classname})# Unregistered WEBFACE local session ({uuid}) ({length}))".format(classname=self.ClassName,
-							uuid=str(uuid),
-							length=len(self.OnDeviceChangeList)),5)
-						self.DeviceChangeListLock.release()
-						return True
-		except Exception as e:
-			self.LogException("[RemoveDeviceChangeListNode]",e,3)
-		self.DeviceChangeListLock.release()
-		return False
-
-	def RemoveDeviceChangeListLocal(self, id):
-		# Context of geventwebsocket (PAY ATTENTION)
-		self.DeviceChangeListLock.acquire()
-		try:
-			is_removed = False
-			for i in xrange(len(self.OnDeviceChangeList) - 1, -1, -1):
-				item = self.OnDeviceChangeList[i]
-				if item["type"] == "3":
-					item_payload = item["payload"]
-					if "ws_id" in item_payload:
-						if item_payload["ws_id"] == id:
-							del self.OnDeviceChangeList[i]
-							self.LogMSG("({classname})# Unregistered WEBFACE local session ({ws_id}) ({length}))".format(classname=self.ClassName,
-									ws_id=str(id),
-									length=len(self.OnDeviceChangeList)),5)
-							is_removed = True
-		except Exception as e:
-			self.LogException("[RemoveDeviceChangeListLocal]",e,3)
-		self.DeviceChangeListLock.release()
-		return is_removed
-	
-	def RemoveDeviceChangeListGlobal(self, id):
-		self.DeviceChangeListLock.acquire()
-		for item in self.OnDeviceChangeList:
-			if item["type"] == "2":
-				item_payload = item["payload"]
-				if "webface_indexer" in item_payload:
-					if item_payload["webface_indexer"] == id:
-						self.OnDeviceChangeList.remove(item)
-						self.LogMSG("({classname})# Unregistered WEBFACE global session ({webface_indexer}))".format(classname=self.ClassName,
-								webface_indexer=str(id)),5)
-						self.DeviceChangeListLock.release()
-						return True
-		self.DeviceChangeListLock.release()
-		return False
-
+	''' 
+		Description: 	N/A
+		Return: 		N/A
+	'''	
 	def UnRegisterOnNodeChangeEvent(self, uuid):
+		self.LogMSG("({classname})# [UnRegisterOnNodeChangeEvent] {0}".format(uuid,classname=self.ClassName),5)
 		self.SendRequestToNode(uuid, "unregister_on_node_change", {
-				'item_type': 1,
-				'uuid':	self.UUID
-			})
+			'item_type': 1,
+			'uuid':	self.UUID
+		})
 
+	''' 
+		Description: 	N/A
+		Return: 		N/A
+	'''	
 	def RegisterOnNodeChangeEvent(self, uuid):
 		self.LogMSG("({classname})# [RegisterOnNodeChangeEvent] {0}".format(uuid,classname=self.ClassName),5)
 		self.SendRequestToNode(uuid, "register_on_node_change", {
-				'item_type': 1,
-				'uuid':	self.UUID
-			})
+			'item_type': 1,
+			'uuid':	self.UUID
+		})
 	
+	''' 
+		Description: 	N/A
+		Return: 		N/A
+	'''	
+	def RegisterItem(self, payload):
+		self.DeviceChangeListLock.acquire()
+		try:
+			key = hashlib.md5("{0}".format(json.dumps(payload))).hexdigest()
+			# Chek if this devicealready registered
+			for item in self.OnDeviceChangeList:
+				if key == item["key"]:
+					self.DeviceChangeListLock.release()
+					return False
+			self.LogMSG("({classname})# [RegisterItem] {0} {1}".format(key, payload,classname=self.ClassName),5)
+			# Append new registertion item
+			self.OnDeviceChangeList.append({
+				'ts':		time.time(),
+				'payload':	payload,
+				'type': 	payload["item_type"],
+				'key':		key
+			})
+		except Exception as e:
+			self.LogException("[RegisterItem]",e,3)
+		self.DeviceChangeListLock.release()
+		return True
+
+	''' 
+		Description: 	N/A
+		Return: 		N/A
+	'''		
+	def UnregisterItem(self, payload):
+		self.DeviceChangeListLock.acquire()
+		try:
+			key = hashlib.md5("{0}".format(json.dumps(payload))).hexdigest()
+			# Chek if this devicealready registered
+			for item in self.OnDeviceChangeList:
+				self.LogMSG("({classname})# [UnregisterItem] [{0} {1}] ? [{2} {3}]".format(key,payload,item["key"],item["payload"],classname=self.ClassName),5)
+				if key == item["key"]:
+					self.LogMSG("({classname})# [UnregisterItem] {0}".format(payload,classname=self.ClassName),5)
+					# Remove new registertion item
+					self.OnDeviceChangeList.remove(item)
+					self.DeviceChangeListLock.release()
+					return True
+		except Exception as e:
+			self.LogException("[RegisterItem]",e,3)
+		self.DeviceChangeListLock.release()
+		return False
+
+	''' 
+		Description: 	N/A
+		Return: 		N/A
+	'''		
 	def RegisterOnNodeChangeRequestHandler(self, sock, packet):
-		self.LogMSG("({classname})# [RegisterOnNodeChangeRequestHandler] {0}".format(packet,classname=self.ClassName),5)
+		self.LogMSG("({classname})# [RegisterOnNodeChangeRequestHandler]".format(classname=self.ClassName),5)
 		payload 	= self.BasicProtocol.GetPayloadFromJson(packet)
 		item_type 	= payload["item_type"]
 
-		# TODO - HASH strigified payload and check if it is already in list
-
-		# Node
-		if item_type == 1:
-			self.AppendDeviceChangeListNode(payload)
+		# Webface
+		if item_type in [2,3]:
+			pipe = packet["additional"]["pipe"]
+			payload["pipe"] = pipe
+			if pipe == "GATEWAY":
+				piggy = self.BasicProtocol.GetPiggybagFromJson(packet)
+				payload["webface_indexer"] = piggy["webface_indexer"]
+			elif pipe == "LOCAL_WS":
+				payload["ws_id"] = packet["additional"]["ws_id"]
+		
+		if self.RegisterItem(payload) is True:
 			return self.BasicProtocol.BuildResponse(packet, {
 				'registered': "OK",
 				'type': self.Type
 			})
-		# Webface
-		elif item_type in [2,3]:
-			piggy = self.BasicProtocol.GetPiggybagFromJson(packet)
-			payload["pipe"] = packet["additional"]["pipe"]
-			if packet["additional"]["pipe"] == "GATEWAY":
-				payload["webface_indexer"] = piggy["webface_indexer"]
-				self.AppendDeviceChangeListGlobal(payload)
-			elif packet["additional"]["pipe"] == "LOCAL_WS":
-				payload["ws_id"] = packet["additional"]["ws_id"]
-				self.AppendDeviceChangeListLocal(payload)
-			
+		else:
 			return self.BasicProtocol.BuildResponse(packet, {
-				'registered': "OK"
+				'registered': "FAILED"
 			})
-		
-		return self.BasicProtocol.BuildResponse(packet, {
-			'registered': "FAILED"
-		})
-	
-	# Overwrite
-	def RegisterOnNodeChangeResponseHandler(self, sock, packet):
-		self.LogMSG("({classname})# [RegisterOnNodeChangeResponseHandler]".format(classname=self.ClassName),5)
-	
-	def UnregisterOnNodeChangeRequestHandler(self, sock, packet):
-		self.LogMSG("({classname})# [UnregisterOnNodeChangeRequestHandler]".format(classname=self.ClassName),5)
-		payload 		= self.BasicProtocol.GetPayloadFromJson(packet)
-		item_type		= payload["item_type"]
 
-		# Node
-		if item_type == 1:
-			uuid = payload["uuid"]
-			self.RemoveDeviceChangeListNode(uuid)
-			return self.BasicProtocol.BuildResponse(packet, {
-				'unregistered': "OK",
-				'type': self.Type
-			})
+	''' 
+		Description: 	N/A
+		Return: 		N/A
+	'''		
+	def UnregisterOnNodeChangeRequestHandler(self, sock, packet):
+		self.LogMSG("({classname})# [UnregisterOnNodeChangeRequestHandler] {0}".format(packet,classname=self.ClassName),5)
+		payload 	= self.BasicProtocol.GetPayloadFromJson(packet)
+		item_type 	= payload["item_type"]
+
 		# Webface
-		elif item_type == 2:
-			if packet["additional"]["pipe"] == "GATEWAY":
-				webface_indexer = payload["webface_indexer"]
-				if self.UnregisterGlobalWS(webface_indexer) is True:
-					return self.BasicProtocol.BuildResponse(packet, {
-						'unregistered': "OK"
-					})
-			elif packet["additional"]["pipe"] == "LOCAL_WS":
-				ws_id = packet["additional"]["ws_id"]
-				if self.UnregisterLocalWS(ws_id) is True:
-					return self.BasicProtocol.BuildResponse(packet, {
-						'unregistered': "OK"
-					})
+		if item_type in [2,3]:
+			pipe = packet["additional"]["pipe"]
+			payload["pipe"] = pipe
+			if pipe == "GATEWAY":
+				piggy = self.BasicProtocol.GetPiggybagFromJson(packet)
+				payload["webface_indexer"] = piggy["webface_indexer"]
+			elif pipe == "LOCAL_WS":
+				payload["ws_id"] = packet["additional"]["ws_id"]
 		
-		return self.BasicProtocol.BuildResponse(packet, {
-			'unregistered': "FAILED"
-		})
-	
+		if self.UnregisterItem(payload) is True:
+			return self.BasicProtocol.BuildResponse(packet, {
+				'unregistered': "OK"
+			})
+		else:
+			return self.BasicProtocol.BuildResponse(packet, {
+				'unregistered': "FAILED"
+			})
+
+	''' 
+		Description: 	N/A
+		Return: 		N/A
+	'''		
 	def UnregisterOnNodeChangeResponseHandler(self, sock, packet):
 		self.LogMSG("({classname})# [UnregisterOnNodeChangeResponseHandler]".format(classname=self.ClassName),5)
-	
-	def UnregisterLocalWS(self, id):
-		return self.RemoveDeviceChangeListLocal(id)
-
-	def UnregisterGlobalWS(self, id):
-		return self.RemoveDeviceChangeListGlobal(id)
 
 	''' 
 		Description: 	Get file handler [REQUEST]

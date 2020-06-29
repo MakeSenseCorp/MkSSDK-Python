@@ -282,33 +282,6 @@ class SlaveNode(MkSAbstractNode.AbstractNode):
 			self.SocketServer.Send(self.LocalMasterConnection.Socket, packet)
 
 	''' 
-		Description: 	Emit event to webface via local websocket.
-		Return: 		N/A
-	'''	
-	def EmitOnNodeChange_WebfaceLocalWebsocket(self, payload, data):
-		ws_id = payload["ws_id"]
-		message = self.BasicProtocol.BuildRequest("DIRECT", "WEBFACE", self.UUID, "on_node_change", data, {
-			'identifier':-1
-		})
-		if self.LocalWSManager is not None:
-			self.LocalWSManager.Send(ws_id, message)
-	
-	''' 
-		Description: 	Emit event to webface via gateway.
-		Return: 		N/A
-	'''	
-	def EmitOnNodeChange_WebfaceGateway(self, payload, data):
-		webface_indexer = payload["webface_indexer"]
-		message = self.BasicProtocol.BuildRequest("DIRECT", "WEBFACE", self.UUID, "on_node_change", data, {
-			'identifier':-1,
-			'webface_indexer':webface_indexer
-		})
-
-		packet  = self.BasicProtocol.AppendMagic(message)
-		if self.LocalMasterConnection.Socket is not None:
-			self.SocketServer.Send(self.LocalMasterConnection.Socket, packet)
-
-	''' 
 		Description: 	Emit event to webface.
 		Return: 		N/A
 	'''		
@@ -317,24 +290,41 @@ class SlaveNode(MkSAbstractNode.AbstractNode):
 		self.DeviceChangeListLock.acquire()
 		# Itterate over registered nodes.
 		for item in self.OnDeviceChangeList:
-			payload 	= item["payload"]
-			item_type	= payload["item_type"] # (1 - Node, 2 - Webface)
+			payload 		= item["payload"]
+			item_type		= payload["item_type"] # (1 - Node, 2 - Webface)
+			destination		= ""
+			event_payload	= {}
 
 			# Node
 			if item_type == 1:
-				uuid = payload["uuid"]
-				message = self.BasicProtocol.BuildRequest("DIRECT", uuid, self.UUID, "on_node_change", data, {})
+				destination = payload["uuid"]
+			# Webface
+			elif item_type in [2,3]:
+				destination = "WEBFACE"
+				# The connected socket is via gateway.
+				if payload["pipe"] == "GATEWAY":
+					event_payload = {
+						'identifier':-1,
+						'webface_indexer':payload["webface_indexer"]
+					}
+				# The connected socket is via local websocket.
+				elif payload["pipe"] == "LOCAL_WS":
+					event_payload = {
+						'identifier':-1
+					}
+			
+			# Build message
+			message = self.BasicProtocol.BuildRequest("DIRECT", destination, self.UUID, "on_node_change", data, event_payload)
+
+			# Send via Master
+			if item_type in [1,2]:
 				packet  = self.BasicProtocol.AppendMagic(message)
 				if self.LocalMasterConnection is not None:
 					self.SocketServer.Send(self.LocalMasterConnection.Socket, packet)
-			# Webface
-			elif item_type == 2:
-				# The connected socket is via gateway.
-				if payload["pipe"] == "GATEWAY":
-					self.EmitOnNodeChange_WebfaceGateway(payload, data)
-				# The connected socket is via local websocket.
-				elif payload["pipe"] == "LOCAL_WS":
-					self.EmitOnNodeChange_WebfaceLocalWebsocket(payload, data)
+			# Local WebSocket Server
+			elif item_type == 3:
+				if self.LocalWSManager is not None:
+					self.LocalWSManager.Send(payload["ws_id"], message)
 			else:
 				self.LogMSG("({classname})# [EmitOnNodeChange] Unsupported item type".format(classname=self.ClassName),3)
 		self.DeviceChangeListLock.release()

@@ -495,7 +495,11 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 						self.SocketServer.SendData(node.IP, node.Port, message)
 			
 			# Remove from registration list
-			self.RemoveDeviceChangeListNode(uuid)
+			# self.RemoveDeviceChangeListNode(uuid)
+			self.UnregisterItem({
+				'item_type': 1,
+				'uuid':	uuid
+			})
 			# Update service
 			node_type = int(n_type)
 			if node_type in self.Services:
