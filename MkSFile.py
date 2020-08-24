@@ -17,6 +17,13 @@ class File ():
 		array = bytearray(data)
 		file.write(array)
 		file.close()
+	
+	def AppendArray (self, filename, data):
+		print(filename)
+		file = open(filename, "a")
+		array = bytearray(data)
+		file.write(array)
+		file.close()
 
 	def Append (self, filename, data):
 		file = open(filename, "a")
