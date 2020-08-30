@@ -68,6 +68,10 @@ class Manager():
 		self.Uploaders						= {}
 		self.UploaderKeys 					= []
 		self.UploaderNextIndex				= 0
+		self.Path 							= "packages"
+	
+	def SetUploadPath(self, path):
+		self.Path = path
 
 	def Worker(self):
 		while(self.ExitFlag):
@@ -77,7 +81,7 @@ class Manager():
 			if uploader is not None:
 				if uploader.UploadDone is True:
 					data, length = uploader.GetFileRaw()
-					self.Ctx.File.SaveArray(os.path.join("packages",uploader.Name), data)
+					self.Ctx.File.SaveArray(os.path.join(self.Path,uploader.Name), data)
 					self.Ctx.Node.EmitOnNodeChange({
 						'event': "upload_progress",
 						'data': {
@@ -142,7 +146,7 @@ class Manager():
 			'event': "upload_progress",
 			'data': {
 				"status": "inprogress",
-				"precentage": "{0}%".format(index/upload.LastFragmentNumber*100),
+				"precentage": "{0}%".format(int(float(index)/float(upload.LastFragmentNumber)*100.0)),
 				"message": "Upload package ..."
 			}
 		})
