@@ -24,6 +24,7 @@ class Manager():
     
     def Stop(self):
         self.WorkerStart = False
+        self.QueueItem(None)
     
     def QueueItem(self, item):
         if self.WorkerStart is True:
@@ -38,7 +39,7 @@ class Manager():
         while self.WorkerStart is True:
             try:
                 item = self.LocalQueue.get(block=True,timeout=None)
-                if self.HandlerCallback is not None:
+                if self.HandlerCallback is not None and item is not None:
                     self.HandlerCallback(item)
             except Exception as e:
                 print("({classname})# ERROR - [Worker] {0} {error}".format(item,classname=self.ClassName,error=str(e)))

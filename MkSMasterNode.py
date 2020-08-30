@@ -44,6 +44,7 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 		self.InstalledNodes 					= []
 		self.IsMaster 							= True
 		self.IsLocalUIEnabled					= False
+		self.Network							= None
 		# Debug & Logging
 		self.DebugMode							= True
 		# Node connection to WS information
@@ -90,6 +91,54 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 		if "log_to_file" in self.System:
 			if self.System["log_to_file"] == "True":
 				self.Logger.EnableLogger()
+	
+	''' 
+		Description: 	Emit event to webface.
+		Return: 		N/A
+	'''		
+	def EmitOnNodeChange(self, data):
+		self.LogMSG("({classname})# [EmitOnNodeChange]".format(classname=self.ClassName),1)
+		self.DeviceChangeListLock.acquire()
+		# Itterate over registered nodes.
+		for item in self.OnDeviceChangeList:
+			payload 		= item["payload"]
+			item_type		= payload["item_type"] # (1 - Node, 2 - Webface)
+			destination		= ""
+			event_payload	= {}
+
+			# Node
+			if item_type == 1:
+				destination = payload["uuid"]
+			# Webface
+			elif item_type in [2,3]:
+				destination = "WEBFACE"
+				# The connected socket is via gateway.
+				if payload["pipe"] == "GATEWAY":
+					event_payload = {
+						'identifier':-1,
+						'webface_indexer':payload["webface_indexer"]
+					}
+				# The connected socket is via local websocket.
+				elif payload["pipe"] == "LOCAL_WS":
+					event_payload = {
+						'identifier':-1
+					}
+			
+			# Build message
+			message = self.BasicProtocol.BuildRequest("DIRECT", destination, self.UUID, "on_node_change", data, event_payload)
+
+			# Send via Master
+			if item_type in [1,2]:
+				if self.Network is not None:
+					self.SendPacketGateway(message)
+			# Local WebSocket Server
+			elif item_type == 3:
+				if self.LocalWSManager is not None:
+					self.LocalWSManager.Send(payload["ws_id"], message)
+			else:
+				self.LogMSG("({classname})# [EmitOnNodeChange] Unsupported item type".format(classname=self.ClassName),3)
+		self.DeviceChangeListLock.release()
+
 
 	''' 
 		Description: 	State [IDLE]
