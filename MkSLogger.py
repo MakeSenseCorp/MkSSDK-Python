@@ -32,7 +32,9 @@ class Logger():
             "2": "CRITICAL",
             "3": "ERROR",
             "4": "WARNNING",
-            "5": "INFO"  
+            "5": "INFO",
+            "6": "FRIENDLY",
+            "7": "NONE"
         }
 
         self.Queue.Start()
