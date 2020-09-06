@@ -13,6 +13,7 @@ import argparse
 import logging
 import Queue
 import hashlib
+import xml.etree.ElementTree as ET
 
 import MkSGlobals
 from mksdk import MkSFile
@@ -101,6 +102,7 @@ class AbstractNode():
 			'get_node_info': 						self.GetNodeInfoRequestHandler,
 			'get_node_status': 						self.GetNodeStatusRequestHandler,
 			'get_file': 							self.GetFileRequestHandler,
+			'get_resource':							self.GetResourceRequestHandler,
 			'register_on_node_change':				self.RegisterOnNodeChangeRequestHandler,
 			'unregister_on_node_change':			self.UnregisterOnNodeChangeRequestHandler,
 			'find_node':							self.FindNodeRequestHandler,
@@ -781,6 +783,35 @@ class AbstractNode():
 	def UnregisterOnNodeChangeResponseHandler(self, sock, packet):
 		self.LogMSG("({classname})# [UnregisterOnNodeChangeResponseHandler]".format(classname=self.ClassName),5)
 
+	def GetResourceRequestHandler(self, sock, packet):
+		self.LogMSG("({classname})# [GetResourceRequestHandler]".format(classname=self.ClassName),6)
+		objFile 		= MkSFile.File()
+		payload 		= self.BasicProtocol.GetPayloadFromJson(packet)
+		machine_type 	= "pc"
+		folder 			= {
+							'config': 		'config',
+							'app': 			'app',
+							'thumbnail': 	'thumbnail'
+		}
+
+		tag_id = payload["id"]
+		src = payload["src"]
+		tag = payload["tag"]
+		ui_type = payload["ui_type"]
+		path 	= os.path.join(".","ui",machine_type,folder[ui_type],src)
+		self.LogMSG("({classname})# [GetResourceRequestHandler] {0}".format(path, classname=self.ClassName),6)
+		content = objFile.Load(path)
+
+		if tag == "img":
+			content = "data:image/jpeg;base64," + content.encode('base64')
+
+		return self.BasicProtocol.BuildResponse(packet, {
+								'id': tag_id,
+								'tag': tag,
+								'src': src,
+								'content': content.encode('hex')
+		})
+
 	''' 
 		Description: 	Get file handler [REQUEST]
 		Return: 		N/A
@@ -806,6 +837,25 @@ class AbstractNode():
 		content = objFile.Load(path)
 		
 		if ("html" in fileType):
+			# Create resource section (load script, img,... via mks API)
+			resources = ""
+			html_rows = content.split("\n")
+			for row in html_rows:
+				if 'data-obj="mks"' in row:
+					xml = "<root>{0}</root>\n".format(row[:-1])
+					DOM = ET.fromstring(xml)
+					for element in DOM.iter():
+						if element.get('data-obj') is not None:
+							if element.get('data-obj') == "mks":
+								if element.tag == "script":
+									resources += "node.API.SendCustomCommand(NodeUUID, 'get_resource', { 'id':'', 'tag':'" + element.tag + "', 'src':'" + element.get('src') + "', 'ui_type': 'config' }, function(res) { var payload = res.data.payload; ExecuteJS(ConvertHEXtoString(payload.content)); });"
+								elif element.tag == "img":
+									tag_id = element.get('id')
+									resources += "node.API.SendCustomCommand(NodeUUID, 'get_resource', { 'id':'" + tag_id + "', 'tag':'" + element.tag + "', 'src':'" + element.get('src') + "', 'ui_type': 'config' }, function(res) { var payload = res.data.payload; document.getElementById(payload.id).src = ConvertHEXtoString(payload.content); });"
+			
+			# Append resource section
+			content = content.replace("[RESOURCES]", resources)
+			# Replace UUID
 			content = content.replace("[NODE_UUID]", self.UUID)
 			if stamping is None:
 				self.LogMSG("({classname})# [ERROR] Missing STAMPING in packet ...".format(classname=self.ClassName),3)
