@@ -144,6 +144,12 @@ class AbstractNode():
 			'enabled': 0,
 			'registered': 0
 		}
+		# FS Area
+		self.UITypes = {
+			'config': 		'config',
+			'app': 			'app',
+			'thumbnail': 	'thumbnail'
+		}
 
 		parser = argparse.ArgumentParser(description='Execution module called Node')
 		parser.add_argument('--path', action='store', dest='pwd', help='Root folder of a Node')
@@ -785,20 +791,19 @@ class AbstractNode():
 
 	def GetResourceRequestHandler(self, sock, packet):
 		self.LogMSG("({classname})# [GetResourceRequestHandler]".format(classname=self.ClassName),6)
-		objFile 		= MkSFile.File()
-		payload 		= self.BasicProtocol.GetPayloadFromJson(packet)
-		machine_type 	= "pc"
-		folder 			= {
-							'config': 		'config',
-							'app': 			'app',
-							'thumbnail': 	'thumbnail'
-		}
+		objFile = MkSFile.File()
+		payload = self.BasicProtocol.GetPayloadFromJson(packet)
+		
+		if "machine_type" not in payload:
+			machine_type = "pc"
+		else:
+			machine_type = payload["machine_type"]
 
-		tag_id = payload["id"]
-		src = payload["src"]
-		tag = payload["tag"]
+		tag_id  = payload["id"]
+		src     = payload["src"]
+		tag     = payload["tag"]
 		ui_type = payload["ui_type"]
-		path 	= os.path.join(".","ui",machine_type,folder[ui_type],src)
+		path 	= os.path.join(".","ui",machine_type,self.UITypes[ui_type],src)
 		self.LogMSG("({classname})# [GetResourceRequestHandler] {0}".format(path, classname=self.ClassName),6)
 		content = objFile.Load(path)
 
@@ -819,21 +824,19 @@ class AbstractNode():
 	def GetFileRequestHandler(self, sock, packet):
 		objFile 		= MkSFile.File()
 		payload 		= self.BasicProtocol.GetPayloadFromJson(packet)
-		uiType 			= payload["ui_type"]
+		uiType 			= payload["ui_type"] # Base UI type
 		fileType 		= payload["file_type"]
 		fileName 		= payload["file_name"]
 		client_type 	= packet["additional"]["client_type"]
 		stamping 		= packet["stamping"]
 		# TODO - Node should get type of machine the node ui running on.
-		machine_type 	= "pc"
+		
+		if "machine_type" not in payload:
+			machine_type = "pc"
+		else:
+			machine_type = payload["machine_type"]
 
-		folder = {
-			'config': 		'config',
-			'app': 			'app',
-			'thumbnail': 	'thumbnail'
-		}
-
-		path 	= os.path.join(".","ui",machine_type,folder[uiType],"ui." + fileType)
+		path 	= os.path.join(".","ui",machine_type,self.UITypes[uiType],"ui." + fileType)
 		content = objFile.Load(path)
 		
 		if ("html" in fileType):
@@ -848,10 +851,12 @@ class AbstractNode():
 						if element.get('data-obj') is not None:
 							if element.get('data-obj') == "mks":
 								if element.tag == "script":
-									resources += "node.API.SendCustomCommand(NodeUUID, 'get_resource', { 'id':'', 'tag':'" + element.tag + "', 'src':'" + element.get('src') + "', 'ui_type': 'config' }, function(res) { var payload = res.data.payload; ExecuteJS(ConvertHEXtoString(payload.content)); });"
+									resources += "node.API.SendCustomCommand(NodeUUID, 'get_resource', { 'id':'', 'tag':'" + element.tag + "', 'src':'" + element.get('src') + "', 'ui_type': '" + uiType + "' }, function(res) { var payload = res.data.payload; MkSGlobal.ExecuteJS(MkSGlobal.ConvertHEXtoString(payload.content)); });"
+								elif element.tag == "css":
+									resources += "node.API.SendCustomCommand(NodeUUID, 'get_resource', { 'id':'', 'tag':'" + element.tag + "', 'src':'" + element.get('src') + "', 'ui_type': '" + uiType + "' }, function(res) { var payload = res.data.payload; MkSGlobal.AppendCSS(MkSGlobal.ConvertHEXtoString(payload.content)); });"
 								elif element.tag == "img":
 									tag_id = element.get('id')
-									resources += "node.API.SendCustomCommand(NodeUUID, 'get_resource', { 'id':'" + tag_id + "', 'tag':'" + element.tag + "', 'src':'" + element.get('src') + "', 'ui_type': 'config' }, function(res) { var payload = res.data.payload; document.getElementById(payload.id).src = ConvertHEXtoString(payload.content); });"
+									resources += "node.API.SendCustomCommand(NodeUUID, 'get_resource', { 'id':'" + tag_id + "', 'tag':'" + element.tag + "', 'src':'" + element.get('src') + "', 'ui_type': '" + uiType + "' }, function(res) { var payload = res.data.payload; document.getElementById(payload.id).src = MkSGlobal.ConvertHEXtoString(payload.content); });"
 			
 			# Append resource section
 			content = content.replace("[RESOURCES]", resources)
