@@ -41,10 +41,10 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 		# Members
 		self.PortsForClients					= [item for item in range(1,33)]
 		self.MasterVersion						= "1.0.1"
-		self.InstalledNodes 					= []
 		self.IsMaster 							= True
 		self.IsLocalUIEnabled					= False
 		self.Network							= None
+		self.ExternalMasterList					= {}
 		# Debug & Logging
 		self.DebugMode							= True
 		# Node connection to WS information
@@ -138,7 +138,6 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 			else:
 				self.LogMSG("({classname})# [EmitOnNodeChange] Unsupported item type".format(classname=self.ClassName),3)
 		self.DeviceChangeListLock.release()
-
 
 	''' 
 		Description: 	State [IDLE]
@@ -342,6 +341,22 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 			self.LogMSG("({classname})# HandleInternalReqest NODE NOT FOUND".format(classname=self.ClassName),4)
 			# Need to look at other masters list.
 			pass
+
+	def DataInputExternalHandler(self, conn, packet):
+		try:
+			destination = self.BasicProtocol.GetDestinationFromJson(packet)
+			# Is destination located in my list.
+			conn = self.GetNodeByUUID(destination)
+			if conn is not None:
+				self.LogMSG("({classname})# [REDIRECTING PACKET] Sending directly to local client".format(classname=self.ClassName), 5)
+				message = self.BasicProtocol.AppendMagic(raw_data)
+				self.SocketServer.Send(conn.Socket, message)
+			else:	
+				if self.Network is not None:
+					self.LogMSG("({classname})# This massage is external (MOSTLY MASTER)".format(classname=self.ClassName), 5)
+					self.SendPacketGateway(raw_data)
+		except Exception as e:
+			self.LogException("[DataSocketInputHandler #5]",e,3)
 
 	''' 
 		Description: 	[HANDLERS]

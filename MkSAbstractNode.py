@@ -248,6 +248,10 @@ class AbstractNode():
 	# Overwrite
 	def RegisterOnNodeChangeResponseHandler(self, sock, packet):
 		self.LogMSG("({classname})# [RegisterOnNodeChangeResponseHandler]".format(classname=self.ClassName),5)
+	
+	# Overload
+	def DataInputExternalHandler(self, conn, packet):
+		pass
 
 	''' 
 		Description:	Connect node (MASTER) over socket, add connection to connections list
@@ -441,19 +445,7 @@ class AbstractNode():
 								pass
 						else:
 							# This massage is external (MOSTLY MASTER)
-							try:
-								# Is destination located in my list.
-								conn = self.GetNodeByUUID(destination)
-								if conn is not None:
-									self.LogMSG("({classname})# [REDIRECTING PACKET] Sending directly to local client".format(classname=self.ClassName), 5)
-									message = self.BasicProtocol.AppendMagic(raw_data)
-									self.SocketServer.Send(conn.Socket, message)
-								else:	
-									if self.Network is not None:
-										self.LogMSG("({classname})# This massage is external (MOSTLY MASTER)".format(classname=self.ClassName), 5)
-										self.SendPacketGateway(raw_data)
-							except Exception as e:
-								self.LogException("[DataSocketInputHandler #5]",e,3)
+							self.DataInputExternalHandler(connection, packet)
 					else:
 						pass
 			else:
