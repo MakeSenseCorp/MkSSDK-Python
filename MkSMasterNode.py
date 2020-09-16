@@ -70,6 +70,7 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 		# Handlers
 		self.NodeRequestHandlers['get_port'] 		= self.GetPortRequestHandler
 		self.NodeRequestHandlers['get_local_nodes'] = self.GetLocalNodesRequestHandler
+		self.NodeRequestHandlers['on_node_change']	= self.OnNodeChangeRequestHandler
 		# Callbacks
 		self.GatewayDataArrivedCallback 		= None
 		self.GatewayConnectedCallback 			= None
@@ -342,16 +343,22 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 			# Need to look at other masters list.
 			pass
 
-	def DataInputExternalHandler(self, conn, packet):
+	''' 
+		Description: 	This handler handle packets arrvived to/from nodes/gateway.
+		Return: 		N/A
+	'''	
+	def LocalSocketDataInputExternalHandler(self, conn, packet, raw_data):
 		try:
 			destination = self.BasicProtocol.GetDestinationFromJson(packet)
 			# Is destination located in my list.
 			conn = self.GetNodeByUUID(destination)
-			if conn is not None:
+			if conn is not None: # Redirect to slave located on this machine
 				self.LogMSG("({classname})# [REDIRECTING PACKET] Sending directly to local client".format(classname=self.ClassName), 5)
 				message = self.BasicProtocol.AppendMagic(raw_data)
 				self.SocketServer.Send(conn.Socket, message)
-			else:	
+			elif:
+				pass # Destination might be in other master
+			else: # This message not nor on this machine neither on this local network, send to Gateway.
 				if self.Network is not None:
 					self.LogMSG("({classname})# This massage is external (MOSTLY MASTER)".format(classname=self.ClassName), 5)
 					self.SendPacketGateway(raw_data)
@@ -371,6 +378,16 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 		payload["ip"]				= self.MyLocalIP
 		return self.BasicProtocol.BuildResponse(packet, payload)
 	
+	''' 
+		Description: 	Event filter handler
+		Return: 		None (application layer will return)
+	'''	
+	def OnNodeChangeRequestHandler(self, sock, packet):
+		payload = self.BasicProtocol.GetPayloadFromJson(packet)
+		if ('online_devices' in payload["event"]):
+			pass
+		return ""
+
 	''' 
 		Description: 	Handler [get_node_info] RESPONSE
 		Return: 		N/A
@@ -403,68 +420,72 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 		if sock is None:
 			return ""
 		
-		node_info = self.BasicProtocol.GetPayloadFromJson(packet)
-		nodetype 	= node_info['type']
-		uuid 		= node_info['uuid']
-		name 		= node_info['name']
+		try:
+			node_info = self.BasicProtocol.GetPayloadFromJson(packet)
+			nodetype 	= node_info['type']
+			uuid 		= node_info['uuid']
+			name 		= node_info['name']
 
-		self.LogMSG("({classname})# [GET_PORT] {uuid} {name} {nodetype}".format(
-						classname=self.ClassName,
-						uuid=uuid,
-						name=name,
-						nodetype=nodetype),5)
+			self.LogMSG("({classname})# [GET_PORT] {uuid} {name} {nodetype}".format(
+							classname=self.ClassName,
+							uuid=uuid,
+							name=name,
+							nodetype=nodetype),5)
 
-		# Do we have available port.
-		if self.PortsForClients:
-			conn = self.SocketServer.GetConnectionBySock(sock)
-			if conn.Obj["listener_port"] == 0:
-				# New request
-				port = 10000 + self.PortsForClients.pop()
-				# Update node
-				conn.Obj["type"] 			= nodetype
-				conn.Obj["listener_port"] 	= port
-				conn.Obj["uuid"] 			= uuid
-				conn.Obj["name"] 			= name
-				conn.Obj["status"] 			= int(conn.Obj["status"]) | 4
-				conn.Obj["is_slave"]		= 1
+			# Do we have available port.
+			if self.PortsForClients:
+				conn = self.SocketServer.GetConnectionBySock(sock)
+				if conn.Obj["listener_port"] == 0:
+					# New request
+					port = 10000 + self.PortsForClients.pop()
+					# Update node
+					conn.Obj["type"] 			= nodetype
+					conn.Obj["listener_port"] 	= port
+					conn.Obj["uuid"] 			= uuid
+					conn.Obj["name"] 			= name
+					conn.Obj["status"] 			= int(conn.Obj["status"]) | 4
+					conn.Obj["is_slave"]		= 1
 
-				# [TODO] Update installed node list (UI will be updated)
-				# [TODO] What will happen when slave node will try to get port when we are not connected to AWS?
+					# [TODO] Update installed node list (UI will be updated)
+					# [TODO] What will happen when slave node will try to get port when we are not connected to AWS?
 
-				# Send message to Gateway
-				payload = { 
-					'node': { 	
-						'ip':	str(conn.IP), 
-						'port':	port, 
-						'uuid':	uuid, 
-						'type':	nodetype,
-						'name':	name
-					} 
-				}
-				message = self.BasicProtocol.BuildRequest("MASTER", "GATEWAY", self.UUID, "node_connected", payload, {})
-				self.SendPacketGateway(message)
+					# Send message to Gateway
+					payload = { 
+						'node': { 	
+							'ip':	str(conn.IP), 
+							'port':	port, 
+							'uuid':	uuid, 
+							'type':	nodetype,
+							'name':	name
+						} 
+					}
+					message = self.BasicProtocol.BuildRequest("MASTER", "GATEWAY", self.UUID, "node_connected", payload, {})
+					self.SendPacketGateway(message)
 
-				# Send message (master_append_node) to all nodes.
-				connection_map = self.SocketServer.GetConnections()
-				for key in connection_map:
-					item = connection_map[key]
-					if item.Socket != self.SocketServer.GetListenerSocket():
-						message = self.BasicProtocol.BuildMessage("response", "DIRECT", item.Obj["uuid"], self.UUID, "master_append_node", node_info, {})
-						message = self.BasicProtocol.AppendMagic(message)
-						self.SocketServer.SendData(item.IP, item.Port, message)
-				
-				# Store UUID if it is a service
-				node_type = int(nodetype)
-				if node_type in self.Services:
-					self.Services[node_type]["uuid"] 		= uuid
-					self.Services[node_type]["enabled"] 	= 1
+					# Send message (master_append_node) to all nodes.
+					connection_map = self.SocketServer.GetConnections()
+					for key in connection_map:
+						item = connection_map[key]
+						if item.Socket != self.SocketServer.GetListenerSocket():
+							message = self.BasicProtocol.BuildMessage("response", "DIRECT", item.Obj["uuid"], self.UUID, "master_append_node", node_info, {})
+							message = self.BasicProtocol.AppendMagic(message)
+							self.SocketServer.SendData(item.IP, item.Port, message)
+					
+					# Store UUID if it is a service
+					node_type = int(nodetype)
+					if node_type in self.Services:
+						self.Services[node_type]["uuid"] 		= uuid
+						self.Services[node_type]["enabled"] 	= 1
 
-				return self.BasicProtocol.BuildResponse(packet, { 'port': port })
+					return self.BasicProtocol.BuildResponse(packet, { 'port': port })
+				else:
+					# Already assigned port (resending)
+					return self.BasicProtocol.BuildResponse(packet, { 'port': conn.Obj["listener_port"] })
 			else:
-				# Already assigned port (resending)
-				return self.BasicProtocol.BuildResponse(packet, { 'port': conn.Obj["listener_port"] })
-		else:
-			# No available ports
+				# No available ports
+				return self.BasicProtocol.BuildResponse(packet, { 'port': 0 })
+		except Exception as e:
+			self.LogException("[NodeDisconnectedHandler]",e,3)
 			return self.BasicProtocol.BuildResponse(packet, { 'port': 0 })
 
 	''' 

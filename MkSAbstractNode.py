@@ -250,7 +250,7 @@ class AbstractNode():
 		self.LogMSG("({classname})# [RegisterOnNodeChangeResponseHandler]".format(classname=self.ClassName),5)
 	
 	# Overload
-	def DataInputExternalHandler(self, conn, packet):
+	def LocalSocketDataInputExternalHandler(self, conn, packet, raw_data):
 		pass
 
 	''' 
@@ -411,6 +411,9 @@ class AbstractNode():
 								if command in self.NodeRequestHandlers.keys():
 									try:
 										message = self.NodeRequestHandlers[command](sock, packet)
+										# This handler migth be also in application layer.
+										if self.OnApplicationRequestCallback is not None:
+											message = self.OnApplicationRequestCallback(sock, packet)
 										if message == "" or message is None:
 											return
 										packet = self.BasicProtocol.AppendMagic(message)
@@ -445,7 +448,7 @@ class AbstractNode():
 								pass
 						else:
 							# This massage is external (MOSTLY MASTER)
-							self.DataInputExternalHandler(connection, packet)
+							self.LocalSocketDataInputExternalHandler(connection, packet, raw_data)
 					else:
 						pass
 			else:
@@ -556,9 +559,6 @@ class AbstractNode():
 		if payload["tagging"]["cat_1"] == "service":
 			self.Services[payload["type"]]["uuid"] 		= payload["uuid"]
 			self.Services[payload["type"]]["enabled"] 	= 1
-		
-		# Send threw node info handler as well.
-		# self.GetNodeInfoResponseHandler(sock, packet)
 
 	''' 
 		Description: 	Find nodes according to type and categories handler. [REQUEST]
@@ -579,7 +579,12 @@ class AbstractNode():
 			return self.BasicProtocol.BuildResponse(packet, self.NodeInfo)
 		else:
 			return ""
-		
+	
+	''' 
+		Description: 	This is basicaly event for slave node - When master append a new node 
+						connection after providing port to new conneceted node. [RESPONSE]
+		Return: 		None
+	'''	
 	def MasterAppendNodeResponseHandler(self, sock, packet):
 		self.LogMSG("({classname})# [MasterAppendNodeResponseHandler]".format(classname=self.ClassName),5)
 		payload 	= self.BasicProtocol.GetPayloadFromJson(packet)
@@ -591,9 +596,12 @@ class AbstractNode():
 		if payload["tagging"]["cat_1"] == "service":
 			self.Services[payload["type"]]["uuid"] 		= payload["uuid"]
 			self.Services[payload["type"]]["enabled"] 	= 1
-		# Send threw node info handler as well.
-		# self.GetNodeInfoResponseHandler(sock, packet)
 
+	''' 
+		Description: 	This is basicaly event for slave node - When master remove a node
+						connection after upon its disconnection. [RESPONSE]
+		Return: 		None
+	'''	
 	def MasterRemoveNodeResponseHandler(self, sock, packet):
 		self.LogMSG("({classname})# [MasterRemoveNodeResponseHandler]".format(classname=self.ClassName),1)
 		payload 	= self.BasicProtocol.GetPayloadFromJson(packet)
@@ -606,7 +614,6 @@ class AbstractNode():
 		if payload["tagging"]["cat_1"] == "service":
 			self.Services[payload["type"]]["uuid"] 		= ""
 			self.Services[payload["type"]]["enabled"] 	= 0
-		# self.GetNodeInfoResponseHandler(sock, packet)
 	
 	def CloseLocalSocketRequestHandler(self, sock, packet):
 		payload	= self.BasicProtocol.GetPayloadFromJson(packet)
