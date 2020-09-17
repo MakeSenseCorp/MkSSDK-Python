@@ -33,6 +33,7 @@ from mksdk import MkSNetMachine
 from mksdk import MkSAbstractNode
 from mksdk import MkSShellExecutor
 from mksdk import MkSLogger
+from mksdk import MkSExternalMasterList
 
 class MasterNode(MkSAbstractNode.AbstractNode):
 	def __init__(self):
@@ -44,7 +45,7 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 		self.IsMaster 							= True
 		self.IsLocalUIEnabled					= False
 		self.Network							= None
-		self.ExternalMasterList					= {}
+		self.MasterManager						= MkSExternalMasterList.ExternalMasterList(self)
 		# Debug & Logging
 		self.DebugMode							= True
 		# Node connection to WS information
@@ -385,7 +386,14 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 	def OnNodeChangeRequestHandler(self, sock, packet):
 		payload = self.BasicProtocol.GetPayloadFromJson(packet)
 		if ('online_devices' in payload["event"]):
-			pass
+			devices = payload["online_devices"]
+			for key in devices:
+				device = devices[key]
+				if "mks" in device: # This is a MKS device (MASTER)
+					self.MasterManager.Append({
+						'ip': key
+					})
+					# Send connection request to this master
 		return ""
 
 	''' 

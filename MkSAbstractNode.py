@@ -410,14 +410,16 @@ class AbstractNode():
 							if direction in "request":
 								if command in self.NodeRequestHandlers.keys():
 									try:
-										message = self.NodeRequestHandlers[command](sock, packet)
-										# This handler migth be also in application layer.
-										if self.OnApplicationRequestCallback is not None:
-											message = self.OnApplicationRequestCallback(sock, packet)
-										if message == "" or message is None:
-											return
-										packet = self.BasicProtocol.AppendMagic(message)
-										self.SocketServer.Send(sock, packet)
+										handler = self.NodeRequestHandlers[command]
+										if handler is not None:
+											message = handler(sock, packet)
+											# This handler migth be also in application layer.
+											if self.OnApplicationRequestCallback is not None:
+												message = self.OnApplicationRequestCallback(sock, packet)
+											if message == "" or message is None:
+												return
+											packet = self.BasicProtocol.AppendMagic(message)
+											self.SocketServer.Send(sock, packet)
 									except Exception as e:
 										self.LogException("[DataSocketInputHandler #1] {0}".format(command),e,3)
 								else:
