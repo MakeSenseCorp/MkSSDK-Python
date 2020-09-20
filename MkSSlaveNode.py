@@ -211,6 +211,7 @@ class SlaveNode(MkSAbstractNode.AbstractNode):
 		payload["master_uuid"] 		= self.MasterUUID
 		payload["pid"]				= self.MyPID
 		payload["listener_port"]	= self.SocketServer.GetListenerPort()
+		self.LogMSG("({classname})# [GetNodeInfoRequestHandler] {0}".format(payload, classname=self.ClassName),5)
 		return self.BasicProtocol.BuildResponse(packet, payload)
 
 	''' 

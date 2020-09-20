@@ -120,6 +120,9 @@ class AbstractNode():
 			'register_on_node_change':				self.RegisterOnNodeChangeResponseHandler,
 			'unregister_on_node_change':			self.UnregisterOnNodeChangeResponseHandler,
 		}
+		self.NodeFilterCommands 					= [
+			'get_online_devices'
+		]
 		# LocalFace UI
 		self.UI 									= None
 		self.LocalWebPort							= ""
@@ -412,12 +415,19 @@ class AbstractNode():
 									try:
 										handler = self.NodeRequestHandlers[command]
 										if handler is not None:
+											# Execute framework layer
 											message = handler(sock, packet)
 											# This handler migth be also in application layer.
-											if self.OnApplicationRequestCallback is not None:
-												message = self.OnApplicationRequestCallback(sock, packet)
+											if command in self.NodeFilterCommands:
+												if self.OnApplicationRequestCallback is not None:
+													# Execute application layer
+													message = self.OnApplicationRequestCallback(sock, packet)
+											
+											# In any case response messgae is empty, don't send response
 											if message == "" or message is None:
 												return
+
+											# Create response and send back to requestor
 											packet = self.BasicProtocol.AppendMagic(message)
 											self.SocketServer.Send(sock, packet)
 									except Exception as e:
@@ -436,7 +446,15 @@ class AbstractNode():
 							elif direction in "response":
 								if command in self.NodeResponseHandlers.keys():
 									try:
-										self.NodeResponseHandlers[command](sock, packet)
+										handler = self.NodeResponseHandlers[command](sock, packet)
+										if handler is not None:
+											# Execute framework layer
+											handler(sock, packet)
+											# This handler migth be also in application layer.
+											if command in self.NodeFilterCommands:
+												if self.OnApplicationRequestCallback is not None:
+													# Execute application layer
+													self.OnApplicationRequestCallback(sock, packet)
 									except Exception as e:
 										self.LogException("[DataSocketInputHandler #3] {0}".format(command),e,3)
 								else:

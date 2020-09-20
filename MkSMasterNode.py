@@ -69,9 +69,11 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 			'WORKING': 							self.State_Work
 		}
 		# Handlers
-		self.NodeRequestHandlers['get_port'] 		= self.GetPortRequestHandler
-		self.NodeRequestHandlers['get_local_nodes'] = self.GetLocalNodesRequestHandler
-		self.NodeRequestHandlers['on_node_change']	= self.OnNodeChangeRequestHandler
+		self.NodeRequestHandlers['get_port'] 			= self.GetPortRequestHandler
+		self.NodeRequestHandlers['get_local_nodes'] 	= self.GetLocalNodesRequestHandler
+		self.NodeRequestHandlers['on_node_change']		= self.OnNodeChangeRequestHandler
+		self.NodeRequestHandlers['get_master_nodes']	= self.GetMasterNodesRequestHandler
+		self.NodeResponseHandlers['get_master_nodes']	= self.GetMasterNodesResponseHandler
 		# Callbacks
 		self.GatewayDataArrivedCallback 		= None
 		self.GatewayConnectedCallback 			= None
@@ -353,13 +355,15 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 			destination = self.BasicProtocol.GetDestinationFromJson(packet)
 			# Is destination located in my list.
 			conn = self.GetNodeByUUID(destination)
-			if conn is not None: # Redirect to slave located on this machine
+			if (conn is not None):
+				# Redirect to slave located on this machine
 				self.LogMSG("({classname})# [REDIRECTING PACKET] Sending directly to local client".format(classname=self.ClassName), 5)
 				message = self.BasicProtocol.AppendMagic(raw_data)
 				self.SocketServer.Send(conn.Socket, message)
-			elif:
-				pass # Destination might be in other master
-			else: # This message not nor on this machine neither on this local network, send to Gateway.
+			else: 
+				# Destination might be in other master
+
+				# This message not nor on this machine neither on this local network, send to Gateway.
 				if self.Network is not None:
 					self.LogMSG("({classname})# This massage is external (MOSTLY MASTER)".format(classname=self.ClassName), 5)
 					self.SendPacketGateway(raw_data)
@@ -379,6 +383,12 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 		payload["ip"]				= self.MyLocalIP
 		return self.BasicProtocol.BuildResponse(packet, payload)
 	
+	def GetMasterNodesRequestHandler(sekf, sock, packet):
+		pass
+
+	def GetMasterNodesResponseHandler(sekf, sock, packet):
+		pass
+
 	''' 
 		Description: 	Event filter handler
 		Return: 		None (application layer will return)
