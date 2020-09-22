@@ -70,10 +70,8 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 		}
 		# Handlers
 		self.NodeRequestHandlers['get_port'] 			= self.GetPortRequestHandler
-		self.NodeRequestHandlers['get_local_nodes'] 	= self.GetLocalNodesRequestHandler
+		self.NodeRequestHandlers['get_local_nodes'] 	= self.GetLocalNodesRequestHandler # TODO - Not sure it is being used
 		self.NodeRequestHandlers['on_node_change']		= self.OnNodeChangeRequestHandler
-		self.NodeRequestHandlers['get_master_nodes']	= self.GetMasterNodesRequestHandler
-		self.NodeResponseHandlers['get_master_nodes']	= self.GetMasterNodesResponseHandler
 		# Callbacks
 		self.GatewayDataArrivedCallback 		= None
 		self.GatewayConnectedCallback 			= None
@@ -382,12 +380,6 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 		payload["listener_port"]	= self.SocketServer.GetListenerPort()
 		payload["ip"]				= self.MyLocalIP
 		return self.BasicProtocol.BuildResponse(packet, payload)
-	
-	def GetMasterNodesRequestHandler(sekf, sock, packet):
-		pass
-
-	def GetMasterNodesResponseHandler(sekf, sock, packet):
-		pass
 
 	''' 
 		Description: 	Event filter handler
@@ -494,6 +486,9 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 					if node_type in self.Services:
 						self.Services[node_type]["uuid"] 		= uuid
 						self.Services[node_type]["enabled"] 	= 1
+
+						if node_type == 103:
+							self.MasterManager.Start()
 
 					return self.BasicProtocol.BuildResponse(packet, { 'port': port })
 				else:
@@ -609,6 +604,11 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 				self.Services[node_type]["uuid"] 		= ""
 				self.Services[node_type]["enabled"] 	= 0
 				self.Services[node_type]["registered"] 	= 0
+
+				if node_type == 103:
+					self.MasterManager.Stop()
+			else:
+				self.MasterManager.Remove(connection)
 
 			# Raise event for user
 			try:
