@@ -108,7 +108,7 @@ class AbstractNode():
 			'find_node':							self.FindNodeRequestHandler,
 			'master_append_node':					self.MasterAppendNodeRequestHandler,
 			'master_remove_node':					self.MasterRemoveNodeRequestHandler,
-			'close_local_socket':					self.CloseLocalSocketRequestHandler
+			'close_local_socket':					self.CloseLocalSocketRequestHandler,
 		}
 		self.NodeResponseHandlers					= {
 			'get_node_info': 						self.GetNodeInfoResponseHandler,
@@ -121,7 +121,7 @@ class AbstractNode():
 			'unregister_on_node_change':			self.UnregisterOnNodeChangeResponseHandler,
 		}
 		self.NodeFilterCommands 					= [
-			'get_online_devices'
+			'on_node_change'
 		]
 		# LocalFace UI
 		self.UI 									= None

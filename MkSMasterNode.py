@@ -69,9 +69,9 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 			'WORKING': 							self.State_Work
 		}
 		# Handlers
+		self.NodeRequestHandlers['on_node_change']		= self.NodeChangeRequestHandler
 		self.NodeRequestHandlers['get_port'] 			= self.GetPortRequestHandler
 		self.NodeRequestHandlers['get_local_nodes'] 	= self.GetLocalNodesRequestHandler # TODO - Not sure it is being used
-		self.NodeRequestHandlers['on_node_change']		= self.OnNodeChangeRequestHandler
 		# Callbacks
 		self.GatewayDataArrivedCallback 		= None
 		self.GatewayConnectedCallback 			= None
@@ -385,17 +385,21 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 		Description: 	Event filter handler
 		Return: 		None (application layer will return)
 	'''	
-	def OnNodeChangeRequestHandler(self, sock, packet):
-		payload = self.BasicProtocol.GetPayloadFromJson(packet)
-		if ('online_devices' in payload["event"]):
-			devices = payload["online_devices"]
-			for key in devices:
-				device = devices[key]
-				if "mks" in device: # This is a MKS device (MASTER)
-					self.MasterManager.Append({
-						'ip': key
-					})
-					# Send connection request to this master
+	def NodeChangeRequestHandler(self, sock, packet):
+		self.LogMSG("({classname})# NodeChangeRequestHandler".format(classname=self.ClassName),5)
+		try:
+			payload = self.BasicProtocol.GetPayloadFromJson(packet)
+			if ('online_devices' in payload["event"]):
+				devices = payload["online_devices"]
+				for key in devices:
+					device = devices[key]
+					if "mks" in device: # This is a MKS device (MASTER)
+						self.MasterManager.Append({
+							'ip': key
+						})
+						# Send connection request to this master
+		except Exception as e:
+			self.LogException("[NodeChangeRequestHandler]",e,3)
 		return ""
 
 	''' 
@@ -446,8 +450,13 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 			if self.PortsForClients:
 				conn = self.SocketServer.GetConnectionBySock(sock)
 				if conn.Obj["listener_port"] == 0:
-					# New request
-					port = 10000 + self.PortsForClients.pop()
+					node_type = int(nodetype)
+					if node_type in self.Services:
+						port = 11000 + node_type
+					else: 
+						# New request
+						port = 10000 + self.PortsForClients.pop()
+					
 					# Update node
 					conn.Obj["type"] 			= nodetype
 					conn.Obj["listener_port"] 	= port
@@ -482,7 +491,6 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 							self.SocketServer.SendData(item.IP, item.Port, message)
 					
 					# Store UUID if it is a service
-					node_type = int(nodetype)
 					if node_type in self.Services:
 						self.Services[node_type]["uuid"] 		= uuid
 						self.Services[node_type]["enabled"] 	= 1
