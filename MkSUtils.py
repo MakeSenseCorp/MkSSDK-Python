@@ -63,11 +63,27 @@ def all_interfaces():
 		struct.pack('iL', bytes, names.buffer_info()[0])
 	))[0]
 	namestr = names.tostring()
+	interfaces = [
+		"eth0",
+		"eth1",
+		"eth2",
+		"wlan0",
+		"wlan1",
+		"wifi0",
+		"ath0",
+		"ath1",
+		"ppp0",
+		"enp0s3",
+		"wlp2s0",
+		"lo"
+	]
 	lst = []
-	for i in range(0, outbytes, 40):
-		name = namestr[i:i+16].split('\0', 1)[0]
-		ip   = namestr[i+20:i+24]
-		lst.append((name, ip))
+	for face in interfaces:
+		if face in namestr:
+			idx = namestr.index(face)
+			name = namestr[idx:idx+16].split('\0', 1)[0]
+			ip   = namestr[idx+20:idx+24]
+			lst.append((name, ip))
 	return lst
 
 def GetIPList():
