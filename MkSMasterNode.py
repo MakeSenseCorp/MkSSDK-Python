@@ -391,11 +391,11 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 			payload = self.BasicProtocol.GetPayloadFromJson(packet)
 			if ('online_devices' in payload["event"]):
 				devices = payload["online_devices"]
-				for key in devices:
-					device = devices[key]
+				for device in devices:
 					if "mks" in device: # This is a MKS device (MASTER)
+						self.LogMSG("({classname})# NodeChangeRequestHandler {0}".format(device,classname=self.ClassName),5)
 						self.MasterManager.Append({
-							'ip': key
+							'ip': device["ip"]
 						})
 						# Send connection request to this master
 		except Exception as e:
