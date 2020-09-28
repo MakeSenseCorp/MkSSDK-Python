@@ -75,7 +75,7 @@ class ExternalMasterList:
 						conn, status = self.ConnectMasterWithRetries(master["ip"])
 						if status is True:
 							master["conn"] 	 = conn
-							master["ts"] 	 = time.time()
+							master["ts"] 	 = time.time() - 70
 							master["status"] = True
 							# Get nodes list
 							self.SendGetNodesList(master)

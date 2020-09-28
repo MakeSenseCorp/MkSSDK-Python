@@ -205,13 +205,12 @@ class SlaveNode(MkSAbstractNode.AbstractNode):
 		Return: 		N/A
 	'''	
 	def GetNodeInfoRequestHandler(self, sock, packet):
-		self.LogMSG("({classname})# [GetNodeInfoRequestHandler]".format(classname=self.ClassName),5)
+		self.LogMSG("({classname})# [GetNodeInfoRequestHandler] Return NODE information".format(classname=self.ClassName),5)
 		payload = self.NodeInfo
 		payload["is_master"] 		= False
 		payload["master_uuid"] 		= self.MasterUUID
 		payload["pid"]				= self.MyPID
 		payload["listener_port"]	= self.SocketServer.GetListenerPort()
-		self.LogMSG("({classname})# [GetNodeInfoRequestHandler] {0}".format(payload, classname=self.ClassName),5)
 		return self.BasicProtocol.BuildResponse(packet, payload)
 
 	''' 

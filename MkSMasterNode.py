@@ -410,7 +410,7 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 		source  	= self.BasicProtocol.GetSourceFromJson(packet)
 		payload 	= self.BasicProtocol.GetPayloadFromJson(packet)
 		additional 	= self.BasicProtocol.GetAdditionalFromJson(packet)
-		self.LogMSG("({classname})# [GetNodeInfoResponseHandler] (NO LOGIC) {0}".format(payload, classname=self.ClassName),5)
+		self.LogMSG("({classname})# [GetNodeInfoResponseHandler] (NO LOGIC) Update connection details".format(classname=self.ClassName),5)
 
 		conn = self.SocketServer.GetConnectionBySock(sock)
 		conn.Obj["uuid"] 			= payload["uuid"]
