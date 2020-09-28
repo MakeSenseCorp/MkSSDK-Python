@@ -30,18 +30,24 @@ class ExternalMasterList:
 		nodes_list = []
 		for key in connections:
 			node = connections[key]
-			nodes_list.append(node.Obj)
+			nodes_list.append(node.Obj["uuid"])
 
 		return self.Context.BasicProtocol.BuildResponse(packet, { 
 			'ip': self.Context.MyLocalIP,
+			'uuid': self.Context.UUID,
 			'nodes': nodes_list
 		})
 
 	def OnGetMasterNodesResponseHandler(self, sock, packet):
 		self.Context.LogMSG("({classname})# [OnGetMasterNodesResponseHandler]".format(classname=self.ClassName),5)
 		payload = self.Context.BasicProtocol.GetPayloadFromJson(packet)
-		self.Masters[payload["ip"]]["nodes"] = payload["nodes"]
-		self.Masters[payload["ip"]]["ts"] 	 = time.time()
+		self.Context.LogMSG("({classname})# [OnGetMasterNodesResponseHandler] {0}".format(payload, classname=self.ClassName),5)
+		master = self.Masters[payload["ip"]]
+		master["nodes"] = payload["nodes"]
+		master["ts"] 	= time.time()
+		master["uuid"] 	= payload["uuid"]
+		self.Context.LogMSG("({classname})# [DEBUG #1] {0}".format(master, classname=self.ClassName),5)
+		self.Masters[payload["ip"]] = master
 
 	def ConnectMasterWithRetries(self, ip):
 		retry = 0
