@@ -21,6 +21,7 @@ from mksdk import MkSUtils
 from mksdk import MkSBasicNetworkProtocol
 from mksdk import MkSSecurity
 from mksdk import MkSLocalSocketMngr
+from mksdk import MkSLocalWS
 
 class AbstractNode():
 	def __init__(self):
@@ -31,6 +32,7 @@ class AbstractNode():
 		self.LocalWSManager							= None
 		self.MKSPath								= ""
 		self.HostName								= socket.gethostname()
+		self.Websock								= MkSLocalWS.MkSLocalWebsocketServer()
 		# Device information
 		self.Type 									= 0
 		self.UUID 									= ""
@@ -127,6 +129,8 @@ class AbstractNode():
 		self.UI 									= None
 		self.LocalWebPort							= ""
 		self.BasicProtocol 							= MkSBasicNetworkProtocol.BasicNetworkProtocol()
+		self.Websock.OnDataArrivedEvent 			= self.LocalWebsockDataArrivedHandler
+		self.Websock.OnWSDisconnected				= self.LocalWebsockDisconnection
 		print(self.NetworkCards)
 
 		self.Services[101] = {
@@ -254,6 +258,45 @@ class AbstractNode():
 	
 	# Overload
 	def LocalSocketDataInputExternalHandler(self, conn, packet, raw_data):
+		pass
+
+	def LocalWebsockDataArrivedHandler(self, ws, packet):
+		messageType = self.BasicProtocol.GetMessageTypeFromJson(packet)
+		direction 	= self.BasicProtocol.GetDirectionFromJson(packet)
+		destination = self.BasicProtocol.GetDestinationFromJson(packet)
+		source 		= self.BasicProtocol.GetSourceFromJson(packet)
+		command 	= self.BasicProtocol.GetCommandFromJson(packet)
+
+		#packet["additional"]["client_type"] = "global_ws"
+		self.LogMSG("({classname})# LocalWebsock [{direction}] {source} -> {dest} [{cmd}]".format(
+					classname=self.ClassName,
+					direction=direction,
+					source=source,
+					dest=destination,
+					cmd=command),5)
+		
+		if messageType == "BROADCAST":
+			pass
+	
+		if destination in source:
+			return
+		
+		if destination in self.UUID:
+			if messageType == "CUSTOM":
+				pass
+			elif messageType in ["DIRECT", "PRIVATE", "WEBFACE"]:
+				if command in self.NodeRequestHandlers.keys():
+					message = self.NodeRequestHandlers[command](None, packet)
+					data = json.dumps(message)
+					self.Websock.Send(data)
+				else:
+					pass
+			else:
+				self.LogMSG("({classname})# [Websocket INBOUND] ERROR - Not support {0} request type.".format(messageType, classname=self.ClassName),4)
+		else:
+			pass
+
+	def LocalWebsockDisconnection(self, ws_id):
 		pass
 
 	''' 

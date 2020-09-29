@@ -4,22 +4,21 @@ import sys
 import json
 
 from collections import OrderedDict
-from flask_socketio import SocketIO, emit
+# from flask_socketio import SocketIO, emit
 from geventwebsocket import WebSocketServer, WebSocketApplication, Resource
-
-if sys.version_info[0] < 3:
-	import thread
-else:
-	import _thread
 
 class MkSLocalWebsocketServer():
 	def __init__(self):
-		self.ClassName 				= "LocalWebsocketServer"
+		self.ClassName 				= "MkSLocalWebsocketServer"
 		self.ApplicationSockets 	= {}
 		self.ServerRunning 			= False
 		# Events
 		self.OnDataArrivedEvent 	= None
 		self.OnWSDisconnected 		= None
+		self.Port 					= 0
+	
+	def SetPort(self, port):
+		self.Port = port
 	
 	def AppendSocket(self, ws_id, ws):
 		print ("({classname})# Append new connection ({0})".format(ws_id, classname=self.ClassName))
@@ -33,17 +32,16 @@ class MkSLocalWebsocketServer():
 	
 	def WSDataArrived(self, ws, data):
 		# TODO - Append webface type
-		packet	= json.loads(data)
+		packet= json.loads(data)
 		if ("HANDSHAKE" == packet['header']['message_type']):
 			return
 		
 		packet["additional"]["ws_id"] 	= id(ws)
 		packet["additional"]["pipe"]  	= "LOCAL_WS"
 		packet["stamping"] 				= ['local_ws']
-		data = json.dumps(packet)
 
 		if self.OnDataArrivedEvent is not None:
-			self.OnDataArrivedEvent(ws, data)
+			self.OnDataArrivedEvent(ws, packet)
 	
 	def Send(self, ws_id, data):
 		if ws_id in self.ApplicationSockets:
@@ -56,7 +54,7 @@ class MkSLocalWebsocketServer():
 
 	def Worker(self):
 		try:
-			server = WebSocketServer(('', 1982), Resource(OrderedDict([('/', NodeWSApplication)])))
+			server = WebSocketServer(('', self.Port), Resource(OrderedDict([('/', NodeWSApplication)])))
 
 			self.ServerRunning = True
 			print ("({classname})# Staring local WS server ...".format(classname=self.ClassName))
@@ -81,7 +79,7 @@ class NodeWSApplication(WebSocketApplication):
 		WSManager.AppendSocket(id(self.ws), self.ws)
 
 	def on_message(self, message):
-		#print ("({classname})# MESSAGE RECIEVED {0} {1}".format(id(self.ws),message,classname=self.ClassName))
+		print ("({classname})# MESSAGE RECIEVED {0} {1}".format(id(self.ws),message,classname=self.ClassName))
 		if message is not None:
 			WSManager.WSDataArrived(self.ws, message)
 		else:

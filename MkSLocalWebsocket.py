@@ -2,10 +2,7 @@
 import os
 import sys
 import json
-if sys.version_info[0] < 3:
-	import thread
-else:
-	import _thread
+import thread
 import threading
 import time
 

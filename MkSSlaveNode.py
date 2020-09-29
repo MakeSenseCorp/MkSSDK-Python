@@ -178,6 +178,9 @@ class SlaveNode(MkSAbstractNode.AbstractNode):
 		conn.Obj["listener_port"] = self.SocketServer.GetListenerPort()
 		# Change state
 		self.SetState("WORKING")
+		# Start Websocket Server
+		self.Websock.SetPort(self.SocketServer.GetListenerPort() + 2000)
+		self.Websock.RunServer()
 		
 	''' 
 		Description: 	State [WORKING]
