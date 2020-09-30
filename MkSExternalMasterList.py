@@ -41,12 +41,10 @@ class ExternalMasterList:
 	def OnGetMasterNodesResponseHandler(self, sock, packet):
 		self.Context.LogMSG("({classname})# [OnGetMasterNodesResponseHandler]".format(classname=self.ClassName),5)
 		payload = self.Context.BasicProtocol.GetPayloadFromJson(packet)
-		self.Context.LogMSG("({classname})# [OnGetMasterNodesResponseHandler] {0}".format(payload, classname=self.ClassName),5)
 		master = self.Masters[payload["ip"]]
 		master["nodes"] = payload["nodes"]
 		master["ts"] 	= time.time()
 		master["uuid"] 	= payload["uuid"]
-		self.Context.LogMSG("({classname})# [DEBUG #1] {0}".format(master, classname=self.ClassName),5)
 		self.Masters[payload["ip"]] = master
 
 	def ConnectMasterWithRetries(self, ip):
@@ -104,11 +102,12 @@ class ExternalMasterList:
 		self.Context.LogMSG("({classname})# Append {0}".format(master,classname=self.ClassName),5)
 
 	def Remove(self, conn):
+		self.Context.LogMSG("({classname})# Remove {0}".format(conn.Obj["uuid"], classname=self.ClassName),5)
 		del_key = None
 		for key in self.Masters:
 			master = self.Masters[key]
-			if master["status"] is False:
-				if master["conn"]["obj"]["uuid"] == conn["obj"]["uuid"]:
+			if master["status"] is True:
+				if master["uuid"] == conn.Obj["uuid"]:
 					del_key = key
 		del self.Masters[del_key]
 
@@ -128,4 +127,5 @@ class ExternalMasterList:
 	def Stop(slef):
 		self.Context.LogMSG("({classname})# Stop".format(classname=self.ClassName),5)
 		self.Working = False
-		# Disconnect and remove all connections
+		# Remove all connections
+		self.Masters.clear()

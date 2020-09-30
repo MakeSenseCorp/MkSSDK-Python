@@ -369,6 +369,11 @@ class Manager():
 	'''
     def Connect(self, ip, port):
 		self.LogMSG("({classname})# [Connect]".format(classname=self.ClassName),5)
+		# Check if this connection allready exist
+		connection = self.GetConnection(ip, port)
+		if connection is not None:
+			return connection, True
+		# Connect to device
 		sock, status = self.ConnectSocket((ip, port))
 		conn = None
 		if True == status:
