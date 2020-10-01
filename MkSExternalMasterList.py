@@ -70,27 +70,30 @@ class ExternalMasterList:
 	def Worker(self):
 		self.Context.LogMSG("({classname})# Start worker".format(classname=self.ClassName),5)
 		self.Working = True
-		while (self.Working is True):
-			try:
-				for key in self.Masters:
-					master = self.Masters[key]
-					if master["status"] is False:
-						# Connect to the master
-						# Check if this socket already exist !!!!!!!
-						conn, status = self.ConnectMasterWithRetries(master["ip"])
-						if status is True:
-							master["conn"] 	 = conn
-							master["ts"] 	 = time.time() - 70
-							master["status"] = True
+		try:
+			while (self.Working is True):
+				if len(self.Masters) > 0:
+					for key in self.Masters:
+						master = self.Masters[key]
+						if master["status"] is False:
+							# Connect to the master
+							# Check if this socket already exist !!!!!!!
+							conn, status = self.ConnectMasterWithRetries(master["ip"])
+							if status is True:
+								master["conn"] 	 = conn
+								master["ts"] 	 = time.time() - 70
+								master["status"] = True
+								# Get nodes list
+								self.SendGetNodesList(master)
+								# Register master node
+						else:
 							# Get nodes list
 							self.SendGetNodesList(master)
-							# Register master node
-					else:
-						# Get nodes list
-						self.SendGetNodesList(master)
+						time.sleep(1)
+				else:
 					time.sleep(1)
-			except Exception as e:
-				self.Context.LogException("[Worker]",e,3)
+		except Exception as e:
+			self.Context.LogException("[Worker]",e,3)
 
 	def Append(self, master):
 		if master["ip"] in self.Masters or master["ip"] in self.Context.MyLocalIP:
@@ -115,9 +118,8 @@ class ExternalMasterList:
 		for key in self.Masters:
 			master = self.Masters[key]
 			if master["status"] is True:
-				for node in master["nodes"]:
-					if node["uuid"] == uuid:
-						return master["conn"]
+				if uuid in master["nodes"]:
+					return master["conn"]
 		return None
 
 	def Start(self):
