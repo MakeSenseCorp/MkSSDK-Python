@@ -65,7 +65,7 @@ class Manager():
 		self.LogMSG("({classname})# [SockNewConnection_RXHandlerMethod]".format(classname=self.ClassName),1)
 		conn = data["conn"]
 		addr = data["addr"]
-		self.AppendConnection(conn, addr[0], addr[1])
+		self.AppendConnection(conn, addr[0], addr[1], "SOCK")
 
     ''' 
 		Description: 	
@@ -127,7 +127,7 @@ class Manager():
 
 			self.ServerSocket.bind(self.ServerAdderss)
 			# [socket, ip_address, port]
-			conn = self.AppendConnection(self.ServerSocket, self.LocalIP, self.ServerAdderss[1])
+			conn = self.AppendConnection(self.ServerSocket, self.LocalIP, self.ServerAdderss[1], "SERVER")
 
 			self.ServerSocket.listen(32)
 			self.LocalSocketWorkerRunning = True
@@ -259,12 +259,12 @@ class Manager():
 						Each connection has its HASH (MD5).
 		Return: 		Status and socket.
 	'''
-    def AppendConnection(self, sock, ip, port):
+    def AppendConnection(self, sock, ip, port, sock_type):
 		self.LogMSG("({classname})# [AppendConnection]".format(classname=self.ClassName),1)
 		# Append to recieving data sockets.
 		self.RecievingSockets.append(sock)
 		# Append to list of all connections.
-		conn = MkSLocalSocketUtils.SocketConnection(ip, port, sock)
+		conn = MkSLocalSocketUtils.SocketConnection(ip, port, sock, sock_type)
 		hash_key = conn.GetHash()
 		self.LogMSG("({classname})# [AppendConnection] {0} {1} {2}".format(ip,str(port),hash_key,classname=self.ClassName),5)
 		self.OpenConnections[hash_key] 	= conn
@@ -367,7 +367,7 @@ class Manager():
 		Return: 		Status and socket.
 		ConnectNode
 	'''
-    def Connect(self, ip, port):
+    def Connect(self, ip, port, sock_type):
 		self.LogMSG("({classname})# [Connect]".format(classname=self.ClassName),5)
 		# Check if this connection allready exist
 		connection = self.GetConnection(ip, port)
@@ -377,7 +377,7 @@ class Manager():
 		sock, status = self.ConnectSocket((ip, port))
 		conn = None
 		if True == status:
-			conn = self.AppendConnection(sock, ip, port)
+			conn = self.AppendConnection(sock, ip, port, sock_type)
 		return conn, status
 	
     ''' 

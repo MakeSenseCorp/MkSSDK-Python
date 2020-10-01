@@ -111,6 +111,7 @@ class AbstractNode():
 			'master_append_node':					self.MasterAppendNodeRequestHandler,
 			'master_remove_node':					self.MasterRemoveNodeRequestHandler,
 			'close_local_socket':					self.CloseLocalSocketRequestHandler,
+			'open_stream_socket':					self.OpenStreamSocketRequestHandler,
 		}
 		self.NodeResponseHandlers					= {
 			'get_node_info': 						self.GetNodeInfoResponseHandler,
@@ -121,6 +122,7 @@ class AbstractNode():
 			'get_online_devices':					self.GetOnlineDevicesResponseHandler,
 			'register_on_node_change':				self.RegisterOnNodeChangeResponseHandler,
 			'unregister_on_node_change':			self.UnregisterOnNodeChangeResponseHandler,
+			'open_stream_socket':					self.OpenStreamSocketResponseHandler,
 		}
 		self.NodeFilterCommands 					= [
 			'on_node_change'
@@ -305,7 +307,7 @@ class AbstractNode():
 		Return: 		Status (True/False).
 	'''
 	def ConnectMaster(self, ip):
-		connection, status = self.SocketServer.Connect(ip, 16999)
+		connection, status = self.SocketServer.Connect(ip, 16999, "SERVER")
 		if status is True:
 			connection.Obj["local_type"] = "MASTER"
 			self.MasterNodesList.append(connection)
@@ -316,13 +318,28 @@ class AbstractNode():
 			return True
 
 		return False
+	
+	''' 
+		Description:	Connect node over socket (private stream use), add connection to connections list.
+		Return: 		Connection and status
+	'''
+	def ConnectStream(self, ip, port):
+		# Send MKS packet with "open_stream_socket" request with tx_ts
+		# Return to app level with ts ad id
+		# Add to dictionary this id
+		# Reciever open listener on port provided by abstract
+		# Reciever respond to requestor with port and rx_ts and tx_ts
+		# add to dictionary listener id
+		# Reciever on response open socket to the port
+		# Each side will update application level with data using callback (each side will bind callback with ts id)
+		pass
 
 	''' 
 		Description:	Connect node over socket, add connection to connections list.
 		Return: 		Connection and status
 	'''
 	def ConnectNode(self, ip, port):
-		return self.SocketServer.Connect(ip, port)
+		return self.SocketServer.Connect(ip, port, "SOCK")
 
 	''' 
 		Description:	Search for MASTER nodes on local network.
@@ -606,6 +623,20 @@ class AbstractNode():
 			'type': node_type
 		}
 		self.SendRequest("BROADCAST", "BROADCAST", "find_node", payload, {})
+
+	''' 
+		Description: 	Request to open private stream socket to other node [RESPONSE]
+		Return: 		None
+	'''	
+	def OpenStreamSocketRequestHandler(self, sock, packet):
+		self.LogMSG("({classname})# [OpenStreamSocketRequestHandler]".format(classname=self.ClassName),5)
+	
+	''' 
+		Description: 	Requestor for stream private socket get reaponse with status and port [RESPONSE]
+		Return: 		None
+	'''	
+	def OpenStreamSocketResponseHandler(self, sock, packet):
+		self.LogMSG("({classname})# [OpenStreamSocketResponseHandler]".format(classname=self.ClassName),5)
 
 	''' 
 		Description: 	Find nodes according to type and categories handler. [RESPONSE]
