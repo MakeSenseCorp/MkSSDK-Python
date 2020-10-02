@@ -22,6 +22,7 @@ from mksdk import MkSBasicNetworkProtocol
 from mksdk import MkSSecurity
 from mksdk import MkSLocalSocketMngr
 from mksdk import MkSLocalWS
+from mksdk import MkSStreamSocket
 
 class AbstractNode():
 	def __init__(self):
@@ -33,6 +34,7 @@ class AbstractNode():
 		self.MKSPath								= ""
 		self.HostName								= socket.gethostname()
 		self.Websock								= MkSLocalWS.MkSLocalWebsocketServer()
+		self.StreamSocksMngr 						= MkSStreamSocket.MkSStreamManager(self)
 		# Device information
 		self.Type 									= 0
 		self.UUID 									= ""
