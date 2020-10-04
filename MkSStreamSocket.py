@@ -5,8 +5,9 @@ import json
 import thread
 
 class MkSStream():
-	def __init__(self, is_server):
+	def __init__(self, name, is_server):
 		self.ClassName 				= "MkSStream"
+		self.Name 					= Name
 		self.UUID 					= ""
 		self.Port 					= 0
 		self.ClientPort 			= 0
@@ -19,11 +20,23 @@ class MkSStream():
 		self.IsServer 				= is_server
 		self.ServerIP				= ""
 		self.ClientIP 				= ""
+		self.State					= "IDLE"
 		# Events
+		self.OnConnectedEvent 		= None
 		self.OnDataArrivedEvent 	= None
+		self.OnDisconnectedEvent 	= None
 	
+	def SetState(self, state):
+		self.State = state
+
 	def SetPort(self, port):
 		self.Port = port
+	
+	def GetPort(self):
+		return self.Port
+	
+	def SetServerIP(self, ip):
+		self.ServerIP = ip
 	
 	def ConfigureListener(self):
 		try:
@@ -70,8 +83,11 @@ class MkSStream():
 				for sock in readable:
 					data, addr = sock.recvfrom(self.DataSize)
 					if self.IsServer is True:
-						self.ClientIP 	= addr[0]
 						self.ClientPort	= addr[1]
+					
+					# Emit event
+					if self.OnDataArrivedEvent is not None:
+						self.OnDataArrivedEvent(self.Name, data)
 				
 				for sock in writable:
 					self.LogMSG("({classname})# [Worker] Socket Writeable ...".format(classname=self.ClassName),5)
@@ -81,7 +97,7 @@ class MkSStream():
 			except Exception as e:
 				self.LogException("[Worker]",e,3)
 	
-	def Listen(slef):
+	def Listen(self):
 		if self.IsServer is True:
 			thread.start_new_thread(self.Worker, ())
 
@@ -110,9 +126,32 @@ class MkSStreamManager():
 		self.ClassName 				= "MkSStreamManager"
 		self.Context 				= context
 		self.Streams 				= {}
+		self.PortCounter 			= 20000
 	
-	def CreateStream(self, id_t):
+	def CreateStream(self, id_t, is_server):
 		if id_t in self.Streams:
 			return
 		
-		self.Streams[id_t] = MkSStream(id_t)
+		stream = MkSStream(is_server)
+		if is_server is True:
+			stream.Port = self.GeneratePort()
+		self.Streams[id_t] = stream	
+	
+	def UpdateStream(self, ts_t, stream):
+		if id_t in self.Streams:
+			return
+		self.Streams[id_t] = stream	
+	
+	def RegisterCallbacks(self, id_t, connected, data, disconnected)
+		stream = self.Streams[id_t]
+		stream.OnConnectedEvent 	= connected
+		stream.OnDataArrivedEvent 	= data
+		stream.OnDisconnectedEvent 	= disconnected
+		self.Streams[id_t] = stream
+	
+	def GetStream(self, ts_t)
+		return self.Streams[id_t]
+	
+	def GeneratePort(self):
+		self.PortCounter += 1
+		return self.PortCounter

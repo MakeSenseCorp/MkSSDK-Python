@@ -80,6 +80,8 @@ class AbstractNode():
 		self.OnLocalServerListenerStartedCallback	= None # When loacl server (listener) succesfully binded port.
 		self.OnShutdownCallback						= None # When node recieve command to terminate itself.
 		self.OnGetNodesListCallback 				= None # Get all online nodes from GLOBAL gateway (Not implemented yet)
+		self.StreamSocketCreatedEvent				= None
+		self.StreamSocketDataEvent					= None
 		# Registered items
 		self.OnDeviceChangeList						= [] # Register command "register_on_node_change"
 		# Synchronization
@@ -320,21 +322,6 @@ class AbstractNode():
 			return True
 
 		return False
-	
-	''' 
-		Description:	Connect node over socket (private stream use), add connection to connections list.
-		Return: 		Connection and status
-	'''
-	def ConnectStream(self, ip, port):
-		# Send MKS packet with "open_stream_socket" request with tx_ts
-		# Return to app level with ts ad id
-		# Add to dictionary this id
-		# Reciever open listener on port provided by abstract
-		# Reciever respond to requestor with port and rx_ts and tx_ts
-		# add to dictionary listener id
-		# Reciever on response open socket to the port
-		# Each side will update application level with data using callback (each side will bind callback with ts id)
-		pass
 
 	''' 
 		Description:	Connect node over socket, add connection to connections list.
@@ -632,6 +619,24 @@ class AbstractNode():
 	'''	
 	def OpenStreamSocketRequestHandler(self, sock, packet):
 		self.LogMSG("({classname})# [OpenStreamSocketRequestHandler]".format(classname=self.ClassName),5)
+		payload = self.BasicProtocol.GetPayloadFromJson(packet)
+
+		ts 	 = payload["ts"]
+		uuid = payload["uuid"]
+		ip 	 = payload["ip"]
+
+		self.StreamSocksMngr.CreateStream(ts, True)
+		stream = self.StreamSocksMngr.GetStream(ts)
+		stream.UUID 	= uuid
+		stream.ClientIP = ip
+		self.StreamSocksMngr.UpdateStream(ts, stream)
+
+		return self.BasicProtocol.BuildResponse(packet, { 
+			'ip': self.MyLocalIP,
+			'uuid': self.UUID,
+			'port': stream.GetPort(),
+			'ts': ts
+		})
 	
 	''' 
 		Description: 	Requestor for stream private socket get reaponse with status and port [RESPONSE]
@@ -639,6 +644,61 @@ class AbstractNode():
 	'''	
 	def OpenStreamSocketResponseHandler(self, sock, packet):
 		self.LogMSG("({classname})# [OpenStreamSocketResponseHandler]".format(classname=self.ClassName),5)
+		payload = self.BasicProtocol.GetPayloadFromJson(packet)
+
+		ip 	 = payload["ip"]
+		port = payload["port"]
+		ts 	 = payload["ts"]
+		uuid = payload["uuid"]
+
+		stream = self.GetStream(ts)
+		stream.SetPort(port)
+		stream.SetServerIP(ip)
+		stream.Connect()
+
+		# Update application layer about stream creation
+		if self.StreamSocketCreatedEvent is not None:
+			self.StreamSocketCreatedEvent(stream.Name, ts)
+
+	''' 
+		Description:	Connect node over socket (private stream use), add connection to connections list.
+		Return: 		Connection and status
+	'''
+	def ConnectStream(self, uuid, name):
+		# Generate timestamp
+		identification_stream = time.time()
+		# Send MKS packet with "open_stream_socket" request with ts
+		self.SendRequestToNode(uuid, "open_stream_socket", {
+			'ts': identification_stream,
+			'uuid': uuid,
+			'ip': self.MyLocalIP
+		})
+		# Create client stream
+		self.StreamSocksMngr.CreateStream(identification_stream, name, False)
+		stream = self.GetStream(identification_stream)
+		# Return to app level with identification stream
+		return identification_stream
+		
+		# Add to dictionary this id
+		# Reciever open listener on port provided by abstract
+		# Reciever respond to requestor with port and rx_ts and tx_ts
+		# add to dictionary listener id
+		# Reciever on response open socket to the port
+		# Each side will update application level with data using callback (each side will bind callback with ts id)
+		
+	''' 
+		Description:	Return created stream.
+		Return: 		Stream
+	'''
+	def GetStream(self, ts_t):
+		return self.StreamSocksMngr.GetStream(ts_t)
+	
+	''' 
+		Description:	Disconnect stream.
+		Return: 		None
+	'''
+	def DisconnectStream(self, ts_t):
+		pass
 
 	''' 
 		Description: 	Find nodes according to type and categories handler. [RESPONSE]
