@@ -80,8 +80,9 @@ class AbstractNode():
 		self.OnLocalServerListenerStartedCallback	= None # When loacl server (listener) succesfully binded port.
 		self.OnShutdownCallback						= None # When node recieve command to terminate itself.
 		self.OnGetNodesListCallback 				= None # Get all online nodes from GLOBAL gateway (Not implemented yet)
-		self.StreamSocketCreatedEvent				= None
-		self.StreamSocketDataEvent					= None
+		self.OnStreamSocketCreatedEvent				= None
+		self.OnStreamSocketDataEvent				= None
+		self.OnStreamSocketDisconnectedEvent 		= None
 		# Registered items
 		self.OnDeviceChangeList						= [] # Register command "register_on_node_change"
 		# Synchronization
@@ -621,21 +622,37 @@ class AbstractNode():
 		self.LogMSG("({classname})# [OpenStreamSocketRequestHandler]".format(classname=self.ClassName),5)
 		payload = self.BasicProtocol.GetPayloadFromJson(packet)
 
-		ts 	 = payload["ts"]
-		uuid = payload["uuid"]
-		ip 	 = payload["ip"]
+		if self.OnStreamSocketCreatedEvent is None or aelf.OnStreamSocketDataEvent is None or self.OnStreamSocketDisconnectedEvent is None:
+			return self.BasicProtocol.BuildResponse(packet, { 
+				'ip': "",
+				'uuid': "",
+				'port': 0,
+				'ts': 0,
+				'status': "NOTSUPPORTED"
+			})
 
-		self.StreamSocksMngr.CreateStream(ts, True)
-		stream = self.StreamSocksMngr.GetStream(ts)
+		identity = payload["ts"]
+		uuid 	 = payload["uuid"]
+		ip 	 	 = payload["ip"]
+
+		self.StreamSocksMngr.CreateStream(identity, "server_{0}".format(identity), True)
+		self.StreamSocksMngr.RegisterCallbacks(identity, OnStreamSocketCreatedEvent, OnStreamSocketDataEvent, None)
+		stream = self.StreamSocksMngr.GetStream(identity)
 		stream.UUID 	= uuid
 		stream.ClientIP = ip
-		self.StreamSocksMngr.UpdateStream(ts, stream)
+		self.StreamSocksMngr.UpdateStream(identity, stream)
+		self.stream.Listen()
+
+		# Update application layer about stream creation
+		if self.OnStreamSocketCreatedEvent is not None:
+			self.OnStreamSocketCreatedEvent(stream.Name, identity)
 
 		return self.BasicProtocol.BuildResponse(packet, { 
 			'ip': self.MyLocalIP,
 			'uuid': self.UUID,
 			'port': stream.GetPort(),
-			'ts': ts
+			'ts': identity,
+			'status': "CREATED"
 		})
 	
 	''' 
@@ -646,19 +663,19 @@ class AbstractNode():
 		self.LogMSG("({classname})# [OpenStreamSocketResponseHandler]".format(classname=self.ClassName),5)
 		payload = self.BasicProtocol.GetPayloadFromJson(packet)
 
-		ip 	 = payload["ip"]
-		port = payload["port"]
-		ts 	 = payload["ts"]
-		uuid = payload["uuid"]
+		ip 			 = payload["ip"]
+		port 		 = payload["port"]
+		identity 	 = payload["ts"]
+		uuid 		 = payload["uuid"]
 
-		stream = self.GetStream(ts)
+		stream = self.GetStream(identity)
 		stream.SetPort(port)
 		stream.SetServerIP(ip)
 		stream.Connect()
 
 		# Update application layer about stream creation
-		if self.StreamSocketCreatedEvent is not None:
-			self.StreamSocketCreatedEvent(stream.Name, ts)
+		if self.OnStreamSocketCreatedEvent is not None:
+			self.OnStreamSocketCreatedEvent(stream.Name, identity)
 
 	''' 
 		Description:	Connect node over socket (private stream use), add connection to connections list.
@@ -666,18 +683,18 @@ class AbstractNode():
 	'''
 	def ConnectStream(self, uuid, name):
 		# Generate timestamp
-		identification_stream = time.time()
+		identity = time.time()
 		# Send MKS packet with "open_stream_socket" request with ts
 		self.SendRequestToNode(uuid, "open_stream_socket", {
-			'ts': identification_stream,
+			'ts': identity,
 			'uuid': uuid,
 			'ip': self.MyLocalIP
 		})
 		# Create client stream
-		self.StreamSocksMngr.CreateStream(identification_stream, name, False)
-		stream = self.GetStream(identification_stream)
+		self.StreamSocksMngr.CreateStream(identity, name, False)
+		self.StreamSocksMngr.RegisterCallbacks(identity, OnStreamSocketCreatedEvent, OnStreamSocketDataEvent, None)
 		# Return to app level with identification stream
-		return identification_stream
+		return identity
 		
 		# Add to dictionary this id
 		# Reciever open listener on port provided by abstract

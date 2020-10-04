@@ -100,6 +100,7 @@ class MkSStream():
 	def Listen(self):
 		if self.IsServer is True:
 			thread.start_new_thread(self.Worker, ())
+			self.SetState("LISTEN")
 
 	def Connect(self, uuid):
 		if self.IsServer is False:
@@ -107,6 +108,7 @@ class MkSStream():
 			self.ClientSocket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 			self.RecievingSockets.append(self.ClientSocket)
 			thread.start_new_thread(self.Worker, ())
+			self.SetState("CONNECT")
 
 	def Disconnect(self):
 		self.WorkerRunning = False
@@ -114,6 +116,7 @@ class MkSStream():
 			self.ServerSocket.close()
 		else:
 			self.ClientSocket.close()
+		self.SetState("IDLE")
 
 	def Send(self, data):
 		if self.IsServer is False:
@@ -128,29 +131,29 @@ class MkSStreamManager():
 		self.Streams 				= {}
 		self.PortCounter 			= 20000
 	
-	def CreateStream(self, id_t, is_server):
-		if id_t in self.Streams:
+	def CreateStream(self, identity, name, is_server):
+		if identity in self.Streams:
 			return
 		
-		stream = MkSStream(is_server)
+		stream = MkSStream(name, is_server)
 		if is_server is True:
 			stream.Port = self.GeneratePort()
-		self.Streams[id_t] = stream	
-	
+		self.Streams[identity] = stream	
+		
 	def UpdateStream(self, ts_t, stream):
-		if id_t in self.Streams:
+		if identity in self.Streams:
 			return
-		self.Streams[id_t] = stream	
+		self.Streams[identity] = stream	
 	
-	def RegisterCallbacks(self, id_t, connected, data, disconnected)
-		stream = self.Streams[id_t]
+	def RegisterCallbacks(self, identity, connected, data, disconnected):
+		stream = self.Streams[identity]
 		stream.OnConnectedEvent 	= connected
 		stream.OnDataArrivedEvent 	= data
 		stream.OnDisconnectedEvent 	= disconnected
-		self.Streams[id_t] = stream
+		self.Streams[identity] = stream
 	
-	def GetStream(self, ts_t)
-		return self.Streams[id_t]
+	def GetStream(self, identity):
+		return self.Streams[identity]
 	
 	def GeneratePort(self):
 		self.PortCounter += 1
