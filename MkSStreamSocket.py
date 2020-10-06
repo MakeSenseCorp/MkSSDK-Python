@@ -3,19 +3,19 @@ import os
 import sys
 import json
 import thread
+import socket, select
+import time
 
 class MkSStream():
 	def __init__(self, name, is_server):
 		self.ClassName 				= "MkSStream"
-		self.Name 					= Name
-		self.UUID 					= ""
+		self.Name 					= name
+		self.Identity 				= 0
 		self.Port 					= 0
 		self.ClientPort 			= 0
 		self.DataSize 				= 1024
 		self.ServerSocket 			= None
 		self.ClientSocket 			= None
-		self.RecievingSockets		= []
-		self.SendingSockets			= []
 		self.WorkerRunning 			= False
 		self.IsServer 				= is_server
 		self.ServerIP				= ""
@@ -28,6 +28,9 @@ class MkSStream():
 	
 	def SetState(self, state):
 		self.State = state
+	
+	def GetState(self):
+		return self.State
 
 	def SetPort(self, port):
 		self.Port = port
@@ -40,16 +43,13 @@ class MkSStream():
 	
 	def ConfigureListener(self):
 		try:
-			self.LogMSG("({classname})# [ConfigureListener]".format(classname=self.ClassName),5)
-
 			self.ServerSocket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-			self.ServerSocket.setblocking(0)
-			self.ServerSocket.bind(('', self.Port))
-			self.RecievingSockets.append(self.ServerSocket)
+			#self.ServerSocket.setblocking(0)
+			self.ServerSocket.bind((self.ServerIP, self.Port))
 
 		except Exception as e:
-			self.LogException("Failed to open listener, {0}".format(str(self.ServerAdderss[1])),e,3)
 			return False
+		return True
 	
 	def Worker(self):
 		# AF_UNIX, AF_LOCAL   Local communication
@@ -76,37 +76,32 @@ class MkSStream():
 		if self.IsServer is True:
 			self.ConfigureListener()
 
+		self.WorkerRunning = True
 		while self.WorkerRunning is True:
 			try:
-				readable, writable, exceptional = select.select(self.RecievingSockets, self.SendingSockets, self.RecievingSockets, 0.5)
 				# Socket management.
-				for sock in readable:
-					data, addr = sock.recvfrom(self.DataSize)
-					if self.IsServer is True:
-						self.ClientPort	= addr[1]
+				if self.IsServer is True: 
+					data, addr = self.ServerSocket.recvfrom(self.DataSize)
+					self.ClientPort	= addr[1]
+				else:
+					data, addr = self.ClientSocket.recvfrom(self.DataSize)
 					
-					# Emit event
-					if self.OnDataArrivedEvent is not None:
-						self.OnDataArrivedEvent(self.Name, data)
+				# Emit event
+				if self.OnDataArrivedEvent is not None:
+					self.OnDataArrivedEvent(self.Name, self.Identity, data)
 				
-				for sock in writable:
-					self.LogMSG("({classname})# [Worker] Socket Writeable ...".format(classname=self.ClassName),5)
-						
-				for sock in exceptional:
-					self.LogMSG("({classname})# [Worker] Socket Exceptional ...".format(classname=self.ClassName),5)
+				time.sleep(0.5)
 			except Exception as e:
-				self.LogException("[Worker]",e,3)
+				print("[Worker]", e)
 	
 	def Listen(self):
 		if self.IsServer is True:
 			thread.start_new_thread(self.Worker, ())
 			self.SetState("LISTEN")
 
-	def Connect(self, uuid):
+	def Connect(self):
 		if self.IsServer is False:
-			self.UUID = uuid
 			self.ClientSocket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-			self.RecievingSockets.append(self.ClientSocket)
 			thread.start_new_thread(self.Worker, ())
 			self.SetState("CONNECT")
 
@@ -119,10 +114,11 @@ class MkSStream():
 		self.SetState("IDLE")
 
 	def Send(self, data):
+		buffer = str.encode(data)
 		if self.IsServer is False:
-			self.ServerSocket.sendto(data, (self.ServerIP, self.Port))
+			self.ClientSocket.sendto(buffer, (self.ServerIP, self.Port))
 		else:
-			self.ClientSocket.sendto(data, (self.ClientIP, self.ClientPort))
+			self.ServerSocket.sendto(buffer, (self.ClientIP, self.ClientPort))
 
 class MkSStreamManager():
 	def __init__(self, context):
@@ -136,11 +132,12 @@ class MkSStreamManager():
 			return
 		
 		stream = MkSStream(name, is_server)
+		stream.Identity = identity
 		if is_server is True:
 			stream.Port = self.GeneratePort()
 		self.Streams[identity] = stream	
 		
-	def UpdateStream(self, ts_t, stream):
+	def UpdateStream(self, identity, stream):
 		if identity in self.Streams:
 			return
 		self.Streams[identity] = stream	

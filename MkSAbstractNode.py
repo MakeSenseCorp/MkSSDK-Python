@@ -14,6 +14,7 @@ import logging
 import Queue
 import hashlib
 import xml.etree.ElementTree as ET
+import random
 
 import MkSGlobals
 from mksdk import MkSFile
@@ -622,7 +623,7 @@ class AbstractNode():
 		self.LogMSG("({classname})# [OpenStreamSocketRequestHandler]".format(classname=self.ClassName),5)
 		payload = self.BasicProtocol.GetPayloadFromJson(packet)
 
-		if self.OnStreamSocketCreatedEvent is None or aelf.OnStreamSocketDataEvent is None or self.OnStreamSocketDisconnectedEvent is None:
+		if self.OnStreamSocketCreatedEvent is None or self.OnStreamSocketDataEvent is None or self.OnStreamSocketDisconnectedEvent is None:
 			return self.BasicProtocol.BuildResponse(packet, { 
 				'ip': "",
 				'uuid': "",
@@ -630,30 +631,31 @@ class AbstractNode():
 				'ts': 0,
 				'status': "NOTSUPPORTED"
 			})
-
 		identity = payload["ts"]
 		uuid 	 = payload["uuid"]
 		ip 	 	 = payload["ip"]
 
 		self.StreamSocksMngr.CreateStream(identity, "server_{0}".format(identity), True)
-		self.StreamSocksMngr.RegisterCallbacks(identity, OnStreamSocketCreatedEvent, OnStreamSocketDataEvent, None)
+		self.StreamSocksMngr.RegisterCallbacks(identity, self.OnStreamSocketCreatedEvent, self.OnStreamSocketDataEvent, self.OnStreamSocketDisconnectedEvent)
 		stream = self.StreamSocksMngr.GetStream(identity)
 		stream.UUID 	= uuid
 		stream.ClientIP = ip
 		self.StreamSocksMngr.UpdateStream(identity, stream)
-		self.stream.Listen()
+		stream.SetServerIP(self.MyLocalIP)
+		stream.Listen()
 
 		# Update application layer about stream creation
 		if self.OnStreamSocketCreatedEvent is not None:
 			self.OnStreamSocketCreatedEvent(stream.Name, identity)
-
-		return self.BasicProtocol.BuildResponse(packet, { 
+		payload = { 
 			'ip': self.MyLocalIP,
 			'uuid': self.UUID,
 			'port': stream.GetPort(),
 			'ts': identity,
 			'status': "CREATED"
-		})
+		}
+
+		return self.BasicProtocol.BuildResponse(packet, payload)
 	
 	''' 
 		Description: 	Requestor for stream private socket get reaponse with status and port [RESPONSE]
@@ -683,7 +685,8 @@ class AbstractNode():
 	'''
 	def ConnectStream(self, uuid, name):
 		# Generate timestamp
-		identity = time.time()
+		random.seed(time.time())
+		identity = int((random.random() * 10000000))
 		# Send MKS packet with "open_stream_socket" request with ts
 		self.SendRequestToNode(uuid, "open_stream_socket", {
 			'ts': identity,
@@ -692,29 +695,31 @@ class AbstractNode():
 		})
 		# Create client stream
 		self.StreamSocksMngr.CreateStream(identity, name, False)
-		self.StreamSocksMngr.RegisterCallbacks(identity, OnStreamSocketCreatedEvent, OnStreamSocketDataEvent, None)
+		self.StreamSocksMngr.RegisterCallbacks(identity, self.OnStreamSocketCreatedEvent, self.OnStreamSocketDataEvent, self.OnStreamSocketDisconnectedEvent)
+		self.LogMSG("({classname})# [ConnectStream] {0}".format(identity,classname=self.ClassName),5)
 		# Return to app level with identification stream
 		return identity
-		
-		# Add to dictionary this id
-		# Reciever open listener on port provided by abstract
-		# Reciever respond to requestor with port and rx_ts and tx_ts
-		# add to dictionary listener id
-		# Reciever on response open socket to the port
-		# Each side will update application level with data using callback (each side will bind callback with ts id)
+	
+	def SendStream(self, identity, data):
+		stream = self.GetStream(identity)
+		if stream is not None:
+			if stream.GetState() in ["CONNECT","LISTEN"]:
+				stream.Send(data)
+		else:
+			self.LogMSG("({classname})# STREAM IS NONE".format(classname=self.ClassName),5)
 		
 	''' 
 		Description:	Return created stream.
 		Return: 		Stream
 	'''
-	def GetStream(self, ts_t):
-		return self.StreamSocksMngr.GetStream(ts_t)
+	def GetStream(self, identity):
+		return self.StreamSocksMngr.GetStream(identity)
 	
 	''' 
 		Description:	Disconnect stream.
 		Return: 		None
 	'''
-	def DisconnectStream(self, ts_t):
+	def DisconnectStream(self, identity):
 		pass
 
 	''' 
