@@ -81,6 +81,10 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 		# Flags
 		self.IsListenerEnabled 					= False
 		self.PipeStdoutRun						= False
+
+		# Start Websocket Server
+		self.Websock.SetPort(1999)
+		self.Websock.RunServer()
 	
 	''' 
 		Description: 	N/A

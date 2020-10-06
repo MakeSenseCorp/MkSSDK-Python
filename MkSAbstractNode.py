@@ -700,6 +700,10 @@ class AbstractNode():
 		# Return to app level with identification stream
 		return identity
 	
+	''' 
+		Description:	Send data over stream
+		Return: 		None
+	'''
 	def SendStream(self, identity, data):
 		stream = self.GetStream(identity)
 		if stream is not None:
@@ -1037,17 +1041,29 @@ class AbstractNode():
 			
 			# Append resource section
 			content = content.replace("[RESOURCES]", resources)
+			config = '''
+				var GatewayIP 	= "[GATEWAY_IP]";
+				var NodeUUID  	= "[NODE_UUID]";
+				var LocalWSIP 	= "[LOCAL_WS_IP]";
+				var LocalWSPORT = "[LOCAL_WS_PORT]";
+			'''
 			# Replace UUID
-			content = content.replace("[NODE_UUID]", self.UUID)
+			config = config.replace("[NODE_UUID]", self.UUID)
 			if stamping is None:
 				self.LogMSG("({classname})# [ERROR] Missing STAMPING in packet ...".format(classname=self.ClassName),3)
-				content = content.replace("[GATEWAY_IP]", self.GatewayIP)
+				config = config.replace("[GATEWAY_IP]", self.GatewayIP)
 			else:
 				if "cloud_t" in stamping:
 					# TODO - Cloud URL must be in config.json
-					content = content.replace("[GATEWAY_IP]", "ec2-54-188-199-33.us-west-2.compute.amazonaws.com")
+					config = config.replace("[GATEWAY_IP]", "ec2-54-188-199-33.us-west-2.compute.amazonaws.com")
 				else:
-					content = content.replace("[GATEWAY_IP]", self.GatewayIP)
+					config = config.replace("[GATEWAY_IP]", self.GatewayIP)
+			
+			# Configure local websocket
+			config = config.replace("[LOCAL_WS_IP]", self.MyLocalIP)
+			config = config.replace("[LOCAL_WS_PORT]", self.Websock.Port)
+			
+			content = content.replace("[CONFIGURATION]", config)
 
 			css 	= ""
 			script 	= ""
