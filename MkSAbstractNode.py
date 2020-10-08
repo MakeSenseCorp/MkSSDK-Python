@@ -1041,12 +1041,14 @@ class AbstractNode():
 			
 			# Append resource section
 			content = content.replace("[RESOURCES]", resources)
+			
 			config = '''
 				var GatewayIP 	= "[GATEWAY_IP]";
 				var NodeUUID  	= "[NODE_UUID]";
 				var LocalWSIP 	= "[LOCAL_WS_IP]";
-				var LocalWSPORT = "[LOCAL_WS_PORT]";
+				var LocalWSPORT = [LOCAL_WS_PORT];
 			'''
+			
 			# Replace UUID
 			config = config.replace("[NODE_UUID]", self.UUID)
 			if stamping is None:
@@ -1058,13 +1060,12 @@ class AbstractNode():
 					config = config.replace("[GATEWAY_IP]", "ec2-54-188-199-33.us-west-2.compute.amazonaws.com")
 				else:
 					config = config.replace("[GATEWAY_IP]", self.GatewayIP)
-			
 			# Configure local websocket
 			config = config.replace("[LOCAL_WS_IP]", self.MyLocalIP)
-			config = config.replace("[LOCAL_WS_PORT]", self.Websock.Port)
-			
-			content = content.replace("[CONFIGURATION]", config)
+			config = config.replace("[LOCAL_WS_PORT]", str(self.Websock.Port))
 
+			content = content.replace("[CONFIGURATION]", config)
+			
 			css 	= ""
 			script 	= ""
 			if client_type == "global_ws":
