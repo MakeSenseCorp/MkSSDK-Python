@@ -5,7 +5,6 @@ import json
 import thread
 
 from collections import OrderedDict
-# from flask_socketio import SocketIO, emit
 from geventwebsocket import WebSocketServer, WebSocketApplication, Resource
 
 class MkSLocalWebsocketServer():
@@ -18,6 +17,11 @@ class MkSLocalWebsocketServer():
 		self.OnWSDisconnected 		= None
 		self.Port 					= 0
 	
+	def RegisterCallbacks(self, data, disconnect):
+		print ("({classname})# [RegisterCallbacks] ({0})".format(data, classname=self.ClassName))
+		self.OnDataArrivedEvent = data
+		self.OnWSDisconnected 	= disconnect
+
 	def SetPort(self, port):
 		self.Port = port
 	
@@ -33,7 +37,7 @@ class MkSLocalWebsocketServer():
 	
 	def WSDataArrived(self, ws, data):
 		# TODO - Append webface type
-		packet= json.loads(data)
+		packet = json.loads(data)
 		if ("HANDSHAKE" == packet['header']['message_type']):
 			return
 		
@@ -41,6 +45,7 @@ class MkSLocalWebsocketServer():
 		packet["additional"]["pipe"]  	= "LOCAL_WS"
 		packet["stamping"] 				= ['local_ws']
 
+		print ("({classname})# [WSDataArrived] {0} {1} {2}".format(id(ws),packet,self.OnDataArrivedEvent,classname=self.ClassName))
 		if self.OnDataArrivedEvent is not None:
 			self.OnDataArrivedEvent(ws, packet)
 	
@@ -80,7 +85,7 @@ class NodeWSApplication(WebSocketApplication):
 		WSManager.AppendSocket(id(self.ws), self.ws)
 
 	def on_message(self, message):
-		print ("({classname})# MESSAGE RECIEVED {0} {1}".format(id(self.ws),message,classname=self.ClassName))
+		# print ("({classname})# MESSAGE RECIEVED {0} {1}".format(id(self.ws),message,classname=self.ClassName))
 		if message is not None:
 			WSManager.WSDataArrived(self.ws, message)
 		else:

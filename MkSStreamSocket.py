@@ -150,7 +150,10 @@ class MkSStreamManager():
 		self.Streams[identity] = stream
 	
 	def GetStream(self, identity):
-		return self.Streams[identity]
+		if identity in self.Streams:
+			return self.Streams[identity]
+		else:
+			return None
 	
 	def GeneratePort(self):
 		self.PortCounter += 1

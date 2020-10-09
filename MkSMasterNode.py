@@ -35,6 +35,8 @@ from mksdk import MkSShellExecutor
 from mksdk import MkSLogger
 from mksdk import MkSExternalMasterList
 
+global WSManager
+
 class MasterNode(MkSAbstractNode.AbstractNode):
 	def __init__(self):
 		MkSAbstractNode.AbstractNode.__init__(self)
@@ -81,10 +83,6 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 		# Flags
 		self.IsListenerEnabled 					= False
 		self.PipeStdoutRun						= False
-
-		# Start Websocket Server
-		self.Websock.SetPort(1999)
-		self.Websock.RunServer()
 	
 	''' 
 		Description: 	N/A
@@ -133,14 +131,19 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 			# Build message
 			message = self.BasicProtocol.BuildRequest("DIRECT", destination, self.UUID, "on_node_change", data, event_payload)
 
-			# Send via Master
-			if item_type in [1,2]:
-				if self.Network is not None:
-					self.SendPacketGateway(message)
-			# Local WebSocket Server
+			# Send via socket
+			if item_type == 1:
+				pass
+			# Send via Gateway or Local Websocket
+			elif item_type == 2:
+				if self.IsLocalSockInUse is True:
+					self.EmitEventViaLocalWebsocket(message)
+				else:
+					if self.Network is not None:
+						self.SendPacketGateway(message)
+			# Local WebSocket Server (LOCAL UI ENABLED) - Disabled
 			elif item_type == 3:
-				if self.LocalWSManager is not None:
-					self.LocalWSManager.Send(payload["ws_id"], message)
+				pass
 			else:
 				self.LogMSG("({classname})# [EmitOnNodeChange] Unsupported item type".format(classname=self.ClassName),3)
 		self.DeviceChangeListLock.release()

@@ -178,9 +178,7 @@ class SlaveNode(MkSAbstractNode.AbstractNode):
 		conn.Obj["listener_port"] = self.SocketServer.GetListenerPort()
 		# Change state
 		self.SetState("WORKING")
-		# Start Websocket Server
-		self.Websock.SetPort(self.SocketServer.GetListenerPort() + 2000)
-		self.Websock.RunServer()
+		self.StartLocalWebsocketServer(self.SocketServer.GetListenerPort() + 2000)
 		
 	''' 
 		Description: 	State [WORKING]
@@ -320,14 +318,21 @@ class SlaveNode(MkSAbstractNode.AbstractNode):
 			message = self.BasicProtocol.BuildRequest("DIRECT", destination, self.UUID, "on_node_change", data, event_payload)
 
 			# Send via Master
-			if item_type in [1,2]:
+			if item_type == 1:
 				packet  = self.BasicProtocol.AppendMagic(message)
 				if self.LocalMasterConnection is not None:
 					self.SocketServer.Send(self.LocalMasterConnection.Socket, packet)
-			# Local WebSocket Server
+			# Send via Master or Local Websocket
+			elif item_type == 2:
+				if self.IsLocalSockInUse is True:
+					self.EmitEventViaLocalWebsocket(message)
+				else:
+					if self.LocalMasterConnection is not None:
+						packet  = self.BasicProtocol.AppendMagic(message)
+						self.SocketServer.Send(self.LocalMasterConnection.Socket, packet)
+			# Local WebSocket Server (LOCAL UI ENABLED) - Disabled
 			elif item_type == 3:
-				if self.LocalWSManager is not None:
-					self.LocalWSManager.Send(payload["ws_id"], message)
+				pass
 			else:
 				self.LogMSG("({classname})# [EmitOnNodeChange] Unsupported item type".format(classname=self.ClassName),3)
 		self.DeviceChangeListLock.release()
