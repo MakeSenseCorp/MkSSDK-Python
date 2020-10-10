@@ -23,24 +23,19 @@ class UVCCamera():
 		self.ImP						= MkSImageProcessing.MkSImageComperator()
 		self.Name 						= ""
 		self.IsGetFrame 				= False
-		self.IsRecoding 				= False
 		self.IsCameraWorking 			= False
-		self.IsSecurity					= False
-		self.FramesPerVideo 			= 2000
 		self.SecondsPerFrame			= 0.4
-		self.RecordingSensetivity 		= 95
-		self.SecuritySensitivity 		= 92
 		self.CurrentImageIndex 			= 0
-		self.OnImageDifferentCallback	= None
 		self.State 						= 0
 		self.FrameCount  				= 0
 		self.FPS 						= 0.0
-		self.RecordingPath 				= ""
 		# Events
-		self.StopRecordingEvent 		= None
+		self.OnImageDifferentCallback	= None
+		self.OnMotionDetectedCallback	= None
+		self.OnFaceDetectedCallback		= None
 		# Synchronization
 		self.WorkingStatusLock 			= threading.Lock()
-
+		# Camera HW
 		self.Device 					= None
 		self.DevicePath 				= path
 		self.Memory 					= None
@@ -49,31 +44,13 @@ class UVCCamera():
 		self.CameraDriverName 			= ""
 		self.UID 						= ""
 
-		self.OnFrameChangeHandler       = None
-		self.OnMotionHandler            = None
-
 		self.InitCameraDriver()
-	
-	def SetSecuritySensetivity(self, value):
-		self.SecuritySensitivity = value
 
-	def SetRecordingPath(self, path):
-		self.RecordingPath = path
-
-	def SetFramesPerVideo(self, value):
-		self.FramesPerVideo = value
-
-	def SetRecordingSensetivity(self, value):
-		self.RecordingSensetivity = value
-	
 	def SetHighDiff(self, value):
 		self.ImP.SetHighDiff(value)
 	
 	def SetSecondsPerFrame(self, value):
 		self.SecondsPerFrame = value
-
-	def GetCapturingProcess(self):
-		return int((float(self.CurrentImageIndex) / float(self.FramesPerVideo)) * 100.0)
 	
 	def GetFPS(self):
 		return self.FPS
@@ -178,26 +155,12 @@ class UVCCamera():
 	
 	def GetState(self):
 		return self.State
-
-	def StartSecurity(self):
-		self.IsSecurity = True
-		self.IsGetFrame = True
-
-	def StopSecurity(self):
-		self.IsSecurity = False
 	
 	def StartGettingFrames(self):
 		self.IsGetFrame = True
 
 	def StopGettingFrames(self):
 		self.IsGetFrame = False
-	
-	def StartRecording(self):
-		self.IsRecoding = True
-		self.IsGetFrame = True
-
-	def StopRecording(self):
-		self.IsRecoding = False
 
 	def StartCamera(self):
 		self.WorkingStatusLock.acquire()
@@ -207,7 +170,6 @@ class UVCCamera():
 
 	def StopCamera(self):
 		self.WorkingStatusLock.acquire()
-		print ("({classname})# Stop recording ... ({0})".format(self.Device, classname=self.ClassName))
 		if self.CameraDriverValid is True:
 		    fcntl.ioctl(self.Device, v4l2.VIDIOC_STREAMOFF, self.BufferType)
 		self.IsCameraWorking = False
@@ -215,17 +177,10 @@ class UVCCamera():
 
 	def CameraThread(self):
 		global GEncoder
-		
-		# TODO - Is video creation is on going?
-		# TODO - Each camera must have its own video folder.
-		# TODO - Enable/Disable camera - self.IsGetFrame(T/F)
-		# TODO - Stop recording will not kill this thread
 
 		frame_cur 			 = None
 		frame_pre 			 = None
 		frame_dif 	 		 = 0
-		rec_buffer 			 = [[],[]]
-		rec_buffer_idx 		 = 0
 		ts 					 = time.time()
 
 		self.IsCameraWorking = True
@@ -241,70 +196,15 @@ class UVCCamera():
 					frame_pre = frame_cur
 
 					self.FPS = 1.0 / float(time.time()-ts)
-					print("({classname})# [FRAME] ({0}) ({1}) ({dev}) (diff={diff}) (sensitivity={sensy}) (fps={fps})".format(	str(self.FrameCount),
+					print("({classname})# [FRAME] ({0}) ({1}) ({dev}) (diff={diff}) (fps={fps})".format(	str(self.FrameCount),
 																						str(len(frame_cur)),
 																						diff=str(frame_dif),
 																						fps=str(self.FPS),
-																						sensy=str(self.SecuritySensitivity),
 																						dev=str(self.Device),
                                                                                         classname=self.ClassName))
-					ts = time.time()
-					if (frame_dif < self.SecuritySensitivity):
-						if self.OnFrameChangeHandler is not None:
-							self.OnFrameChangeHandler({
-                                        'dev': self.DevicePath.split('/')[-1],
-                                        'event': "new_frame", 
-                                        'frame': base64.encodestring(frame_cur)
-                            })
-
-					if self.IsSecurity is True:
-						if (frame_dif < self.SecuritySensitivity):
-							print("[Camera] Security {diff} {sensitivity}".format(diff = str(frame_dif), sensitivity = str(self.SecuritySensitivity)))
-							if self.OnImageDifferentCallback is not None:
-								self.OnImageDifferentCallback(self.Device, frame_cur)
-				
-					if self.IsRecoding is True:
-						# Check for valid storage
-						if not os.path.exists(self.RecordingPath):
-							if self.StopRecordingEvent is not None:
-								self.StopRecordingEvent({
-									'path': self.RecordingPath,
-									'ip': "",
-									'dev': self.Device,
-									'mac': "",
-									'uid': self.UID
-								})
-							self.IsRecoding = False
-						else:
-							if (frame_dif < self.RecordingSensetivity):
-								rec_buffer[rec_buffer_idx].append(frame_cur)
-								print("[Camera] Recording {frames} {diff} {sensitivity}".format(frames = str(len(rec_buffer[rec_buffer_idx])), diff = str(frame_dif), sensitivity = str(self.RecordingSensetivity)))
-								self.CurrentImageIndex = len(rec_buffer[rec_buffer_idx])
-							
-							if self.FramesPerVideo <= self.CurrentImageIndex:
-								path = "{0}/{1}/video".format(self.RecordingPath, self.UID)
-								try:
-									if not os.path.exists(path):
-										os.makedirs(path)
-									GEncoder.AddOrder({
-										'images': rec_buffer[rec_buffer_idx],
-										'path': path
-									})
-									# logging.debug("Sent recording order " + str(id(rec_buffer[rec_buffer_idx])))
-								except Exception as e:
-									print ("[Camera] Exception", e)
-
-								if 1 == rec_buffer_idx:
-									rec_buffer_idx = 0
-								else:
-									rec_buffer_idx = 1
-								
-								rec_buffer[rec_buffer_idx] = []
-								self.CurrentImageIndex = len(rec_buffer[rec_buffer_idx])
-								gc.collect()
+					ts = time.time()			
 				else:
 					print ("({classname})# ERROR - Cannot fetch frame ...".format(classname=self.ClassName))
 			else:
 				time.sleep(1)
 			self.WorkingStatusLock.acquire()
-		print ("({classname})# Exit RECORDING THREAD ...".format(classname=self.ClassName))
