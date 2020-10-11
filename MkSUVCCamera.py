@@ -29,6 +29,8 @@ class UVCCamera():
 		self.State 						= 0
 		self.FrameCount  				= 0
 		self.FPS 						= 0.0
+		self.Sensetivity 				= 98
+		self.UserFPS	 				= 1
 		# Events
 		self.OnFrameChangeHandler		= None
 		self.OnMotionDetectedCallback	= None
@@ -51,6 +53,9 @@ class UVCCamera():
 	
 	def SetSecondsPerFrame(self, value):
 		self.SecondsPerFrame = value
+	
+	def SetFPS(self, value):
+		self.UserFPS = value
 	
 	def SetSensetivity(self, sensetivity):
 		self.Sensetivity = sensetivity
@@ -137,8 +142,7 @@ class UVCCamera():
 			raw_frame 		= self.Memory.read(self.Buffer.length)
 			img_raw_Frame 	= Image.open(BytesIO(raw_frame))
 			output 			= BytesIO()
-			img_raw_Frame.save(output, "JPEG", quality=15, optimize=True, progressive=True)
-			print("DEBUG")
+			img_raw_Frame.save(output, "JPEG", quality=25, optimize=True, progressive=True)
 			frame 			= output.getvalue()
 
 			self.Memory.seek(0)
@@ -206,8 +210,17 @@ class UVCCamera():
 																							str(len(frame_cur)),
 																							diff=str(frame_dif),
 																							fps=str(self.FPS),
-																							dev=str(self.Device),
+																							dev=str(self.DevicePath),
 																							classname=self.ClassName))
+						if self.Sensetivity > frame_dif:
+							if self.OnFrameChangeHandler is not None:
+								self.OnFrameChangeHandler({
+									"device_path": self.DevicePath,
+									"uid": self.UID,
+									"user_fps": self.UserFPS,
+									"fps": str(self.FPS),
+									"sensetivity": self.Sensetivity
+								}, frame_cur)
 					ts = time.time()			
 				else:
 					print ("({classname})# ERROR - Cannot fetch frame ...".format(classname=self.ClassName))
