@@ -30,7 +30,7 @@ class UVCCamera():
 		self.FrameCount  				= 0
 		self.FPS 						= 0.0
 		# Events
-		self.OnImageDifferentCallback	= None
+		self.OnFrameChangeHandler		= None
 		self.OnMotionDetectedCallback	= None
 		self.OnFaceDetectedCallback		= None
 		# Synchronization
@@ -51,6 +51,9 @@ class UVCCamera():
 	
 	def SetSecondsPerFrame(self, value):
 		self.SecondsPerFrame = value
+	
+	def SetSensetivity(self, sensetivity):
+		self.Sensetivity = sensetivity
 	
 	def GetFPS(self):
 		return self.FPS
@@ -108,8 +111,9 @@ class UVCCamera():
 		self.Buffer 		= v4l2.v4l2_buffer()
 		self.Buffer.type 	= v4l2.V4L2_BUF_TYPE_VIDEO_CAPTURE
 		self.Buffer.memory 	= v4l2.V4L2_MEMORY_MMAP
-		frame_garbed 	= False
-		retry_counter	= 0
+		frame_garbed 		= False
+		retry_counter		= 0
+		frame 				= None
 		try:
 			while frame_garbed is False and retry_counter < 5:
 				# Needed for virtual FPS and UVC driver
@@ -134,6 +138,7 @@ class UVCCamera():
 			img_raw_Frame 	= Image.open(BytesIO(raw_frame))
 			output 			= BytesIO()
 			img_raw_Frame.save(output, "JPEG", quality=15, optimize=True, progressive=True)
+			print("DEBUG")
 			frame 			= output.getvalue()
 
 			self.Memory.seek(0)
@@ -196,12 +201,13 @@ class UVCCamera():
 					frame_pre = frame_cur
 
 					self.FPS = 1.0 / float(time.time()-ts)
-					print("({classname})# [FRAME] ({0}) ({1}) ({dev}) (diff={diff}) (fps={fps})".format(	str(self.FrameCount),
-																						str(len(frame_cur)),
-																						diff=str(frame_dif),
-																						fps=str(self.FPS),
-																						dev=str(self.Device),
-                                                                                        classname=self.ClassName))
+					if frame_cur is not None:
+						print("({classname})# [FRAME] ({0}) ({1}) ({dev}) (diff={diff}) (fps={fps})".format(	str(self.FrameCount),
+																							str(len(frame_cur)),
+																							diff=str(frame_dif),
+																							fps=str(self.FPS),
+																							dev=str(self.Device),
+																							classname=self.ClassName))
 					ts = time.time()			
 				else:
 					print ("({classname})# ERROR - Cannot fetch frame ...".format(classname=self.ClassName))
