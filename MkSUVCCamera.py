@@ -32,9 +32,8 @@ class UVCCamera():
 		self.Sensetivity 				= 98
 		self.UserFPS	 				= 1
 		# Events
-		self.OnFrameChangeHandler		= None
-		self.OnMotionDetectedCallback	= None
-		self.OnFaceDetectedCallback		= None
+		self.OnFrameChangeCallback		= None
+		self.OnCameraFailCallback		= None
 		# Synchronization
 		self.WorkingStatusLock 			= threading.Lock()
 		# Camera HW
@@ -128,14 +127,13 @@ class UVCCamera():
 					fcntl.ioctl(self.Device, v4l2.VIDIOC_DQBUF, self.Buffer)
 					frame_garbed = True
 				except Exception as e:
-				    retry_counter += 1
-				    print ("({classname})# [ERROR] UVC driver cannot dqueue frame ... ({0})".format(retry_counter, classname=self.ClassName))
+					retry_counter += 1
+					print ("({classname})# [ERROR] UVC driver cannot dqueue frame ... {1}".format(e, classname=self.ClassName))
+					if "No such device" in e:
+						self.CameraDriverValid = False
+						return None, True
             
 			if frame_garbed is False:
-				# Reset uvc driver
-				fcntl.ioctl(self.Device, v4l2.VIDIOC_STREAMOFF, self.BufferType)
-				self.Memory.close()
-				self.InitCameraDriver()
 				return None, True
             
 			# Read frame from memory maped object
@@ -150,12 +148,10 @@ class UVCCamera():
 			fcntl.ioctl(self.Device, v4l2.VIDIOC_QBUF, self.Buffer)
 			self.FrameCount +=  1
 		except Exception as e:
+			print ("({classname})# [Frame] ERROR ({0})".format(e, classname=self.ClassName))
 			if "No such device" in e:
 				self.CameraDriverValid = False
-				self.StopCamera()
-				return None, True
-			else:
-				print ("({classname})# {0}".format(e, classname=self.ClassName))
+			return None, True
 
 		return frame, False
 	
@@ -196,34 +192,51 @@ class UVCCamera():
 		self.IsGetFrame 	 = True
 		
 		self.WorkingStatusLock.acquire()
-		while self.IsCameraWorking is True:
-			self.WorkingStatusLock.release()
-			if self.IsGetFrame is True:
-				frame_cur, error = self.Frame()
-				if (error is False):
-					frame_dif = self.ImP.CompareJpegImages(frame_cur, frame_pre)
-					frame_pre = frame_cur
+		try:
+			while self.IsCameraWorking is True:
+				self.WorkingStatusLock.release()
+				if self.IsGetFrame is True:
+					frame_cur, error = self.Frame()
+					if (error is False):
+						frame_dif = self.ImP.CompareJpegImages(frame_cur, frame_pre)
+						frame_pre = frame_cur
 
-					self.FPS = 1.0 / float(time.time()-ts)
-					if frame_cur is not None:
-						print("({classname})# [FRAME] ({0}) ({1}) ({dev}) (diff={diff}) (fps={fps})".format(	str(self.FrameCount),
-																							str(len(frame_cur)),
-																							diff=str(frame_dif),
-																							fps=str(self.FPS),
-																							dev=str(self.DevicePath),
-																							classname=self.ClassName))
-						if self.Sensetivity > frame_dif:
-							if self.OnFrameChangeHandler is not None:
-								self.OnFrameChangeHandler({
-									"device_path": self.DevicePath,
-									"uid": self.UID,
-									"user_fps": self.UserFPS,
-									"fps": str(self.FPS),
-									"sensetivity": self.Sensetivity
-								}, frame_cur)
-					ts = time.time()			
+						self.FPS = 1.0 / float(time.time()-ts)
+						if frame_cur is not None:
+							print("({classname})# [FRAME] ({0}) ({1}) ({dev}) (diff={diff}) (fps={fps})".format(	str(self.FrameCount),
+																								str(len(frame_cur)),
+																								diff=str(frame_dif),
+																								fps=str(self.FPS),
+																								dev=str(self.DevicePath),
+																								classname=self.ClassName))
+							if self.Sensetivity > frame_dif:
+								if self.OnFrameChangeCallback is not None:
+									self.OnFrameChangeCallback({
+										"device_path": self.DevicePath,
+										"uid": self.UID,
+										"user_fps": self.UserFPS,
+										"fps": str(self.FPS),
+										"sensetivity": self.Sensetivity
+									}, frame_cur)
+						ts = time.time()			
+					else:
+						print ("({classname})# ERROR - Cannot fetch frame ... {0}".format(self.IsCameraWorking, classname=self.ClassName))
+						# Remove MMAP
+						self.Memory.close()
+						# Clode FD for this camera
+						os.close(self.Device)
+						# Stop camera thread
+						self.StopCamera()
+						# Emit to user
+						if self.OnCameraFailCallback is not None:
+							self.OnCameraFailCallback(self.UID)
 				else:
-					print ("({classname})# ERROR - Cannot fetch frame ...".format(classname=self.ClassName))
-			else:
-				time.sleep(1)
-			self.WorkingStatusLock.acquire()
+					time.sleep(1)
+				self.WorkingStatusLock.acquire()
+		except Exception as e:
+			print ("({classname})# ERROR {0}".format(e, classname=self.ClassName))
+			# Emit to user
+			if self.OnCameraFailCallback is not None:
+				self.OnCameraFailCallback(self.UID)
+		
+		print ("({classname})# Exit camera thread {0}".format(self.UID, classname=self.ClassName))
