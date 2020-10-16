@@ -62,6 +62,16 @@ class UVCCamera():
 	def GetFPS(self):
 		return self.FPS
 	
+	def Pause(self):
+		if self.CameraDriverValid is True:
+			fcntl.ioctl(self.Device, v4l2.VIDIOC_STREAMOFF, self.BufferType)
+			self.IsGetFrame = False
+	
+	def Resume(self):
+		if self.CameraDriverValid is True:
+			fcntl.ioctl(self.Device, v4l2.VIDIOC_STREAMON, self.BufferType)
+			self.IsGetFrame = True
+	
 	def InitCameraDriver(self):
 		self.Device = os.open(self.DevicePath, os.O_RDWR | os.O_NONBLOCK, 0)
 
@@ -118,20 +128,25 @@ class UVCCamera():
 		frame_garbed 		= False
 		retry_counter		= 0
 		frame 				= None
+		delta 				= 0.0
 		try:
 			while frame_garbed is False and retry_counter < 5:
 				# Needed for virtual FPS and UVC driver
-				time.sleep(self.SecondsPerFrame)
+				time.sleep(self.SecondsPerFrame + delta)
 				# Get image from the driver queue
 				try:
 					fcntl.ioctl(self.Device, v4l2.VIDIOC_DQBUF, self.Buffer)
 					frame_garbed = True
 				except Exception as e:
 					retry_counter += 1
-					print ("({classname})# [ERROR] UVC driver cannot dqueue frame ... {1}".format(e, classname=self.ClassName))
+					print ("({classname})# VIDIOC_DQBUF [ERROR] {0}".format(e, classname=self.ClassName))
 					if "No such device" in e:
 						self.CameraDriverValid = False
 						return None, True
+					elif "[Errno 11] Resource temporarily unavailable" in e:
+						#self.Pause()
+						#self.Resume()
+						delta = 1.0
             
 			if frame_garbed is False:
 				return None, True
@@ -148,7 +163,7 @@ class UVCCamera():
 			fcntl.ioctl(self.Device, v4l2.VIDIOC_QBUF, self.Buffer)
 			self.FrameCount +=  1
 		except Exception as e:
-			print ("({classname})# [Frame] ERROR ({0})".format(e, classname=self.ClassName))
+			print ("({classname})# Frame [ERROR] ({0})".format(e, classname=self.ClassName))
 			if "No such device" in e:
 				self.CameraDriverValid = False
 			return None, True
@@ -167,13 +182,13 @@ class UVCCamera():
 	def StopGettingFrames(self):
 		self.IsGetFrame = False
 
-	def StartCamera(self):
+	def Start(self):
 		self.WorkingStatusLock.acquire()
 		if (self.IsCameraWorking is False):
 			thread.start_new_thread(self.CameraThread, ())
 		self.WorkingStatusLock.release()
 
-	def StopCamera(self):
+	def Stop(self):
 		self.WorkingStatusLock.acquire()
 		if self.CameraDriverValid is True:
 		    fcntl.ioctl(self.Device, v4l2.VIDIOC_STREAMOFF, self.BufferType)
@@ -220,21 +235,22 @@ class UVCCamera():
 									}, frame_cur)
 						ts = time.time()			
 					else:
-						print ("({classname})# ERROR - Cannot fetch frame ... {0}".format(self.IsCameraWorking, classname=self.ClassName))
-						# Remove MMAP
-						self.Memory.close()
-						# Clode FD for this camera
-						os.close(self.Device)
-						# Stop camera thread
-						self.StopCamera()
-						# Emit to user
-						if self.OnCameraFailCallback is not None:
-							self.OnCameraFailCallback(self.UID)
+						print ("({classname})# Cannot fetch frame ... {0}".format(self.IsCameraWorking, classname=self.ClassName))
+						if self.CameraDriverValid is False:
+							# Remove MMAP
+							self.Memory.close()
+							# Clode FD for this camera
+							os.close(self.Device)
+							# Stop camera thread
+							self.Stop()
+							# Emit to user
+							if self.OnCameraFailCallback is not None:
+								self.OnCameraFailCallback(self.UID)
 				else:
 					time.sleep(1)
 				self.WorkingStatusLock.acquire()
 		except Exception as e:
-			print ("({classname})# ERROR {0}".format(e, classname=self.ClassName))
+			print ("({classname})# CameraThread [ERROR] {0}".format(e, classname=self.ClassName))
 			# Emit to user
 			if self.OnCameraFailCallback is not None:
 				self.OnCameraFailCallback(self.UID)
