@@ -15,6 +15,11 @@ from io import BytesIO
 from mksdk import MkSVideoRecording
 from mksdk import MkSImageProcessing
 
+'''
+1. No such device
+2. [Errno 11] Resource temporarily unavailable
+'''
+
 GEncoder = MkSVideoRecording.VideoCreator()
 
 class UVCCamera():
@@ -44,6 +49,10 @@ class UVCCamera():
 		self.Buffer 					= None
 		self.CameraDriverName 			= ""
 		self.UID 						= ""
+		# Error Handling
+		self.ErrorCount					= 0
+		self.RebootCount				= 0
+		self.LocalRebootRequired		= False
 
 		self.InitCameraDriver()
 
@@ -66,11 +75,13 @@ class UVCCamera():
 		if self.CameraDriverValid is True:
 			fcntl.ioctl(self.Device, v4l2.VIDIOC_STREAMOFF, self.BufferType)
 			self.IsGetFrame = False
+			time.sleep(1)
 	
 	def Resume(self):
 		if self.CameraDriverValid is True:
 			fcntl.ioctl(self.Device, v4l2.VIDIOC_STREAMON, self.BufferType)
 			self.IsGetFrame = True
+			time.sleep(1)
 	
 	def InitCameraDriver(self):
 		self.Device = os.open(self.DevicePath, os.O_RDWR | os.O_NONBLOCK, 0)
@@ -118,54 +129,40 @@ class UVCCamera():
 		# Start streaming
 		self.BufferType = v4l2.v4l2_buf_type(v4l2.V4L2_BUF_TYPE_VIDEO_CAPTURE)
 		fcntl.ioctl(self.Device, v4l2.VIDIOC_STREAMON, self.BufferType)
-		time.sleep(5)
+		time.sleep(1)
 
 	def Frame(self):
 		# Allocate new buffer
-		self.Buffer 		= v4l2.v4l2_buffer()
-		self.Buffer.type 	= v4l2.V4L2_BUF_TYPE_VIDEO_CAPTURE
-		self.Buffer.memory 	= v4l2.V4L2_MEMORY_MMAP
-		frame_garbed 		= False
-		retry_counter		= 0
-		frame 				= None
-		delta 				= 0.0
+		#self.Buffer 			= v4l2.v4l2_buffer()
+		#self.Buffer.type 		= v4l2.V4L2_BUF_TYPE_VIDEO_CAPTURE
+		#self.Buffer.memory 	= v4l2.V4L2_MEMORY_MMAP
+		frame = None
 		try:
-			while frame_garbed is False and retry_counter < 5:
-				# Needed for virtual FPS and UVC driver
-				time.sleep(self.SecondsPerFrame + delta)
-				# Get image from the driver queue
-				try:
-					fcntl.ioctl(self.Device, v4l2.VIDIOC_DQBUF, self.Buffer)
-					frame_garbed = True
-				except Exception as e:
-					retry_counter += 1
-					print ("({classname})# VIDIOC_DQBUF [ERROR] {0}".format(e, classname=self.ClassName))
-					if "No such device" in e:
-						self.CameraDriverValid = False
-						return None, True
-					elif "[Errno 11] Resource temporarily unavailable" in e:
-						#self.Pause()
-						#self.Resume()
-						delta = 1.0
-            
-			if frame_garbed is False:
-				return None, True
-            
+			# Needed for virtual FPS and UVC driver
+			time.sleep(self.SecondsPerFrame)
+			# Get image from the driver queue
+			fcntl.ioctl(self.Device, v4l2.VIDIOC_DQBUF, self.Buffer)           
 			# Read frame from memory maped object
 			raw_frame 		= self.Memory.read(self.Buffer.length)
+			# Convert to Image
 			img_raw_Frame 	= Image.open(BytesIO(raw_frame))
 			output 			= BytesIO()
+			# Save as JPEG format
 			img_raw_Frame.save(output, "JPEG", quality=25, optimize=True, progressive=True)
 			frame 			= output.getvalue()
-
+			# Set memory to zero offset
 			self.Memory.seek(0)
 			# Requeue the buffer
 			fcntl.ioctl(self.Device, v4l2.VIDIOC_QBUF, self.Buffer)
-			self.FrameCount +=  1
+			self.FrameCount += 1
 		except Exception as e:
 			print ("({classname})# Frame [ERROR] ({0})".format(e, classname=self.ClassName))
+			self.ErrorCount += 1
 			if "No such device" in e:
 				self.CameraDriverValid = False
+			else:
+				if self.ErrorCount > 3:
+					self.LocalRebootRequired = True
 			return None, True
 
 		return frame, False
@@ -194,6 +191,20 @@ class UVCCamera():
 		    fcntl.ioctl(self.Device, v4l2.VIDIOC_STREAMOFF, self.BufferType)
 		self.IsCameraWorking = False
 		self.WorkingStatusLock.release()
+	
+	def Reboot(self):
+		self.WorkingStatusLock.acquire()
+		# Stop camera stream
+		fcntl.ioctl(self.Device, v4l2.VIDIOC_STREAMOFF, self.BufferType)
+		# Remove MMAP
+		self.Memory.close()
+		# Clode FD for this camera
+		os.close(self.Device)
+		# Init camera
+		self.InitCameraDriver()
+		self.LocalRebootRequired = False
+		self.RebootCount += 1
+		self.WorkingStatusLock.release()
 
 	def CameraThread(self):
 		global GEncoder
@@ -210,6 +221,10 @@ class UVCCamera():
 		try:
 			while self.IsCameraWorking is True:
 				self.WorkingStatusLock.release()
+				if self.LocalRebootRequired is True:
+					self.Reboot()
+					self.ErrorCount = 0
+
 				if self.IsGetFrame is True:
 					frame_cur, error = self.Frame()
 					if (error is False):
@@ -218,11 +233,12 @@ class UVCCamera():
 
 						self.FPS = 1.0 / float(time.time()-ts)
 						if frame_cur is not None:
-							print("({classname})# [FRAME] ({0}) ({1}) ({dev}) (diff={diff}) (fps={fps})".format(	str(self.FrameCount),
+							print("({classname})# [FRAME] ({0}) ({1}) ({dev}) (diff={diff}) (fps={fps}) (reboot_count={reboot_count})".format(	str(self.FrameCount),
 																								str(len(frame_cur)),
 																								diff=str(frame_dif),
 																								fps=str(self.FPS),
 																								dev=str(self.DevicePath),
+																								reboot_count=str(self.RebootCount),
 																								classname=self.ClassName))
 							if self.Sensetivity > frame_dif:
 								if self.OnFrameChangeCallback is not None:
