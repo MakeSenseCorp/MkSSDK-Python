@@ -23,7 +23,6 @@ class Manager():
 		self.ClassName                  = "MkSLocalSocket"
 		self.Security                   = MkSSecurity.Security()
 		self.Transceiver                = MkSTransceiver.Manager(self.SocketTXCallback, self.SocketRXCallback)
-		self.BasicProtocol              = MkSBasicNetworkProtocol.BasicNetworkProtocol()
 		self.Logger						= None
 		# Events
 		self.NewSocketEvent             = None	# Disabled

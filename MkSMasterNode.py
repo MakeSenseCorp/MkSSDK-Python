@@ -312,7 +312,7 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 							message = self.GatewayDataArrivedCallback(None, packet)
 							self.SendPacketGateway(message)
 				else:
-					self.LogMSG("({classname})# [Websocket INBOUND] ERROR - Not support {0} request type.".format(messageType, classname=self.ClassName),4)
+					self.LogMSG("({classname})# [Websocket INBOUND] ERROR - Master DOES NOT support {0} request type.".format(messageType, classname=self.ClassName),4)
 			else:
 				self.LogMSG("(Master Node)# Not mine ... Sending to slave ... " + destination,5)
 				# Find who has this destination adderes.
@@ -358,26 +358,38 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 	def LocalSocketDataInputExternalHandler(self, conn, packet, raw_data):
 		try:
 			destination = self.BasicProtocol.GetDestinationFromJson(packet)
-			# Is destination located in my list.
-			slave = self.GetNodeByUUID(destination)
-			if (slave is not None):
-				# Redirect to slave located on this machine
-				self.LogMSG("({classname})# [REDIRECTING PACKET] Sending directly to local client".format(classname=self.ClassName), 5)
-				message = self.BasicProtocol.AppendMagic(raw_data)
-				self.SocketServer.Send(slave.Socket, message)
-			else: 
-				# Destination might be in other master
-				if self.MasterManager.Working is True:
-					master = self.MasterManager.GetMasterConnection(destination)
-					if master is not None:
-						self.LogMSG("({classname})# [REDIRECTING PACKET] Sending to other MASTER".format(classname=self.ClassName), 5)
-						self.SocketServer.Send(master.Socket, message)
-						return
-			
+			direction 	= self.BasicProtocol.GetDirectionFromJson(packet)
+			messageType = self.BasicProtocol.GetMessageTypeFromJson(packet)
+			self.LogMSG("({classname})# [LocalSocketDataInputExternalHandler] {0}".format(destination,classname=self.ClassName), 5)
+			if destination in ["MASTER","UNKNOWN"]:
+				return
+			elif destination in ["BROADCAST"] and "request" in direction and messageType in ["BROADCAST"]:
 				# This message not nor on this machine neither on this local network, send to Gateway.
 				if self.Network is not None:
-					self.LogMSG("({classname})# This massage is external (MOSTLY MASTER)".format(classname=self.ClassName), 5)
+					# self.LogMSG("({classname})# This massage is external (MOSTLY MASTER)".format(classname=self.ClassName), 5)
 					self.SendPacketGateway(raw_data)
+			else:
+				# Is destination located in my list.
+				slave = self.GetNodeByUUID(destination)
+				if (slave is not None):
+					# Redirect to slave located on this machine
+					self.LogMSG("({classname})# [LocalSocketDataInputExternalHandler] Sending directly to local client".format(classname=self.ClassName), 5)
+					message = self.BasicProtocol.AppendMagic(raw_data)
+					self.SocketServer.Send(slave.Socket, message)
+				else: 
+					self.LogMSG("({classname})# [LocalSocketDataInputExternalHandler] Not my node.".format(classname=self.ClassName), 5)
+					# Destination might be in other master
+					if self.MasterManager.Working is True:
+						master = self.MasterManager.GetMasterConnection(destination)
+						if master is not None:
+							self.LogMSG("({classname})# [LocalSocketDataInputExternalHandler] Sending to other MASTER".format(classname=self.ClassName), 5)
+							self.SocketServer.Send(master.Socket, message)
+							return
+				
+					# This message not nor on this machine neither on this local network, send to Gateway.
+					if self.Network is not None:
+						#self.LogMSG("({classname})# This massage is external (MOSTLY MASTER)".format(classname=self.ClassName), 5)
+						self.SendPacketGateway(raw_data)
 		except Exception as e:
 			self.LogException("[LocalSocketDataInputExternalHandler]",e,3)
 

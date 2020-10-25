@@ -257,7 +257,7 @@ class Network ():
 		# Set user key, commub=nication with applications will be based on key.
 		# Key will be obtain by master on provisioning flow.
 		self.UserDevKey 				= key
-		self.BasicProtocol 				= MkSBasicNetworkProtocol.BasicNetworkProtocol()
+		self.BasicProtocol 				= MkSBasicNetworkProtocol.BasicNetworkProtocol(self.DeviceUUID)
 		self.BasicProtocol.SetKey(key)
 		websocket.enableTrace(False)
 		self.WSConnection 				= websocket.WebSocketApp(self.WSServerUri)

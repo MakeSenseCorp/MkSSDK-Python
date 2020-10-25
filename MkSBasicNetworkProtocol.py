@@ -4,8 +4,9 @@ import time
 import json
 
 class BasicNetworkProtocol():
-	def __init__(self):
+	def __init__(self, uuid):
 		self.Name 	= "Message Protocol Between Nodes and Applications"
+		self.UUID 	= uuid
 	
 	def SetKey(self, key):
 		self.Key    = key
@@ -84,8 +85,12 @@ class BasicNetworkProtocol():
 		dest 	= packet['header']['destination']
 		src 	= packet['header']['source']
 
+		if dest in ["BROADCAST"]:
+			packet['header']['source'] = self.UUID
+		else:
+			packet['header']['source'] = dest
+
 		packet['header']['destination']	= src
-		packet['header']['source']		= dest
 		packet['header']['direction']	= "response"
 		packet['data']['payload']		= payload
 

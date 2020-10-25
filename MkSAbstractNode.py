@@ -238,7 +238,7 @@ class AbstractNode():
 		# LocalFace UI
 		self.UI 									= None
 		self.LocalWebPort							= ""
-		self.BasicProtocol 							= MkSBasicNetworkProtocol.BasicNetworkProtocol()
+		self.BasicProtocol 							= None
 		print(self.NetworkCards)
 
 		self.Services[101] = {
@@ -584,7 +584,7 @@ class AbstractNode():
 								return
 						
 						# Is this packet for me or this packet for MASTER and I'm a Master or this message is BROADCAST?
-						if destination in self.UUID or (destination in "MASTER" and 1 == self.Type) or broadcast is True:
+						if destination in self.UUID or (destination in "MASTER" and 1 == self.Type) or (broadcast is True and "BROADCAST" in destination):
 							if direction in "request":
 								if command in self.NodeRequestHandlers.keys():
 									try:
@@ -618,6 +618,9 @@ class AbstractNode():
 											self.SocketServer.Send(sock, packet)
 										except Exception as e:
 											self.LogException("[DataSocketInputHandler #2]",e,3)
+								# Send to all other
+								if broadcast is True:
+									self.LocalSocketDataInputExternalHandler(connection, json.loads(raw_data), raw_data)
 							elif direction in "response":
 								if command in self.NodeResponseHandlers.keys():
 									try:
@@ -738,6 +741,14 @@ class AbstractNode():
 			'type': node_type
 		}
 		self.SendRequest("BROADCAST", "BROADCAST", "find_node", payload, {})
+	
+	def SearchNodes(self, index):
+		self.SendRequest("BROADCAST", "BROADCAST", "operations", {
+			"index": 	 index,
+			"subindex":	 0x0,
+			"direction": 0x1,
+			"data": { }
+		}, {})
 
 	''' 
 		Description: 	Request to open private stream socket to other node [RESPONSE]
@@ -1286,6 +1297,7 @@ class AbstractNode():
 			else:
 				self.UUID = self.NodeInfo["uuid"]
 			
+			self.BasicProtocol = MkSBasicNetworkProtocol.BasicNetworkProtocol(self.UUID)
 			self.BasicProtocol.SetKey(self.Key)
 			WSManager.RegisterCallbacks(self.LocalWebsockConnectedHandler, self.LocalWebsockDataArrivedHandler, self.LocalWebsockDisconnectedHandler, self.LocalWebsockSessionsEmpty)
 			# Start Websocket Server
