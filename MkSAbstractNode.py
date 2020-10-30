@@ -563,7 +563,7 @@ class AbstractNode():
 		Return: 		<N/A>
 	'''
 	def SendBroadcastBySocket(self, sock, command):
-		message = self.BasicProtocol.BuildRequest("BROADCAST", "UNKNOWN", self.UUID, command, {}, {})
+		message = self.BasicProtocol.BuildRequest("BROADCAST", "BROADCAST", self.UUID, command, {}, {})
 		packet  = self.BasicProtocol.AppendMagic(message)
 		self.SocketServer.Send(sock, packet)
 		return True

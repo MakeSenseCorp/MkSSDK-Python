@@ -413,15 +413,14 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 		Return: 		N/A
 	'''	
 	def LocalNetworkMessageHandler(self, connection, raw_data):
-		packet 		= json.loads(raw_data)
-		sock 		= connection.Socket
-		msg_type 	= self.BasicProtocol.GetMessageTypeFromJson(packet)
-		cmd 		= self.BasicProtocol.GetCommandFromJson(packet)
-		direct 		= self.BasicProtocol.GetDirectionFromJson(packet)
-		dest 		= self.BasicProtocol.GetDestinationFromJson(packet)
-		src 		= self.BasicProtocol.GetSourceFromJson(packet)
-
+		packet 	= json.loads(raw_data)
+		dest 	= self.BasicProtocol.GetDestinationFromJson(packet)
 		if dest in self.UUID or dest in "MASTER":
+			sock 		= connection.Socket
+			msg_type 	= self.BasicProtocol.GetMessageTypeFromJson(packet)
+			cmd 		= self.BasicProtocol.GetCommandFromJson(packet)
+			direct 		= self.BasicProtocol.GetDirectionFromJson(packet)
+			src 		= self.BasicProtocol.GetSourceFromJson(packet)
 			if direct in "request":
 				if cmd in self.NodeRequestHandlers.keys():
 					try:
@@ -451,7 +450,7 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 							if message == "" or message is None:
 								return
 							# Create response and send back to requestor
-							msg_response = self.BasicProtocol.BasicProtocol.BuildResponse(packet,message)
+							msg_response = self.BasicProtocol.BuildResponse(packet,message)
 							packet = self.BasicProtocol.AppendMagic(msg_response)
 							self.SocketServer.Send(sock, packet)
 						except Exception as e:
@@ -515,7 +514,7 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 			messageType = self.BasicProtocol.GetMessageTypeFromJson(packet)
 			self.LogMSG("({classname})# [LocalSocketDataInputExternalHandler] {0}".format(destination,classname=self.ClassName), 5)
 
-			if destination in ["BROADCAST","MASTER","UNKNOWN"]:
+			if destination in ["BROADCAST","MASTER"]:
 				return
 			
 			if messageType in ["BROADCAST"]:

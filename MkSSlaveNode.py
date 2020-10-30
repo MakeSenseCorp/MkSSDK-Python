@@ -200,6 +200,80 @@ class SlaveNode(MkSAbstractNode.AbstractNode):
 	'''	
 	def State_Exit(self):
 		self.Exit("Exit state initiated")
+	
+
+	''' 
+		Description: 	N/A
+		Return: 		N/A
+	'''	
+	def LocalNetworkMessageHandler(self, connection, raw_data):
+		packet 		= json.loads(raw_data)
+		dest 		= self.BasicProtocol.GetDestinationFromJson(packet)
+
+		if dest in [self.UUID, "BROADCAST"]:
+			sock 		= connection.Socket
+			msg_type 	= self.BasicProtocol.GetMessageTypeFromJson(packet)
+			cmd 		= self.BasicProtocol.GetCommandFromJson(packet)
+			direct 		= self.BasicProtocol.GetDirectionFromJson(packet)
+			src 		= self.BasicProtocol.GetSourceFromJson(packet)
+
+			if direct in "request":
+				if cmd in self.NodeRequestHandlers.keys():
+					try:
+						handler = self.NodeRequestHandlers[cmd]
+						if handler is not None:
+							# Execute framework layer
+							message = handler(sock, packet)
+							# This handler migth be also in application layer.
+							if cmd in self.NodeFilterCommands:
+								if self.OnApplicationRequestCallback is not None:
+									# Execute application layer
+									message = self.OnApplicationRequestCallback(sock, packet)
+							# In any case response messgae is empty, don't send response
+							if message == "" or message is None:
+								return
+							# Create response and send back to requestor
+							msg_response = self.BasicProtocol.BuildResponse(packet,message)
+							packet = self.BasicProtocol.AppendMagic(msg_response)
+							self.SocketServer.Send(sock, packet)
+					except Exception as e:
+						self.LogException("[LocalNetworkMessageHandler] {0}".format(cmd),e,3)
+				else:
+					# This command belongs to the application level
+					if self.OnApplicationRequestCallback is not None:
+						try:
+							message = self.OnApplicationRequestCallback(sock, packet)
+							if message == "" or message is None:
+								return
+							# Create response and send back to requestor
+							msg_response = self.BasicProtocol.BuildResponse(packet,message)
+							packet = self.BasicProtocol.AppendMagic(msg_response)
+							self.SocketServer.Send(sock, packet)
+						except Exception as e:
+							self.LogException("[DataSocketInputHandler #2]",e,3)
+			elif direct in "response":
+				if cmd in self.NodeResponseHandlers.keys():
+					try:
+						handler = self.NodeResponseHandlers[cmd](sock, packet)
+						if handler is not None:
+							# Execute framework layer
+							handler(sock, packet)
+							# This handler migth be also in application layer.
+							if cmd in self.NodeFilterCommands:
+								if self.OnApplicationRequestCallback is not None:
+									# Execute application layer
+									self.OnApplicationRequestCallback(sock, packet)
+					except Exception as e:
+						self.LogException("[LocalNetworkMessageHandler] {0}".format(cmd),e,3)
+				else:
+					# This command belongs to the application level
+					if self.OnApplicationResponseCallback is not None:
+						try:
+							self.OnApplicationResponseCallback(sock, packet)
+						except Exception as e:
+							self.LogException("[LocalNetworkMessageHandler]",e,3)
+			else:
+				pass
 
 	''' 
 		Description: 	Handler [get_node_info] REQUEST
@@ -212,7 +286,7 @@ class SlaveNode(MkSAbstractNode.AbstractNode):
 		payload["master_uuid"] 		= self.MasterUUID
 		payload["pid"]				= self.MyPID
 		payload["listener_port"]	= self.SocketServer.GetListenerPort()
-		return self.BasicProtocol.BuildResponse(packet, payload)
+		return payload
 
 	''' 
 		Description: 	Handler [get_node_info] RESPONSE
@@ -269,7 +343,7 @@ class SlaveNode(MkSAbstractNode.AbstractNode):
 			"state": self.State,
 			"info": self.NodeInfo
 		}
-		return self.BasicProtocol.BuildResponse(packet, payload)
+		return payload
 
 	''' 
 		Description: 	Override method to send request
