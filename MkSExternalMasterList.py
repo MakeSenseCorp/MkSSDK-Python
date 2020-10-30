@@ -121,12 +121,21 @@ class ExternalMasterList:
 				if uuid in master["nodes"]:
 					return master["conn"]
 		return None
+	
+	def GetMasterConnectionList(self):
+		return [self.Masters[key]["conn"] for key in self.Masters]
+	
+	def SendMessageAllMasters(self, packet):
+		for key in self.Masters:
+			master = self.Masters[key]
+			if master["status"] is True:
+				self.Context.SocketServer.Send(master["conn"].Socket, packet)
 
 	def Start(self):
 		self.Context.LogMSG("({classname})# Start".format(classname=self.ClassName),5)
 		thread.start_new_thread(self.Worker, ())
 
-	def Stop(slef):
+	def Stop(self):
 		self.Context.LogMSG("({classname})# Stop".format(classname=self.ClassName),5)
 		self.Working = False
 		# Remove all connections

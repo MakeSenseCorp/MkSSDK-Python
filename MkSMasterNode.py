@@ -271,6 +271,18 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 		self.AccessTick = 0
 		self.NetworkAccessTickLock.release()
 		self.SetState("ACCESS_GATEWAY")
+	
+	''' 
+		Description: 	N/A
+		Return: 		N/A
+	'''	
+	def WebSocketErrorCallback (self):
+		self.LogMSG("({classname})# ERROR - Gateway socket error".format(classname=self.ClassName),3)
+		# TODO - Send callback "OnWSError"
+		self.NetworkAccessTickLock.acquire()
+		self.AccessTick = 0
+		self.NetworkAccessTickLock.release()
+		self.SetState("ACCESS_WAIT_GATEWAY")
 
 	''' 
 		Description: 	N/A
@@ -306,11 +318,15 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 				elif messageType in ["DIRECT", "PRIVATE", "WEBFACE"]:
 					if command in self.NodeRequestHandlers.keys():
 						message = self.NodeRequestHandlers[command](None, packet)
-						self.SendPacketGateway(message)
+						# Create response and send back to requestor
+						packet = self.BasicProtocol.BuildResponse(packet,message)
+						self.SendPacketGateway(packet)
 					else:
 						if self.GatewayDataArrivedCallback is not None:
 							message = self.GatewayDataArrivedCallback(None, packet)
-							self.SendPacketGateway(message)
+							# Create response and send back to requestor
+							packet = self.BasicProtocol.BuildResponse(packet,message)
+							self.SendPacketGateway(packet)
 				else:
 					self.LogMSG("({classname})# [Websocket INBOUND] ERROR - Master DOES NOT support {0} request type.".format(messageType, classname=self.ClassName),4)
 			else:
@@ -319,18 +335,6 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 				self.HandleExternalRequest(packet)
 		except Exception as e:
 			self.LogException("[WebSocketDataArrivedCallback] {0}".format(packet),e,3)
-
-	''' 
-		Description: 	N/A
-		Return: 		N/A
-	'''	
-	def WebSocketErrorCallback (self):
-		self.LogMSG("({classname})# ERROR - Gateway socket error".format(classname=self.ClassName),3)
-		# TODO - Send callback "OnWSError"
-		self.NetworkAccessTickLock.acquire()
-		self.AccessTick = 0
-		self.NetworkAccessTickLock.release()
-		self.SetState("ACCESS_WAIT_GATEWAY")
 	
 	''' 
 		Description: 	Master as proxy server.
@@ -350,6 +354,155 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 			self.LogMSG("({classname})# HandleInternalReqest NODE NOT FOUND".format(classname=self.ClassName),4)
 			# Need to look at other masters list.
 			pass
+	
+	''' 
+		Description: 	N/A
+		Return: 		N/A
+	'''	
+	def LocalNetworkBroadcastHandler(self, connection, raw_data):
+		packet 		= json.loads(raw_data)
+		sock 		= connection.Socket
+		msg_type 	= self.BasicProtocol.GetMessageTypeFromJson(packet)
+		cmd 		= self.BasicProtocol.GetCommandFromJson(packet)
+		direct 		= self.BasicProtocol.GetDirectionFromJson(packet)
+		dest 		= self.BasicProtocol.GetDestinationFromJson(packet)
+		src 		= self.BasicProtocol.GetSourceFromJson(packet)
+
+		if direct in "request":
+			# Send to other nodes
+			self.BroadcastToAll(raw_data)
+			# Handle broadcast request
+			if cmd in self.NodeRequestHandlers.keys():
+				try:
+					handler = self.NodeRequestHandlers[cmd]
+					if handler is not None:
+						# Execute framework layer
+						message = handler(sock, packet)
+						# This handler migth be also in application layer.
+						if cmd in self.NodeFilterCommands:
+							if self.OnApplicationRequestCallback is not None:
+								# Execute application layer
+								message = self.OnApplicationRequestCallback(sock, packet)
+						# In any case response messgae is empty, don't send response
+						if message == "" or message is None:
+							return
+						# Create response and send back to requestor
+						msg_response = self.BasicProtocol.BuildResponse(packet,message)
+						packet = self.BasicProtocol.AppendMagic(msg_response)
+						self.SocketServer.Send(sock, packet)
+				except Exception as e:
+					self.LogException("[LocalNetworkBroadcastHandler] {0}".format(cmd),e,3)
+			else:
+				# This command belongs to the application level
+				if self.OnApplicationRequestCallback is not None:
+					try:
+						message = self.OnApplicationRequestCallback(sock, packet)
+						if message == "" or message is None:
+							return
+						# Create response and send back to requestor
+						msg_response = self.BasicProtocol.BuildResponse(packet,message)
+						packet = self.BasicProtocol.AppendMagic(msg_response)
+						self.SocketServer.Send(sock, packet)
+					except Exception as e:
+						self.LogException("[LocalNetworkBroadcastHandler]",e,3)
+		elif direct in "response":
+			self.LogMSG("({classname})# [LocalNetworkBroadcastHandler] [RESPONSE] Response to BROADCAST should be DIRECT type".format(classname=self.ClassName), 4)
+
+	''' 
+		Description: 	N/A
+		Return: 		N/A
+	'''	
+	def LocalNetworkMessageHandler(self, connection, raw_data):
+		packet 		= json.loads(raw_data)
+		sock 		= connection.Socket
+		msg_type 	= self.BasicProtocol.GetMessageTypeFromJson(packet)
+		cmd 		= self.BasicProtocol.GetCommandFromJson(packet)
+		direct 		= self.BasicProtocol.GetDirectionFromJson(packet)
+		dest 		= self.BasicProtocol.GetDestinationFromJson(packet)
+		src 		= self.BasicProtocol.GetSourceFromJson(packet)
+
+		if dest in self.UUID or dest in "MASTER":
+			if direct in "request":
+				if cmd in self.NodeRequestHandlers.keys():
+					try:
+						handler = self.NodeRequestHandlers[cmd]
+						if handler is not None:
+							# Execute framework layer
+							message = handler(sock, packet)
+							# This handler migth be also in application layer.
+							if cmd in self.NodeFilterCommands:
+								if self.OnApplicationRequestCallback is not None:
+									# Execute application layer
+									message = self.OnApplicationRequestCallback(sock, packet)
+							# In any case response messgae is empty, don't send response
+							if message == "" or message is None:
+								return
+							# Create response and send back to requestor
+							msg_response = self.BasicProtocol.BuildResponse(packet,message)
+							packet = self.BasicProtocol.AppendMagic(msg_response)
+							self.SocketServer.Send(sock, packet)
+					except Exception as e:
+						self.LogException("[LocalNetworkMessageHandler] {0}".format(cmd),e,3)
+				else:
+					# This command belongs to the application level
+					if self.OnApplicationRequestCallback is not None:
+						try:
+							message = self.OnApplicationRequestCallback(sock, packet)
+							if message == "" or message is None:
+								return
+							# Create response and send back to requestor
+							msg_response = self.BasicProtocol.BasicProtocol.BuildResponse(packet,message)
+							packet = self.BasicProtocol.AppendMagic(msg_response)
+							self.SocketServer.Send(sock, packet)
+						except Exception as e:
+							self.LogException("[DataSocketInputHandler #2]",e,3)
+			elif direct in "response":
+				if cmd in self.NodeResponseHandlers.keys():
+					try:
+						handler = self.NodeResponseHandlers[cmd](sock, packet)
+						if handler is not None:
+							# Execute framework layer
+							handler(sock, packet)
+							# This handler migth be also in application layer.
+							if cmd in self.NodeFilterCommands:
+								if self.OnApplicationRequestCallback is not None:
+									# Execute application layer
+									self.OnApplicationRequestCallback(sock, packet)
+					except Exception as e:
+						self.LogException("[LocalNetworkMessageHandler] {0}".format(cmd),e,3)
+				else:
+					# This command belongs to the application level
+					if self.OnApplicationResponseCallback is not None:
+						try:
+							self.OnApplicationResponseCallback(sock, packet)
+						except Exception as e:
+							self.LogException("[LocalNetworkMessageHandler]",e,3)
+			else:
+				pass
+		else:
+			# This massage is external (MOSTLY MASTER)
+			self.LocalSocketDataInputExternalHandler(connection, packet, raw_data)
+
+	''' 
+		Description: 	N/A
+		Return: 		N/A
+	'''	
+	def BroadcastToAll(self, raw_data):
+		# Send to Gateway.
+		if self.Network is not None:
+			#self.LogMSG("({classname})# This massage is external (MOSTLY MASTER)".format(classname=self.ClassName), 5)
+			self.SendPacketGateway(raw_data)
+		else:
+			# Send to all masters
+			if self.MasterManager.Working is True:
+				self.MasterManager.SendMessageAllMasters(raw_data)
+			# Send all my nodes except broadcast requestor
+			connections = self.GetConnectedNodes()
+			for idx, key in enumerate(connections):
+				node = connections[key]
+				if 1 == node.Obj["is_slave"]:
+					# Send message
+					node.Socket.send(raw_data)
 
 	''' 
 		Description: 	This handler handle packets arrvived to/from nodes/gateway.
@@ -361,35 +514,33 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 			direction 	= self.BasicProtocol.GetDirectionFromJson(packet)
 			messageType = self.BasicProtocol.GetMessageTypeFromJson(packet)
 			self.LogMSG("({classname})# [LocalSocketDataInputExternalHandler] {0}".format(destination,classname=self.ClassName), 5)
-			if destination in ["MASTER","UNKNOWN"]:
+
+			if destination in ["BROADCAST","MASTER","UNKNOWN"]:
 				return
-			elif destination in ["BROADCAST"] and "request" in direction and messageType in ["BROADCAST"]:
+			
+			if messageType in ["BROADCAST"]:
+				return
+
+			# Is destination located in my list.
+			slave = self.GetNodeByUUID(destination)
+			if (slave is not None):
+				# Redirect to slave located on this machine
+				self.LogMSG("({classname})# [LocalSocketDataInputExternalHandler] Sending directly to local client".format(classname=self.ClassName), 5)
+				message = self.BasicProtocol.AppendMagic(raw_data)
+				self.SocketServer.Send(slave.Socket, message)
+			else: 
+				self.LogMSG("({classname})# [LocalSocketDataInputExternalHandler] Not my node.".format(classname=self.ClassName), 5)
+				# Destination might be in other master
+				if self.MasterManager.Working is True:
+					master = self.MasterManager.GetMasterConnection(destination)
+					if master is not None:
+						self.LogMSG("({classname})# [LocalSocketDataInputExternalHandler] Sending to other MASTER".format(classname=self.ClassName), 5)
+						self.SocketServer.Send(master.Socket, message)
+						return
 				# This message not nor on this machine neither on this local network, send to Gateway.
 				if self.Network is not None:
-					# self.LogMSG("({classname})# This massage is external (MOSTLY MASTER)".format(classname=self.ClassName), 5)
+					#self.LogMSG("({classname})# This massage is external (MOSTLY MASTER)".format(classname=self.ClassName), 5)
 					self.SendPacketGateway(raw_data)
-			else:
-				# Is destination located in my list.
-				slave = self.GetNodeByUUID(destination)
-				if (slave is not None):
-					# Redirect to slave located on this machine
-					self.LogMSG("({classname})# [LocalSocketDataInputExternalHandler] Sending directly to local client".format(classname=self.ClassName), 5)
-					message = self.BasicProtocol.AppendMagic(raw_data)
-					self.SocketServer.Send(slave.Socket, message)
-				else: 
-					self.LogMSG("({classname})# [LocalSocketDataInputExternalHandler] Not my node.".format(classname=self.ClassName), 5)
-					# Destination might be in other master
-					if self.MasterManager.Working is True:
-						master = self.MasterManager.GetMasterConnection(destination)
-						if master is not None:
-							self.LogMSG("({classname})# [LocalSocketDataInputExternalHandler] Sending to other MASTER".format(classname=self.ClassName), 5)
-							self.SocketServer.Send(master.Socket, message)
-							return
-				
-					# This message not nor on this machine neither on this local network, send to Gateway.
-					if self.Network is not None:
-						#self.LogMSG("({classname})# This massage is external (MOSTLY MASTER)".format(classname=self.ClassName), 5)
-						self.SendPacketGateway(raw_data)
 		except Exception as e:
 			self.LogException("[LocalSocketDataInputExternalHandler]",e,3)
 
@@ -404,7 +555,7 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 		payload["pid"]				= self.MyPID
 		payload["listener_port"]	= self.SocketServer.GetListenerPort()
 		payload["ip"]				= self.MyLocalIP
-		return self.BasicProtocol.BuildResponse(packet, payload)
+		return payload
 
 	''' 
 		Description: 	Event filter handler
@@ -523,44 +674,16 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 						if node_type == 103:
 							self.MasterManager.Start()
 
-					return self.BasicProtocol.BuildResponse(packet, { 'port': port })
+					return { 'port': port }
 				else:
 					# Already assigned port (resending)
-					return self.BasicProtocol.BuildResponse(packet, { 'port': conn.Obj["listener_port"] })
+					return { 'port': conn.Obj["listener_port"] }
 			else:
 				# No available ports
-				return self.BasicProtocol.BuildResponse(packet, { 'port': 0 })
+				return { 'port': 0 }
 		except Exception as e:
 			self.LogException("[NodeDisconnectedHandler]",e,3)
-			return self.BasicProtocol.BuildResponse(packet, { 'port': 0 })
-
-	''' 
-		Description: 	Handler [register_on_node_change] RESPONSE
-		Return: 		N/A
-	'''		
-	def RegisterOnNodeChangeResponseHandler(self, sock, packet):
-		payload = self.BasicProtocol.GetPayloadFromJson(packet)
-		self.LogMSG("({classname})# [RegisterOnNodeChangeResponseHandler] {0}".format(payload,classname=self.ClassName),5)
-		node_type = int(payload["type"])
-		if payload["registered"] == "OK":
-			if node_type in self.Services:
-				self.Services[node_type]["registered"] = 1
-			else:
-				pass
-
-	''' 
-		Description: 	Handler [unregister_on_node_change] RESPONSE
-		Return: 		N/A
-	'''			
-	def UnregisterOnNodeChangeResponseHandler(self, sock, packet):
-		payload = self.BasicProtocol.GetPayloadFromJson(packet)
-		self.LogMSG("({classname})# [UnregisterOnNodeChangeResponseHandler] {0}".format(payload,classname=self.ClassName),5)
-		node_type = int(payload["type"])
-		if payload["registered"] == "OK":
-			if node_type in self.Services:
-				self.Services[node_type]["registered"] = 0
-			else:
-				pass
+			return { 'port': 0 }
 
 	''' 
 		Description: 	[HANDLERS]
@@ -665,7 +788,7 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 				'uuid':	conn.Obj["uuid"],
 				'type':	conn.Obj["type"]
 			})
-		return self.BasicProtocol.BuildResponse(packet, { 'nodes': nodes })
+		return { 'nodes': nodes }
 
 	''' 
 		Description: 	[HANDLERS]
@@ -677,7 +800,7 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 			"state": self.State,
 			"info": self.NodeInfo
 		}
-		return self.BasicProtocol.BuildResponse(packet, payload)
+		return payload
 
 	''' 
 		Description: 	[HANDLERS]

@@ -86,7 +86,8 @@ class BasicNetworkProtocol():
 		src 	= packet['header']['source']
 
 		if dest in ["BROADCAST"]:
-			packet['header']['source'] = self.UUID
+			packet['header']['source'] 		 = self.UUID
+			packet['header']['message_type'] = "DIRECT"
 		else:
 			packet['header']['source'] = dest
 

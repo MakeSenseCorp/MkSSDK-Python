@@ -186,6 +186,7 @@ class AbstractNode():
 		self.OnStreamSocketCreatedEvent				= None
 		self.OnStreamSocketDataEvent				= None
 		self.OnStreamSocketDisconnectedEvent 		= None
+		self.OnGenericEventCallback					= None
 		# Registered items
 		self.OnDeviceChangeList						= [] # Register command "register_on_node_change"
 		# Synchronization
@@ -359,15 +360,45 @@ class AbstractNode():
 	# Overload
 	def MasterRemoveNodeRequestHandler(self, sock, packet):
 		pass
-
-	# Overwrite
-	def RegisterOnNodeChangeResponseHandler(self, sock, packet):
-		self.LogMSG("({classname})# [RegisterOnNodeChangeResponseHandler]".format(classname=self.ClassName),5)
 	
 	# Overload
 	def LocalSocketDataInputExternalHandler(self, conn, packet, raw_data):
 		pass
 
+	''' 
+		Description: 	Handler [register_on_node_change] RESPONSE
+		Return: 		N/A
+	'''		
+	def RegisterOnNodeChangeResponseHandler(self, sock, packet):
+		payload = self.BasicProtocol.GetPayloadFromJson(packet)
+		self.LogMSG("({classname})# [RegisterOnNodeChangeResponseHandler] {0}".format(payload,classname=self.ClassName),5)
+		node_type = int(payload["type"])
+		if payload["registered"] == "OK":
+			if node_type in self.Services:
+				self.Services[node_type]["registered"] = 1
+			else:
+				pass
+			
+			if self.OnGenericEventCallback is not None:
+				self.OnGenericEventCallback("on_register_node_change", payload)
+
+	''' 
+		Description: 	Handler [unregister_on_node_change] RESPONSE
+		Return: 		N/A
+	'''			
+	def UnregisterOnNodeChangeResponseHandler(self, sock, packet):
+		payload = self.BasicProtocol.GetPayloadFromJson(packet)
+		self.LogMSG("({classname})# [UnregisterOnNodeChangeResponseHandler] {0}".format(payload,classname=self.ClassName),5)
+		node_type = int(payload["type"])
+		if payload["unregistered"] == "OK":
+			if node_type in self.Services:
+				self.Services[node_type]["registered"] = 0
+			else:
+				pass
+
+			if self.OnGenericEventCallback is not None:
+				self.OnGenericEventCallback("on_unregister_node_change", payload)
+	
 	def LocalWebsockConnectedHandler(self, ws_id):
 		self.LogMSG("({classname})# [LocalWebsockConnectedHandler] {0}".format(ws_id,classname=self.ClassName),5)
 		self.IsLocalSockInUse = True
@@ -454,6 +485,7 @@ class AbstractNode():
 		Return: 		Connection and status
 	'''
 	def ConnectNode(self, ip, port):
+		# TODO - Make sure ip located in this network
 		return self.SocketServer.Connect(ip, port, "SOCK")
 
 	''' 
@@ -546,6 +578,14 @@ class AbstractNode():
 			return self.SendBroadcastBySocket(conn.Socket, command)
 		return False
 	
+	# Overwrite
+	def LocalNetworkBroadcastHandler(self, connection, raw_data):
+		pass
+	
+	# Overwrite
+	def LocalNetworkMessageHandler(self, connection, raw_data):
+		pass
+	
 	''' 
 		Description: 	Input handler binded to LocalSocketMngr callback.
 		Return: 		None.
@@ -567,7 +607,6 @@ class AbstractNode():
 						direction 	= self.BasicProtocol.GetDirectionFromJson(packet)
 						destination = self.BasicProtocol.GetDestinationFromJson(packet)
 						source 		= self.BasicProtocol.GetSourceFromJson(packet)
-						broadcast 	= False
 
 						packet["additional"]["client_type"] = "global_ws" # Why?
 						self.LogMSG("({classname})# SOCK [{type}] [{direction}] {source} -> {dest} [{cmd}]".format(classname=self.ClassName,
@@ -578,75 +617,12 @@ class AbstractNode():
 									type=messageType), 5)
 						
 						if messageType == "BROADCAST":
-							broadcast = True
+							self.LocalNetworkBroadcastHandler(connection, raw_data)
 						else:
 							if destination in self.UUID and source in self.UUID:
 								return
 						
-						# Is this packet for me or this packet for MASTER and I'm a Master or this message is BROADCAST?
-						if destination in self.UUID or (destination in "MASTER" and 1 == self.Type) or (broadcast is True and "BROADCAST" in destination):
-							if direction in "request":
-								if command in self.NodeRequestHandlers.keys():
-									try:
-										handler = self.NodeRequestHandlers[command]
-										if handler is not None:
-											# Execute framework layer
-											message = handler(sock, packet)
-											# This handler migth be also in application layer.
-											if command in self.NodeFilterCommands:
-												if self.OnApplicationRequestCallback is not None:
-													# Execute application layer
-													message = self.OnApplicationRequestCallback(sock, packet)
-											
-											# In any case response messgae is empty, don't send response
-											if message == "" or message is None:
-												return
-
-											# Create response and send back to requestor
-											packet = self.BasicProtocol.AppendMagic(message)
-											self.SocketServer.Send(sock, packet)
-									except Exception as e:
-										self.LogException("[DataSocketInputHandler #1] {0}".format(command),e,3)
-								else:
-									# This command belongs to the application level
-									if self.OnApplicationRequestCallback is not None:
-										try:
-											message = self.OnApplicationRequestCallback(sock, packet)
-											if message == "" or message is None:
-												return
-											packet = self.BasicProtocol.AppendMagic(message)
-											self.SocketServer.Send(sock, packet)
-										except Exception as e:
-											self.LogException("[DataSocketInputHandler #2]",e,3)
-								# Send to all other
-								if broadcast is True:
-									self.LocalSocketDataInputExternalHandler(connection, json.loads(raw_data), raw_data)
-							elif direction in "response":
-								if command in self.NodeResponseHandlers.keys():
-									try:
-										handler = self.NodeResponseHandlers[command](sock, packet)
-										if handler is not None:
-											# Execute framework layer
-											handler(sock, packet)
-											# This handler migth be also in application layer.
-											if command in self.NodeFilterCommands:
-												if self.OnApplicationRequestCallback is not None:
-													# Execute application layer
-													self.OnApplicationRequestCallback(sock, packet)
-									except Exception as e:
-										self.LogException("[DataSocketInputHandler #3] {0}".format(command),e,3)
-								else:
-									# This command belongs to the application level
-									if self.OnApplicationResponseCallback is not None:
-										try:
-											self.OnApplicationResponseCallback(sock, packet)
-										except Exception as e:
-											self.LogException("[DataSocketInputHandler #4]",e,3)
-							else:
-								pass
-						else:
-							# This massage is external (MOSTLY MASTER)
-							self.LocalSocketDataInputExternalHandler(connection, packet, raw_data)
+						self.LocalNetworkMessageHandler(connection, raw_data)
 					else:
 						pass
 			else:
@@ -759,13 +735,13 @@ class AbstractNode():
 		payload = self.BasicProtocol.GetPayloadFromJson(packet)
 
 		if self.OnStreamSocketCreatedEvent is None or self.OnStreamSocketDataEvent is None or self.OnStreamSocketDisconnectedEvent is None:
-			return self.BasicProtocol.BuildResponse(packet, { 
+			return { 
 				'ip': "",
 				'uuid': "",
 				'port': 0,
 				'ts': 0,
 				'status': "NOTSUPPORTED"
-			})
+			}
 		identity = payload["ts"]
 		uuid 	 = payload["uuid"]
 		ip 	 	 = payload["ip"]
@@ -790,7 +766,7 @@ class AbstractNode():
 			'status': "CREATED"
 		}
 
-		return self.BasicProtocol.BuildResponse(packet, payload)
+		return payload
 	
 	''' 
 		Description: 	Requestor for stream private socket get reaponse with status and port [RESPONSE]
@@ -890,10 +866,10 @@ class AbstractNode():
 		node_type = payload["type"]
 
 		if str(node_type) == str(self.Type):
-			return self.BasicProtocol.BuildResponse(packet, self.NodeInfo)
+			return self.NodeInfo
 
 		if cat_1 in "service" and cat_2 in "network" and cat_3 in "ip_scanner" and node_type == 0:
-			return self.BasicProtocol.BuildResponse(packet, self.NodeInfo)
+			return self.NodeInfo
 		else:
 			return ""
 	
@@ -1061,14 +1037,14 @@ class AbstractNode():
 				payload["ws_id"] = packet["additional"]["ws_id"]
 		
 		if self.RegisterItem(payload) is True:
-			return self.BasicProtocol.BuildResponse(packet, {
+			return {
 				'registered': "OK",
 				'type': self.Type
-			})
+			}
 		else:
-			return self.BasicProtocol.BuildResponse(packet, {
+			return {
 				'registered': "FAILED"
-			})
+			}
 
 	''' 
 		Description: 	N/A
@@ -1090,20 +1066,13 @@ class AbstractNode():
 				payload["ws_id"] = packet["additional"]["ws_id"]
 		
 		if self.UnregisterItem(payload) is True:
-			return self.BasicProtocol.BuildResponse(packet, {
+			return {
 				'unregistered': "OK"
-			})
+			}
 		else:
-			return self.BasicProtocol.BuildResponse(packet, {
+			return {
 				'unregistered': "FAILED"
-			})
-
-	''' 
-		Description: 	N/A
-		Return: 		N/A
-	'''		
-	def UnregisterOnNodeChangeResponseHandler(self, sock, packet):
-		self.LogMSG("({classname})# [UnregisterOnNodeChangeResponseHandler]".format(classname=self.ClassName),5)
+			}
 
 	def GetResourceRequestHandler(self, sock, packet):
 		self.LogMSG("({classname})# [GetResourceRequestHandler]".format(classname=self.ClassName),6)
@@ -1126,12 +1095,12 @@ class AbstractNode():
 		if tag == "img":
 			content = "data:image/jpeg;base64," + content.encode('base64')
 
-		return self.BasicProtocol.BuildResponse(packet, {
-								'id': tag_id,
-								'tag': tag,
-								'src': src,
-								'content': content.encode('hex')
-		})
+		return {
+			'id': tag_id,
+			'tag': tag,
+			'src': src,
+			'content': content.encode('hex')
+		}
 
 	''' 
 		Description: 	Get file handler [REQUEST]
@@ -1228,11 +1197,11 @@ class AbstractNode():
 				fileType=fileType,
 				length=str(len(content))),5)
 		
-		return self.BasicProtocol.BuildResponse(packet, {
-								'file_type': fileType,
-								'ui_type': uiType,
-								'content': content.encode('hex')
-		})
+		return {
+			'file_type': fileType,
+			'ui_type': uiType,
+			'content': content.encode('hex')
+		}
 
 	''' 
 		Description: 	N/A
