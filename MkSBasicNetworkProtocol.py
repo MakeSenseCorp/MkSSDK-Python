@@ -82,10 +82,11 @@ class BasicNetworkProtocol():
 		return self.BuildMessage("request", messageType, destination, source, command, payload, piggy)
     
 	def BuildResponse(self, packet, payload):
-		dest 	= packet['header']['destination']
-		src 	= packet['header']['source']
+		dest 		= packet['header']['destination']
+		src 		= packet['header']['source']
+		msg_type 	= packet['header']['message_type']
 
-		if dest in ["BROADCAST"]:
+		if dest in ["BROADCAST"] or msg_type in ["BROADCAST"]:
 			packet['header']['source'] 		 = self.UUID
 			packet['header']['message_type'] = "DIRECT"
 		else:

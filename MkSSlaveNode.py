@@ -247,6 +247,7 @@ class SlaveNode(MkSAbstractNode.AbstractNode):
 								return
 							# Create response and send back to requestor
 							msg_response = self.BasicProtocol.BuildResponse(packet,message)
+							self.LogMSG("({classname})# [LocalNetworkMessageHandler] Sending RESPONSE\n{0}".format(msg_response,classname=self.ClassName),5)
 							packet = self.BasicProtocol.AppendMagic(msg_response)
 							self.SocketServer.Send(sock, packet)
 						except Exception as e:
@@ -286,6 +287,7 @@ class SlaveNode(MkSAbstractNode.AbstractNode):
 		payload["master_uuid"] 		= self.MasterUUID
 		payload["pid"]				= self.MyPID
 		payload["listener_port"]	= self.SocketServer.GetListenerPort()
+		payload["ip"] 	= self.MyLocalIP
 		return payload
 
 	''' 
@@ -298,26 +300,35 @@ class SlaveNode(MkSAbstractNode.AbstractNode):
 		additional 	= self.BasicProtocol.GetAdditionalFromJson(packet)
 		self.LogMSG("({classname})# [GetNodeInfoResponseHandler] [{0}, {1}, {2}, {3}]".format(payload["uuid"],payload["type"],payload["pid"],payload["name"], classname=self.ClassName),5)
 
-		conn = self.SocketServer.GetConnectionBySock(sock)
-		conn.Obj["uuid"] 			= payload["uuid"]
-		conn.Obj["type"] 			= payload["type"]
-		conn.Obj["pid"] 			= payload["pid"]
-		conn.Obj["name"] 			= payload["name"]
-		conn.Obj["listener_port"]	= payload["listener_port"]
-		conn.Obj["status"] 	= 1
-		
 		if source in "MASTER":
-			if self.GetState() in "GET_MASTER_INFO":
-				# We are here because this is a response for slave boot sequence
-				self.MasterInfo = payload
-				self.MasterUUID = payload["uuid"]
-				self.SetState("GET_PORT")
-			else:
+			conn = self.SocketServer.GetConnectionBySock(sock)
+			if conn is not None:
+				conn.Obj["uuid"] 			= payload["uuid"]
+				conn.Obj["type"] 			= payload["type"]
+				conn.Obj["pid"] 			= payload["pid"]
+				conn.Obj["name"] 			= payload["name"]
+				conn.Obj["listener_port"]	= payload["listener_port"]
+				conn.Obj["status"] 	= 1
+
+				if self.GetState() in "GET_MASTER_INFO":
+					# We are here because this is a response for slave boot sequence
+					self.MasterInfo = payload
+					self.MasterUUID = payload["uuid"]
+					self.SetState("GET_PORT")
+				else:
+					if self.OnGetNodeInfoCallback is not None:
+						self.OnGetNodeInfoCallback(payload)
+		else:
+			conn = self.SocketServer.GetConnection(payload["ip"], payload["listener_port"])
+			if conn is not None:
+				conn.Obj["uuid"] 			= payload["uuid"]
+				conn.Obj["type"] 			= payload["type"]
+				conn.Obj["pid"] 			= payload["pid"]
+				conn.Obj["name"] 			= payload["name"]
+				conn.Obj["listener_port"]	= payload["listener_port"]
+				conn.Obj["status"] 	= 1
 				if self.OnGetNodeInfoCallback is not None:
 					self.OnGetNodeInfoCallback(payload)
-		else:
-			if self.OnGetNodeInfoCallback is not None:
-				self.OnGetNodeInfoCallback(payload)
 
 	''' 
 		Description: 	Handler [get_port] RESPONSE
@@ -353,8 +364,14 @@ class SlaveNode(MkSAbstractNode.AbstractNode):
 		# Generate request
 		message = self.BasicProtocol.BuildRequest(msg_type, uuid, self.UUID, command, payload, additional)
 		packet  = self.BasicProtocol.AppendMagic(message)
-		if self.LocalMasterConnection is not None:
-			self.SocketServer.Send(self.LocalMasterConnection.Socket, packet)
+		# If slave connected via direct socket
+		node = self.GetNodeByUUID(uuid)
+		if node is not None:
+			self.SocketServer.Send(node.Socket, packet)
+		else:
+			# Send via MASTER
+			if self.LocalMasterConnection is not None:
+				self.SocketServer.Send(self.LocalMasterConnection.Socket, packet)
 
 	''' 
 		Description: 	Emit event to webface.
