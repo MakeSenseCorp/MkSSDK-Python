@@ -5,7 +5,7 @@ import time
 import hashlib
 
 class SocketConnection():
-	def __init__(self, ip, port, sock, sock_type):
+	def __init__(self, ip, port, sock, sock_type,kind):
 		self.IP 			= ip
 		self.Port 			= port
 		self.Socket 		= sock
@@ -13,6 +13,7 @@ class SocketConnection():
 		self.HASH 			= ""		# MD5 hash of ip and port
 		self.Obj 			= {}
 		self.Type 			= sock_type
+		self.Kind 			= kind
 		# Set timestamp
 		self.UpdateTimestamp()
 

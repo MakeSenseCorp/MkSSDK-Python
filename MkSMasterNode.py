@@ -548,12 +548,20 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 		Return: 		N/A
 	'''	
 	def GetNodeInfoRequestHandler(self, sock, packet):
+		self.LogMSG("({classname})# [GetNodeInfoRequestHandler] Return NODE information".format(classname=self.ClassName),5)
+		conn 	= self.SocketServer.GetConnectionBySock(sock)
 		payload = self.NodeInfo
+
 		payload["is_master"] 		= self.IsMaster
 		payload["master_uuid"] 		= self.UUID
 		payload["pid"]				= self.MyPID
 		payload["listener_port"]	= self.SocketServer.GetListenerPort()
 		payload["ip"]				= self.MyLocalIP
+		if conn.Kind is "SERVER":
+			payload["port"] = conn.Obj["server_port"]
+		elif conn.Kind is "CLIENT":
+			payload["port"] = conn.Obj["client_port"]
+		
 		return payload
 
 	''' 

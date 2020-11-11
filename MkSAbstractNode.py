@@ -350,6 +350,10 @@ class AbstractNode():
 		pass
 
 	# Overload
+	def EmitOnNodeChangeByIndex(self, index, payload):
+		pass
+
+	# Overload
 	def LocalServerTerminated(self):
 		pass
 
@@ -458,7 +462,7 @@ class AbstractNode():
 		WSManager.EmitEvent(data)
 	
 	def StartLocalWebsocketServer(self, port):
-		self.LogMSG("({classname})# [LocalWebsockDStartLocalWebsocketServerisconnectedHandler] {0}".format(port,classname=self.ClassName),5)
+		self.LogMSG("({classname})# [StartLocalWebsocketServer] {0}".format(port,classname=self.ClassName),5)
 		WSManager.SetPort(port)
 		WSManager.RunServer()
 
@@ -636,6 +640,7 @@ class AbstractNode():
 		Return: 		
 	'''
 	def NewNodeConnectedHandler(self, connection):
+		# self.LogMSG("({classname})# [NewNodeConnectedHandler]".format(classname=self.ClassName), 4)
 		if self.SocketServer.GetListenerSocket() != connection.Socket:
 			# Raise event for user
 			if self.OnAceptNewConnectionCallback is not None:
@@ -652,6 +657,13 @@ class AbstractNode():
 		connection.Obj["status"] 		= 1
 		connection.Obj["is_slave"]		= 0
 		connection.Obj["info"]			= None
+
+		if connection.Kind is "SERVER":
+			connection.Obj["client_port"] 	= connection.Port
+			connection.Obj["server_port"] 	= connection.Socket.getsockname()[1]
+		elif connection.Kind is "CLIENT":
+			connection.Obj["client_port"] 	= connection.Socket.getsockname()[1]
+			connection.Obj["server_port"] 	= connection.Port
 	
 	''' 
 		Description: 	

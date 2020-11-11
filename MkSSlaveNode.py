@@ -201,6 +201,12 @@ class SlaveNode(MkSAbstractNode.AbstractNode):
 	def State_Exit(self):
 		self.Exit("Exit state initiated")
 	
+	''' 
+		Description: 	N/A
+		Return: 		N/A
+	'''	
+	def LocalNetworkBroadcastHandler(self, connection, raw_data):
+		self.LocalNetworkMessageHandler(connection, raw_data)
 
 	''' 
 		Description: 	N/A
@@ -247,7 +253,7 @@ class SlaveNode(MkSAbstractNode.AbstractNode):
 								return
 							# Create response and send back to requestor
 							msg_response = self.BasicProtocol.BuildResponse(packet,message)
-							self.LogMSG("({classname})# [LocalNetworkMessageHandler] Sending RESPONSE\n{0}".format(msg_response,classname=self.ClassName),5)
+							# self.LogMSG("({classname})# [LocalNetworkMessageHandler] Sending RESPONSE\n{0}".format(msg_response,classname=self.ClassName),5)
 							packet = self.BasicProtocol.AppendMagic(msg_response)
 							self.SocketServer.Send(sock, packet)
 						except Exception as e:
@@ -282,12 +288,19 @@ class SlaveNode(MkSAbstractNode.AbstractNode):
 	'''	
 	def GetNodeInfoRequestHandler(self, sock, packet):
 		self.LogMSG("({classname})# [GetNodeInfoRequestHandler] Return NODE information".format(classname=self.ClassName),5)
+		conn 	= self.SocketServer.GetConnectionBySock(sock)
 		payload = self.NodeInfo
+
 		payload["is_master"] 		= False
 		payload["master_uuid"] 		= self.MasterUUID
 		payload["pid"]				= self.MyPID
 		payload["listener_port"]	= self.SocketServer.GetListenerPort()
-		payload["ip"] 	= self.MyLocalIP
+		payload["ip"] 				= self.MyLocalIP
+		if conn.Kind is "SERVER":
+			payload["port"] = conn.Obj["server_port"]
+		elif conn.Kind is "CLIENT":
+			payload["port"] = conn.Obj["client_port"]
+		
 		return payload
 
 	''' 
@@ -298,7 +311,7 @@ class SlaveNode(MkSAbstractNode.AbstractNode):
 		source  	= self.BasicProtocol.GetSourceFromJson(packet)
 		payload 	= self.BasicProtocol.GetPayloadFromJson(packet)
 		additional 	= self.BasicProtocol.GetAdditionalFromJson(packet)
-		self.LogMSG("({classname})# [GetNodeInfoResponseHandler] [{0}, {1}, {2}, {3}]".format(payload["uuid"],payload["type"],payload["pid"],payload["name"], classname=self.ClassName),5)
+		# self.LogMSG("({classname})# [GetNodeInfoResponseHandler] [{0}, {1}, {2}, {3}, {4}]".format(source,payload["uuid"],payload["type"],payload["pid"],payload["name"], classname=self.ClassName),5)
 
 		if source in "MASTER":
 			conn = self.SocketServer.GetConnectionBySock(sock)
@@ -319,7 +332,8 @@ class SlaveNode(MkSAbstractNode.AbstractNode):
 					if self.OnGetNodeInfoCallback is not None:
 						self.OnGetNodeInfoCallback(payload)
 		else:
-			conn = self.SocketServer.GetConnection(payload["ip"], payload["listener_port"])
+			# self.LogMSG("({classname})# [GetNodeInfoResponseHandler] [{0}]".format(payload, classname=self.ClassName),5)
+			conn = self.SocketServer.GetConnection(payload["ip"], payload["port"])
 			if conn is not None:
 				conn.Obj["uuid"] 			= payload["uuid"]
 				conn.Obj["type"] 			= payload["type"]
@@ -372,13 +386,53 @@ class SlaveNode(MkSAbstractNode.AbstractNode):
 			# Send via MASTER
 			if self.LocalMasterConnection is not None:
 				self.SocketServer.Send(self.LocalMasterConnection.Socket, packet)
+	
+	''' 
+		Description: 	Override method to send request
+		Return: 		N/A
+	'''	
+	def SendReponse(self, uuid, msg_type, command, payload, additional):
+		# Generate request
+		message = self.BasicProtocol.CreateResponse(msg_type, uuid, self.UUID, command, payload, additional)
+		packet  = self.BasicProtocol.AppendMagic(message)
+		# If slave connected via direct socket
+		node = self.GetNodeByUUID(uuid)
+		if node is not None:
+			self.SocketServer.Send(node.Socket, packet)
+		else:
+			# Send via MASTER
+			if self.LocalMasterConnection is not None:
+				self.SocketServer.Send(self.LocalMasterConnection.Socket, packet)
+	
+	''' 
+		Description: 	Emit event to webface.
+		Return: 		N/A
+	'''		
+	def EmitOnNodeChangeByIndex(self, index, data):
+		self.DeviceChangeListLock.acquire()
+		# Itterate over registered nodes.
+		for item in self.OnDeviceChangeList:
+			payload 		= item["payload"]
+			item_type		= payload["item_type"]
+			destination		= ""
+
+			# Send to Node
+			if item_type == 1:
+				destination = payload["uuid"]
+				self.LogMSG("({classname})# [EmitOnNodeChangeByIndex] NODE {0}".format(destination,classname=self.ClassName),5)
+				self.SendReponse(destination, "DIRECT", "operations", {
+					"index": 	 index,
+					"subindex":	 0x100,
+					"direction": 0x1,
+					"data": data
+				}, {})
+		self.DeviceChangeListLock.release()
 
 	''' 
 		Description: 	Emit event to webface.
 		Return: 		N/A
 	'''		
 	def EmitOnNodeChange(self, data):
-		self.LogMSG("({classname})# [EmitOnNodeChange]".format(classname=self.ClassName),1)
 		self.DeviceChangeListLock.acquire()
 		# Itterate over registered nodes.
 		for item in self.OnDeviceChangeList:
@@ -404,17 +458,16 @@ class SlaveNode(MkSAbstractNode.AbstractNode):
 					event_payload = {
 						'identifier':-1
 					}
-			
-			# Build message
-			message = self.BasicProtocol.BuildRequest("DIRECT", destination, self.UUID, "on_node_change", data, event_payload)
 
-			# Send via Master
+			# Send to Node
 			if item_type == 1:
-				packet  = self.BasicProtocol.AppendMagic(message)
-				if self.LocalMasterConnection is not None:
-					self.SocketServer.Send(self.LocalMasterConnection.Socket, packet)
+				self.LogMSG("({classname})# [EmitOnNodeChange] NODE {0}".format(destination,classname=self.ClassName),5)
+				self.SendReponse(destination, "DIRECT", "on_node_change", data, event_payload)
 			# Send via Master or Local Websocket
 			elif item_type == 2:
+				# Build message
+				self.LogMSG("({classname})# [EmitOnNodeChange] MASTER {0}".format(destination,classname=self.ClassName),5)
+				message = self.BasicProtocol.BuildRequest("DIRECT", destination, self.UUID, "on_node_change", data, event_payload)
 				if self.IsLocalSockInUse is True:
 					self.EmitEventViaLocalWebsocket(message)
 				else:
@@ -423,9 +476,10 @@ class SlaveNode(MkSAbstractNode.AbstractNode):
 						self.SocketServer.Send(self.LocalMasterConnection.Socket, packet)
 			# Local WebSocket Server (LOCAL UI ENABLED) - Disabled
 			elif item_type == 3:
+				self.LogMSG("({classname})# [EmitOnNodeChange] DISABLED {0}".format(destination,classname=self.ClassName),5)
 				pass
 			else:
-				self.LogMSG("({classname})# [EmitOnNodeChange] Unsupported item type".format(classname=self.ClassName),3)
+				self.LogMSG("({classname})# [EmitOnNodeChange] UNSUPPORTED {0}".format(destination,classname=self.ClassName),5)
 		self.DeviceChangeListLock.release()
 
 	''' 

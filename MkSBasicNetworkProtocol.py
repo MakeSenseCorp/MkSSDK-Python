@@ -80,6 +80,9 @@ class BasicNetworkProtocol():
     
 	def BuildRequest(self, messageType, destination, source, command, payload, piggy):
 		return self.BuildMessage("request", messageType, destination, source, command, payload, piggy)
+	
+	def CreateResponse(self, messageType, destination, source, command, payload, piggy):
+		return self.BuildMessage("response", messageType, destination, source, command, payload, piggy)
     
 	def BuildResponse(self, packet, payload):
 		dest 		= packet['header']['destination']

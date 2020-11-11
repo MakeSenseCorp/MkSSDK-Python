@@ -64,7 +64,7 @@ class Manager():
 		self.LogMSG("({classname})# [SockNewConnection_RXHandlerMethod]".format(classname=self.ClassName),1)
 		conn = data["conn"]
 		addr = data["addr"]
-		self.AppendConnection(conn, addr[0], addr[1], "SOCK")
+		self.AppendConnection(conn, addr[0], addr[1], "SOCK", "SERVER")
 
 	''' 
 		Description: 	
@@ -126,7 +126,7 @@ class Manager():
 
 			self.ServerSocket.bind(self.ServerAdderss)
 			# [socket, ip_address, port]
-			conn = self.AppendConnection(self.ServerSocket, self.LocalIP, self.ServerAdderss[1], "SERVER")
+			conn = self.AppendConnection(self.ServerSocket, self.LocalIP, self.ServerAdderss[1], "SERVER", "SERVER")
 
 			self.ServerSocket.listen(32)
 			self.LocalSocketWorkerRunning = True
@@ -258,16 +258,16 @@ class Manager():
 						Each connection has its HASH (MD5).
 		Return: 		Status and socket.
 	'''
-	def AppendConnection(self, sock, ip, port, sock_type):
-		self.LogMSG("({classname})# [AppendConnection]".format(classname=self.ClassName),1)
+	def AppendConnection(self, sock, ip, port, sock_type, kind):
+		# self.LogMSG("({classname})# [AppendConnection]".format(classname=self.ClassName),1)
 		# Append to recieving data sockets.
 		self.RecievingSockets.append(sock)
 		# Append to list of all connections.
-		conn = MkSLocalSocketUtils.SocketConnection(ip, port, sock, sock_type)
+		conn = MkSLocalSocketUtils.SocketConnection(ip, port, sock, sock_type, kind)
 		hash_key = conn.GetHash()
-		self.LogMSG("({classname})# [AppendConnection] {0} {1} {2}".format(ip,str(port),hash_key,classname=self.ClassName),5)
 		self.OpenConnections[hash_key] 	= conn
 		self.SockToHASHMap[sock] 		= hash_key
+		self.LogMSG("({classname})# [AppendConnection] {0} {1} {2}".format(ip,str(port),hash_key,sock.getsockname(),classname=self.ClassName),5)
 		
 		try:
 			# Raise event for user
@@ -376,7 +376,7 @@ class Manager():
 		sock, status = self.ConnectSocket((ip, port))
 		conn = None
 		if True == status:
-			conn = self.AppendConnection(sock, ip, port, sock_type)
+			conn = self.AppendConnection(sock, ip, port, sock_type, "CLIENT")
 		return conn, status
 	
 	''' 
