@@ -83,6 +83,9 @@ class BasicNetworkProtocol():
 	
 	def CreateResponse(self, messageType, destination, source, command, payload, piggy):
 		return self.BuildMessage("response", messageType, destination, source, command, payload, piggy)
+	
+	def CreateMessage(self, messageType, destination, source, command, payload, piggy):
+		return self.BuildMessage("message", messageType, destination, source, command, payload, piggy)
     
 	def BuildResponse(self, packet, payload):
 		dest 		= packet['header']['destination']

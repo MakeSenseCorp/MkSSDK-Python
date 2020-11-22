@@ -187,6 +187,7 @@ class AbstractNode():
 		self.OnStreamSocketDataEvent				= None
 		self.OnStreamSocketDisconnectedEvent 		= None
 		self.OnGenericEventCallback					= None
+		self.OnNoneDirectionMessageArrivedCallback	= None
 		# Registered items
 		self.OnDeviceChangeList						= [] # Register command "register_on_node_change"
 		# Synchronization
@@ -513,15 +514,6 @@ class AbstractNode():
 	'''
 	def ConnectLocalMaster(self):
 		return self.ConnectMaster(self.MyLocalIP)
-	
-	''' 
-		Description: 	Send message over socket via message queue.
-		Return: 		Status.
-	'''	
-	def SendMKSPacketOverLocalNetwork(self, uuid, msg_type, command, payload, additional):
-		# Generate request
-		message = self.BasicProtocol.BuildRequest(msg_type, uuid, self.UUID, command, payload, additional)
-		packet  = self.BasicProtocol.AppendMagic(message)
 
 	''' 
 		Description: 	Get local node.
@@ -737,6 +729,17 @@ class AbstractNode():
 			"direction": 0x1,
 			"data": { }
 		}, {})
+	
+	def SendMail(self, to, subject, message):
+		payload = {
+			'service': 'email',
+			'data': {
+				'to': to,
+				'subject': subject,
+				'body': message
+			}
+		}
+		self.SendRequest("MASTER", "DIRECT", "service", payload, {})
 
 	''' 
 		Description: 	Request to open private stream socket to other node [RESPONSE]

@@ -476,6 +476,10 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 							self.OnApplicationResponseCallback(sock, packet)
 						except Exception as e:
 							self.LogException("[LocalNetworkMessageHandler]",e,3)
+			elif direct in "message":
+				if self.OnNoneDirectionMessageArrivedCallback is not None:
+					payload = self.BasicProtocol.GetPayloadFromJson(packet)
+					self.OnNoneDirectionMessageArrivedCallback(cmd, src, payload)
 			else:
 				pass
 		else:
@@ -557,10 +561,13 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 		payload["pid"]				= self.MyPID
 		payload["listener_port"]	= self.SocketServer.GetListenerPort()
 		payload["ip"]				= self.MyLocalIP
-		if conn.Kind is "SERVER":
-			payload["port"] = conn.Obj["server_port"]
-		elif conn.Kind is "CLIENT":
-			payload["port"] = conn.Obj["client_port"]
+
+		src = self.BasicProtocol.GetSourceFromJson(packet)
+		if src not in ["WEBFACE"]:
+			if conn.Kind is "SERVER":
+				payload["port"] = conn.Obj["server_port"]
+			elif conn.Kind is "CLIENT":
+				payload["port"] = conn.Obj["client_port"]
 		
 		return payload
 
