@@ -83,6 +83,8 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 		# Flags
 		self.IsListenerEnabled 					= False
 		self.PipeStdoutRun						= False
+
+		self.MasterManager.Start()
 	
 	''' 
 		Description: 	N/A
@@ -233,7 +235,10 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 		if self.SystemLoaded is False:
 			self.SystemLoaded = True # Update node that system done loading.
 			if self.NodeSystemLoadedCallback is not None:
-				self.NodeSystemLoadedCallback()
+				try:
+					self.NodeSystemLoadedCallback()
+				except Exception as e:
+					self.LogException("[State_Work] NodeSystemLoadedCallback",e,3)
 			
 		if 0 == self.Ticker % 60:
 			self.SendGatewayPing()
@@ -685,9 +690,6 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 						self.Services[node_type]["uuid"] 		= uuid
 						self.Services[node_type]["enabled"] 	= 1
 
-						if node_type == 103:
-							self.MasterManager.Start()
-
 					return { 'port': port }
 				else:
 					# Already assigned port (resending)
@@ -774,9 +776,6 @@ class MasterNode(MkSAbstractNode.AbstractNode):
 				self.Services[node_type]["uuid"] 		= ""
 				self.Services[node_type]["enabled"] 	= 0
 				self.Services[node_type]["registered"] 	= 0
-
-				if node_type == 103:
-					self.MasterManager.Stop()
 			else:
 				self.MasterManager.Remove(connection)
 

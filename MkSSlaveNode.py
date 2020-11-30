@@ -189,7 +189,10 @@ class SlaveNode(MkSAbstractNode.AbstractNode):
 			if self.SystemLoaded is False:
 				self.SystemLoaded = True # Update node that system done loading.
 				if self.NodeSystemLoadedCallback is not None:
-					self.NodeSystemLoadedCallback()
+					try:
+						self.NodeSystemLoadedCallback()
+					except Exception as e:
+						self.LogException("[State_Work] NodeSystemLoadedCallback",e,3)
 			
 			if 0 == self.Ticker % 60:
 				self.SendGatewayPing()

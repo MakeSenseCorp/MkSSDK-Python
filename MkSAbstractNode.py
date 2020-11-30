@@ -172,9 +172,7 @@ class AbstractNode():
 		# Callbacks
 		self.WorkingCallback 						= None
 		self.NodeSystemLoadedCallback 				= None
-		self.OnLocalServerStartedCallback 			= None # Main local server (listener) rutin started.		
-		self.OnApplicationRequestCallback			= None # Application will get this event on request arrived from local socket
-		self.OnApplicationResponseCallback			= None # Application will get this event on response arrived from local socket
+		self.OnLocalServerStartedCallback 			= None # Main local server (listener) rutin started.
 		self.OnAceptNewConnectionCallback			= None # Local server listener recieved new socket connection
 		self.OnMasterFoundCallback					= None # When master node found or connected this event will be raised.
 		self.OnMasterSearchCallback					= None # Raised on serach of master nodes start.
@@ -193,9 +191,6 @@ class AbstractNode():
 		# Synchronization
 		self.DeviceChangeListLock 					= threading.Lock()
 		# Services
-		#self.IPScannerServiceUUID					= None
-		#self.EMailServiceUUID						= None
-		#self.SMSServiceUUID						= None
 		self.Services 								= {}
 		self.NetworkOnlineDevicesList 				= []
 		# Timers
@@ -207,7 +202,6 @@ class AbstractNode():
 		self.MyLocalIP 								= "N/A"
 		self.NetworkCards 							= MkSUtils.GetIPList()
 		# Network
-		#self.MasterSocket							= None
 		self.LocalMasterConnection					= None
 		# Handlers
 		self.NodeRequestHandlers					= {
@@ -222,6 +216,7 @@ class AbstractNode():
 			'master_remove_node':					self.MasterRemoveNodeRequestHandler,
 			'close_local_socket':					self.CloseLocalSocketRequestHandler,
 			'open_stream_socket':					self.OpenStreamSocketRequestHandler,
+			'operations':							self.OperationsRequestHandler,
 		}
 		self.NodeResponseHandlers					= {
 			'get_node_info': 						self.GetNodeInfoResponseHandler,
@@ -233,7 +228,11 @@ class AbstractNode():
 			'register_on_node_change':				self.RegisterOnNodeChangeResponseHandler,
 			'unregister_on_node_change':			self.UnregisterOnNodeChangeResponseHandler,
 			'open_stream_socket':					self.OpenStreamSocketResponseHandler,
+			'operations':							self.OperationsResponseHandler,
 		}
+		self.ApplicationRequestHandlers 			= None
+		self.ApplicationResponseHandlers 			= None
+		self.Operations								= {}
 		self.NodeFilterCommands 					= [
 			'on_node_change'
 		]
@@ -243,24 +242,15 @@ class AbstractNode():
 		self.BasicProtocol 							= None
 		print(self.NetworkCards)
 
-		self.Services[101] = {
-			'uuid': "",
-			'name': "SMS",
-			'enabled': 0,
-			'registered': 0
-		}
-		self.Services[102] = {
-			'uuid': "",
-			'name': "eMail",
-			'enabled': 0,
-			'registered': 0
-		}
-		self.Services[103] = {
-			'uuid': "",
-			'name': "IP Scanner",
-			'enabled': 0,
-			'registered': 0
-		}
+		''' Online Service
+			{
+				'uuid': "",
+				'name': "SMS",
+				'enabled': 0,
+				'registered': 0
+			}
+		'''
+
 		# FS Area
 		self.UITypes = {
 			'config': 		'config',
@@ -369,6 +359,69 @@ class AbstractNode():
 	# Overload
 	def LocalSocketDataInputExternalHandler(self, conn, packet, raw_data):
 		pass
+	
+	def OperationsRequestHandler(self, sock, packet):
+		messageType = self.BasicProtocol.GetMessageTypeFromJson(packet)
+		direction 	= self.BasicProtocol.GetDirectionFromJson(packet)
+		destination = self.BasicProtocol.GetDestinationFromJson(packet)
+		source 		= self.BasicProtocol.GetSourceFromJson(packet)
+		command 	= self.BasicProtocol.GetCommandFromJson(packet)
+		payload 	= self.BasicProtocol.GetPayloadFromJson(packet)
+
+		if "index" in payload and "subindex" in payload:
+			index 		= payload["index"]
+			subindex  	= payload["subindex"]
+			self.LogMSG("({classname})# [OperationsResponseHandler] {0} {1}".format(index,subindex,classname=self.ClassName),5)
+			if index in self.Operations:
+				data = self.Operations[index][subindex](sock, packet)
+				return {
+					"index": 	 index,
+					"subindex":	 subindex,
+					"direction": 0,
+					"data": 	 data
+				}
+			
+			return {
+				"index": 	 index,
+				"subindex":	 subindex,
+				"direction": 0,
+				"data": {
+					'return_code': 'fail'
+				}
+			}
+		
+		return {
+			'error': 'fail'
+		}
+
+	def OperationsResponseHandler(self, sock, packet):
+		messageType = self.BasicProtocol.GetMessageTypeFromJson(packet)
+		direction 	= self.BasicProtocol.GetDirectionFromJson(packet)
+		destination = self.BasicProtocol.GetDestinationFromJson(packet)
+		source 		= self.BasicProtocol.GetSourceFromJson(packet)
+		command 	= self.BasicProtocol.GetCommandFromJson(packet)
+		payload 	= self.BasicProtocol.GetPayloadFromJson(packet)
+
+		if "index" in payload and "subindex" in payload:
+			index 		= payload["index"]
+			subindex  	= payload["subindex"]
+			self.LogMSG("({classname})# [OperationsResponseHandler] {0} {1}".format(index,subindex,classname=self.ClassName),5)
+			if index in self.Operations:
+				self.Operations[index][subindex](sock, packet)
+
+	def OnApplicationRequestCallback(self, sock, packet):
+		command = self.BasicProtocol.GetCommandFromJson(packet)
+		if command in self.ApplicationRequestHandlers:
+			return self.ApplicationRequestHandlers[command](sock, packet)
+		
+		return {
+			'error': 'cmd_no_support'
+		}
+
+	def OnApplicationResponseCallback(self, sock, packet):
+		command = self.BasicProtocol.GetCommandFromJson(packet)
+		if command in self.ApplicationResponseHandlers:
+			self.ApplicationResponseHandlers[command](sock, packet)
 
 	''' 
 		Description: 	Handler [register_on_node_change] RESPONSE
@@ -698,7 +751,7 @@ class AbstractNode():
 		Return: 		None
 	'''	
 	def ScanNetwork(self):
-		self.SendRequestToNode(self.Services[103]["uuid"], "get_online_devices", {})
+		self.SendRequestToNode("MASTER", "get_online_devices", {})
 
 	''' 
 		Description: 	Get devices in local network handler. [RESPONSE]
